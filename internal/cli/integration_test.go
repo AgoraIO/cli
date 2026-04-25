@@ -437,7 +437,7 @@ func TestCLIHelpSurfaceAndRemovedCommands(t *testing.T) {
 	if strings.Contains(result.stdout, "completion") {
 		t.Fatalf("did not expect completion command in help: %s", result.stdout)
 	}
-	for _, args := range [][]string{{"uap"}, {"rtm2"}, {"project", "onboard"}} {
+	for _, args := range [][]string{{"uap"}, {"rtm2"}, {"project", "onboard"}, {"add"}} {
 		result := runCLI(t, args, cliRunOptions{})
 		if result.exitCode != 1 || !strings.Contains(result.stderr, "unknown command") {
 			t.Fatalf("expected unknown command for %v, got exit=%d stderr=%s", args, result.exitCode, result.stderr)
@@ -451,7 +451,7 @@ func TestCLIHelpContentIsTaskOriented(t *testing.T) {
 		t.Fatalf("unexpected root help output: %+v", root)
 	}
 	rootAll := runCLI(t, []string{"--help", "--all"}, cliRunOptions{})
-	if rootAll.exitCode != 0 || !strings.Contains(rootAll.stdout, "Full Command Tree") || !strings.Contains(rootAll.stdout, "agora project env write") || !strings.Contains(rootAll.stdout, "agora quickstart env write") || !strings.Contains(rootAll.stdout, "agora add") {
+	if rootAll.exitCode != 0 || !strings.Contains(rootAll.stdout, "Full Command Tree") || !strings.Contains(rootAll.stdout, "agora project env write") || !strings.Contains(rootAll.stdout, "agora quickstart env write") || strings.Contains(rootAll.stdout, "agora add") {
 		t.Fatalf("unexpected root help --all output: %+v", rootAll)
 	}
 
@@ -474,8 +474,8 @@ func TestCLIHelpContentIsTaskOriented(t *testing.T) {
 	}
 
 	add := runCLI(t, []string{"add", "--help"}, cliRunOptions{})
-	if add.exitCode != 0 || !strings.Contains(add.stdout, "future in-place integrations") {
-		t.Fatalf("unexpected add help output: %+v", add)
+	if add.exitCode != 1 || !strings.Contains(add.stderr, "unknown command") {
+		t.Fatalf("expected add to remain unavailable, got %+v", add)
 	}
 }
 
@@ -714,6 +714,92 @@ func TestCLIQuickstartListAndCreate(t *testing.T) {
 	}
 }
 
+func TestCLIQuickstartEnvWriteUsesTargetRepoBindingPrecedence(t *testing.T) {
+	configHome := t.TempDir()
+	rootDir := t.TempDir()
+	api := newFakeCLIBFF()
+	defer api.server.Close()
+
+	alpha := buildFakeProject("Project Alpha", "prj_alpha", "app_alpha", "global")
+	alpha.FeatureState.RTMEnabled = true
+	alpha.FeatureState.ConvoAIEnabled = true
+	beta := buildFakeProject("Project Beta", "prj_beta", "app_beta", "global")
+	beta.FeatureState.RTMEnabled = true
+	beta.FeatureState.ConvoAIEnabled = true
+	api.projects[alpha.ProjectID] = &alpha
+	api.projects[beta.ProjectID] = &beta
+	persistSessionForIntegration(t, configHome)
+	if err := saveContext(map[string]string{"XDG_CONFIG_HOME": configHome}, projectContext{
+		CurrentProjectID:   &beta.ProjectID,
+		CurrentProjectName: &beta.Name,
+		CurrentRegion:      "global",
+		PreferredRegion:    "global",
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	targetDir := filepath.Join(rootDir, "demo-go")
+	if err := os.MkdirAll(filepath.Join(targetDir, "server-go"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(targetDir, "server-go", ".env.example"), []byte("APP_ID=\nAPP_CERTIFICATE=\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := writeLocalProjectBinding(targetDir, localProjectBinding{
+		ProjectID:   alpha.ProjectID,
+		ProjectName: alpha.Name,
+		Region:      "global",
+		Template:    "go",
+		EnvPath:     "server-go/.env.local",
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	result := runCLI(t, []string{"quickstart", "env", "write", targetDir, "--json"}, cliRunOptions{
+		env: map[string]string{
+			"XDG_CONFIG_HOME":    configHome,
+			"AGORA_API_BASE_URL": api.baseURL,
+			"AGORA_LOG_LEVEL":    "error",
+		},
+		workdir: t.TempDir(),
+	})
+	if result.exitCode != 0 || !strings.Contains(result.stdout, `"projectId":"prj_alpha"`) {
+		t.Fatalf("expected repo-local project binding precedence, got %+v", result)
+	}
+	envRaw, err := os.ReadFile(filepath.Join(targetDir, "server-go", ".env.local"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(envRaw), "APP_ID=app_alpha") || strings.Contains(string(envRaw), "APP_ID=app_beta") {
+		t.Fatalf("expected target repo binding project app id in env, got %s", string(envRaw))
+	}
+}
+
+func TestCLIQuickstartEnvWriteMissingBindingEvenWhenEnvExists(t *testing.T) {
+	configHome := t.TempDir()
+	targetDir := filepath.Join(t.TempDir(), "demo-go")
+	if err := os.MkdirAll(filepath.Join(targetDir, "server-go"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(targetDir, "server-go", ".env.example"), []byte("APP_ID=\nAPP_CERTIFICATE=\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(targetDir, "server-go", ".env.local"), []byte("APP_ID=stale\nAPP_CERTIFICATE=stale\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	result := runCLI(t, []string{"quickstart", "env", "write", targetDir, "--json"}, cliRunOptions{
+		env: map[string]string{
+			"XDG_CONFIG_HOME": configHome,
+			"AGORA_LOG_LEVEL": "error",
+		},
+		workdir: t.TempDir(),
+	})
+	if result.exitCode != 1 || !strings.Contains(result.stdout, `"ok":false`) || !strings.Contains(result.stdout, ".agora/project.json") || !strings.Contains(result.stdout, "--project") || !strings.Contains(result.stdout, "agora project use") {
+		t.Fatalf("unexpected missing binding result: %+v", result)
+	}
+}
+
 func TestCLIInitCreatesProjectAndQuickstart(t *testing.T) {
 	configHome := t.TempDir()
 	rootDir := t.TempDir()
@@ -948,6 +1034,67 @@ func TestCLIProjectUseShowFeatureAndDoctorHappyPath(t *testing.T) {
 	}})
 	if rtmDoctor.exitCode != 0 || !strings.Contains(rtmDoctor.stdout, `"feature":"rtm"`) || !strings.Contains(rtmDoctor.stdout, `"status":"healthy"`) {
 		t.Fatalf("unexpected rtm doctor result: %+v", rtmDoctor)
+	}
+}
+
+func TestCLIProjectDoctorDeepDetectsWorkspaceDrift(t *testing.T) {
+	configHome := t.TempDir()
+	api := newFakeCLIBFF()
+	defer api.server.Close()
+
+	project := buildFakeProject("Project Alpha", "prj_123456", "app_123456", "global")
+	project.FeatureState.RTMEnabled = true
+	project.FeatureState.ConvoAIEnabled = true
+	api.projects[project.ProjectID] = &project
+	persistSessionForIntegration(t, configHome)
+	if err := saveContext(map[string]string{"XDG_CONFIG_HOME": configHome}, projectContext{
+		CurrentProjectID:   &project.ProjectID,
+		CurrentProjectName: &project.Name,
+		CurrentRegion:      "global",
+		PreferredRegion:    "global",
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	repoRoot := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(repoRoot, "server-go"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := writeLocalProjectBinding(repoRoot, localProjectBinding{
+		ProjectID:   project.ProjectID,
+		ProjectName: project.Name,
+		Region:      "global",
+		Template:    "go",
+		EnvPath:     "server-go/.env.local",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	mismatched := strings.Join([]string{
+		"# BEGIN AGORA CLI QUICKSTART",
+		"# Project ID: prj_other",
+		"# Project Name: Project Other",
+		"APP_ID=app_other",
+		"APP_CERTIFICATE=other",
+		"# END AGORA CLI QUICKSTART",
+		"",
+	}, "\n")
+	if err := os.WriteFile(filepath.Join(repoRoot, "server-go", ".env.local"), []byte(mismatched), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	doctor := runCLI(t, []string{"project", "doctor", "--deep", "--json"}, cliRunOptions{
+		env: map[string]string{
+			"XDG_CONFIG_HOME":    configHome,
+			"AGORA_API_BASE_URL": api.baseURL,
+			"AGORA_LOG_LEVEL":    "error",
+		},
+		workdir: repoRoot,
+	})
+	if doctor.exitCode != 1 || !strings.Contains(doctor.stdout, `"mode":"deep"`) || !strings.Contains(doctor.stdout, `"status":"not_ready"`) || !strings.Contains(doctor.stdout, `"category":"workspace"`) || !strings.Contains(doctor.stdout, `"code":"WORKSPACE_ENV_APP_ID_MISMATCH"`) {
+		t.Fatalf("unexpected deep doctor mismatch result: %+v", doctor)
+	}
+	if !strings.Contains(doctor.stdout, `"workspace":`) || !strings.Contains(doctor.stdout, `"envAppID":"app_other"`) {
+		t.Fatalf("expected deep doctor workspace details, got %+v", doctor)
 	}
 }
 

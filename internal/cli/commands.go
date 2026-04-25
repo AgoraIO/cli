@@ -55,7 +55,8 @@ Use "agora --help --all" to inspect the full command tree, including advanced lo
 	root.AddCommand(a.buildProjectCommand())
 	root.AddCommand(a.buildQuickstartCommand())
 	root.AddCommand(a.buildInitCommand())
-	root.AddCommand(a.buildAddCommand())
+	// Keep "add" unregistered until it has a real implementation. Calls to
+	// `agora add` should behave as unknown command for now.
 	defaultHelp := root.HelpFunc()
 	root.SetHelpFunc(func(cmd *cobra.Command, args []string) {
 		defaultHelp(cmd, args)
@@ -369,29 +370,6 @@ These commands do not clone local application code. Use "agora quickstart" for s
 	return cmd
 }
 
-func (a *App) buildAddCommand() *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "add",
-		Short: "Integrate Agora features into an existing codebase",
-		Long: `The add command group is reserved for future in-place integrations into an existing application.
-
-Use "agora quickstart create" when you want a standalone starter repo.
-Use "agora init" when you want the recommended end-to-end onboarding flow.
-Use "agora project" when you want to manage remote Agora resources.`,
-		Example: strings.TrimSpace(`
-  agora add --help
-`),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			if len(args) > 0 {
-				return fmt.Errorf("unknown command %q for %q", args[0], cmd.CommandPath())
-			}
-			return cmd.Help()
-		},
-	}
-	cmd.Hidden = true
-	return cmd
-}
-
 func (a *App) buildProjectCreate() *cobra.Command {
 	var region, template string
 	var features []string
@@ -679,7 +657,7 @@ func (a *App) buildProjectDoctor() *cobra.Command {
 	var feature string
 	cmd := &cobra.Command{
 		Use:   "doctor [project]",
-		Short: "Diagnose whether a project is ready for ConvoAI development",
+		Short: "Diagnose whether a project is ready for selected feature development",
 		Long: `Run a readiness check for a project, including auth state, project context, and required feature configuration.
 
 Exit codes:
@@ -720,7 +698,7 @@ Exit codes:
 			return nil
 		},
 	}
-	cmd.Flags().BoolVar(&deep, "deep", false, "run deeper preflight checks when supported")
+	cmd.Flags().BoolVar(&deep, "deep", false, "run deeper repo-local checks for .agora metadata and quickstart env consistency")
 	cmd.Flags().StringVar(&feature, "feature", "convoai", "target feature readiness to evaluate: rtc, rtm, or convoai")
 	return cmd
 }
