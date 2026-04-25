@@ -16,9 +16,9 @@ import (
 
 const (
 	currentAppConfigVersion = 2
-	legacyAPIBaseURL        = "https://agora-cli-bff.staging.la3.agoralab.co"
-	legacyOAuthBaseURL      = "https://staging-sso.agora.io"
-	legacyOAuthClientID     = "cli_demo"
+	previousAPIBaseURL      = "https://agora-cli-bff.staging.la3.agoralab.co"
+	previousOAuthBaseURL    = "https://staging-sso.agora.io"
+	previousOAuthClientID   = "cli_demo"
 )
 
 type configState struct {
@@ -64,7 +64,7 @@ func ensureAppConfigState(env map[string]string) (configState, error) {
 	}
 
 	cfg := defaultConfig()
-	mergeConfig(&cfg, migrateLegacyConfig(raw))
+	mergeConfig(&cfg, migratePreviousConfig(raw))
 	version, hasVersion := intValue(raw["version"])
 	if hasVersion && version > currentAppConfigVersion {
 		return configState{}, fmt.Errorf("Config version %d is newer than this CLI supports.", version)
@@ -92,20 +92,20 @@ func ensureAppConfigState(env map[string]string) (configState, error) {
 	}, nil
 }
 
-func migrateLegacyConfig(raw map[string]any) map[string]any {
+func migratePreviousConfig(raw map[string]any) map[string]any {
 	clone := map[string]any{}
 	for k, v := range raw {
 		clone[k] = v
 	}
 	version, _ := intValue(raw["version"])
 	if version < 2 {
-		if v, ok := clone["apiBaseUrl"].(string); ok && v == legacyAPIBaseURL {
+		if v, ok := clone["apiBaseUrl"].(string); ok && v == previousAPIBaseURL {
 			clone["apiBaseUrl"] = defaultConfig().APIBaseURL
 		}
-		if v, ok := clone["oauthBaseUrl"].(string); ok && v == legacyOAuthBaseURL {
+		if v, ok := clone["oauthBaseUrl"].(string); ok && v == previousOAuthBaseURL {
 			clone["oauthBaseUrl"] = defaultConfig().OAuthBaseURL
 		}
-		if v, ok := clone["oauthClientId"].(string); ok && v == legacyOAuthClientID {
+		if v, ok := clone["oauthClientId"].(string); ok && v == previousOAuthClientID {
 			clone["oauthClientId"] = defaultConfig().OAuthClientID
 		}
 	}
@@ -146,7 +146,7 @@ func formatConfigBanner(state configState) string {
 	case state.Status == "created":
 		headline = fmt.Sprintf("Config initialized: %s", state.ConfigFilePath)
 	case state.PreviousVersion == nil:
-		headline = fmt.Sprintf("Config upgraded to version %d from a legacy format: %s", state.Config.Version, state.ConfigFilePath)
+		headline = fmt.Sprintf("Config upgraded to version %d from an earlier format: %s", state.Config.Version, state.ConfigFilePath)
 	default:
 		headline = fmt.Sprintf("Config upgraded from version %d to %d: %s", *state.PreviousVersion, state.Config.Version, state.ConfigFilePath)
 	}

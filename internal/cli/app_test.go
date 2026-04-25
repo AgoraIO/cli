@@ -89,13 +89,13 @@ func TestBuildProjectDoctorResultWarning(t *testing.T) {
 		{Feature: "rtc", Message: "rtc included with the project", Status: "included"},
 		{Feature: "rtm", Message: "rtm enabled", Status: "enabled"},
 		{Feature: "convoai", Message: "convoai enabled", Status: "enabled"},
-	}, false)
+	}, "convoai", false)
 	if result.Status != "warning" {
 		t.Fatalf("expected warning, got %s", result.Status)
 	}
 }
 
-func TestEnsureAppConfigStateMigratesLegacyDefaults(t *testing.T) {
+func TestEnsureAppConfigStateMigratesPreviousDefaults(t *testing.T) {
 	dir := t.TempDir()
 	configPath, err := resolveConfigFilePath(map[string]string{"XDG_CONFIG_HOME": dir})
 	if err != nil {
@@ -105,11 +105,11 @@ func TestEnsureAppConfigStateMigratesLegacyDefaults(t *testing.T) {
 		t.Fatal(err)
 	}
 	raw := map[string]any{
-		"apiBaseUrl":       legacyAPIBaseURL,
+		"apiBaseUrl":       previousAPIBaseURL,
 		"browserAutoOpen":  true,
 		"logLevel":         "info",
-		"oauthBaseUrl":     legacyOAuthBaseURL,
-		"oauthClientId":    legacyOAuthClientID,
+		"oauthBaseUrl":     previousOAuthBaseURL,
+		"oauthClientId":    previousOAuthClientID,
 		"oauthScope":       "basic_info,console",
 		"output":           "pretty",
 		"telemetryEnabled": true,
@@ -262,7 +262,7 @@ func TestEnsureAppConfigStateCreatedAndLoaded(t *testing.T) {
 	}
 }
 
-func TestEnsureAppConfigStateMigratesPartialAndCustomLegacyConfigs(t *testing.T) {
+func TestEnsureAppConfigStateMigratesPartialAndCustomPreviousConfigs(t *testing.T) {
 	dir := t.TempDir()
 	configPath, err := resolveConfigFilePath(map[string]string{"XDG_CONFIG_HOME": dir})
 	if err != nil {

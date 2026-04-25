@@ -119,6 +119,7 @@ func (a *App) initProject(name, targetDir string, template quickstartTemplate, e
 		"action":          "init",
 		"enabledFeatures": enabledFeatures,
 		"envPath":         quickstartResult["envPath"],
+		"metadataPath":    filepath.ToSlash(filepath.Join(localAgoraDirName, localProjectFileName)),
 		"nextSteps":       initNextSteps(template, asString(quickstartResult["path"])),
 		"path":            quickstartResult["path"],
 		"projectAction":   projectAction,

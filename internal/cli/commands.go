@@ -25,6 +25,8 @@ Use "agora init" for the fastest path to a runnable demo.
 Use "agora --help --all" to inspect the full command tree, including advanced low-level commands.`,
 		Example: strings.TrimSpace(`
   agora login
+  agora whoami
+  agora logout
   agora init my-nextjs-demo --template nextjs
   agora init my-python-demo --template python
   agora init my-go-demo --template go
@@ -674,6 +676,7 @@ func (a *App) buildProjectFeature() *cobra.Command {
 
 func (a *App) buildProjectDoctor() *cobra.Command {
 	var deep bool
+	var feature string
 	cmd := &cobra.Command{
 		Use:   "doctor [project]",
 		Short: "Diagnose whether a project is ready for ConvoAI development",
@@ -686,15 +689,19 @@ Exit codes:
   3  auth or session issues`,
 		Example: strings.TrimSpace(`
   agora project doctor
+  agora project doctor --feature rtm
   agora project doctor --deep
   agora project doctor my-agent-demo --json
 `),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := validateDoctorFeature(feature); err != nil {
+				return err
+			}
 			project := ""
 			if len(args) > 0 {
 				project = args[0]
 			}
-			result := a.projectDoctor(project, deep)
+			result := a.projectDoctor(project, feature, deep)
 			if err := renderResult(cmd, "project doctor", result); err != nil {
 				return err
 			}
@@ -714,8 +721,6 @@ Exit codes:
 		},
 	}
 	cmd.Flags().BoolVar(&deep, "deep", false, "run deeper preflight checks when supported")
-	cmd.Flags().String("feature", "convoai", "target feature to evaluate")
-	cmd.Flags().Bool("fix", false, "reserved for future safe automatic fixes")
-	cmd.Flags().Bool("verbose", false, "reserved for future verbose pretty output")
+	cmd.Flags().StringVar(&feature, "feature", "convoai", "target feature readiness to evaluate: rtc, rtm, or convoai")
 	return cmd
 }

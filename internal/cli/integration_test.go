@@ -421,7 +421,7 @@ func parseAuthURL(stderr string) string {
 	return ""
 }
 
-func TestCLIHelpSurfaceAndLegacyCommands(t *testing.T) {
+func TestCLIHelpSurfaceAndRemovedCommands(t *testing.T) {
 	result := runCLI(t, []string{"--help"}, cliRunOptions{})
 	if result.exitCode != 0 {
 		t.Fatalf("expected exit 0, got %d stderr=%s", result.exitCode, result.stderr)
@@ -488,6 +488,16 @@ func TestCLIJSONErrorsUseEnvelope(t *testing.T) {
 	})
 	if result.exitCode != 1 || !strings.Contains(result.stdout, `"ok":false`) || !strings.Contains(result.stdout, `"command":"project env write"`) || !strings.Contains(result.stdout, `"exitCode":1`) || result.stderr != "" {
 		t.Fatalf("unexpected json error envelope: %+v", result)
+	}
+
+	unknown := runCLI(t, []string{"project", "onboard", "--json"}, cliRunOptions{
+		env: map[string]string{
+			"XDG_CONFIG_HOME": t.TempDir(),
+			"AGORA_LOG_LEVEL": "error",
+		},
+	})
+	if unknown.exitCode != 1 || !strings.Contains(unknown.stdout, `"ok":false`) || !strings.Contains(unknown.stdout, `"command":"project onboard"`) || unknown.stderr != "" {
+		t.Fatalf("unexpected unknown-command json envelope: %+v", unknown)
 	}
 }
 
@@ -581,6 +591,13 @@ func TestCLIQuickstartListAndCreate(t *testing.T) {
 	if !strings.Contains(string(localEnv), "# Project ID: prj_123456") || !strings.Contains(string(localEnv), "# Project Name: Project Alpha") || !strings.Contains(string(localEnv), "APP_ID=app_123456") || !strings.Contains(string(localEnv), "APP_CERTIFICATE=") {
 		t.Fatalf("unexpected .env.local contents: %s", string(localEnv))
 	}
+	metadataRaw, err := os.ReadFile(filepath.Join(boundTarget, ".agora", "project.json"))
+	if err != nil {
+		t.Fatalf("expected .agora/project.json in bound scaffold: %v", err)
+	}
+	if !strings.Contains(string(metadataRaw), `"projectId": "prj_123456"`) || !strings.Contains(string(metadataRaw), `"template": "python"`) {
+		t.Fatalf("unexpected .agora/project.json contents: %s", string(metadataRaw))
+	}
 	if strings.Contains(string(localEnv), "AGORA_PROJECT_ID=") || strings.Contains(string(localEnv), "AGORA_PROJECT_NAME=") {
 		t.Fatalf("did not expect project metadata env vars in python env file: %s", string(localEnv))
 	}
@@ -638,6 +655,20 @@ func TestCLIQuickstartListAndCreate(t *testing.T) {
 	})
 	if writePythonEnv.exitCode != 0 || !strings.Contains(writePythonEnv.stdout, `"template":"python"`) {
 		t.Fatalf("unexpected python quickstart env write result: %+v", writePythonEnv)
+	}
+
+	repoScopedConfig := t.TempDir()
+	persistSessionForIntegration(t, repoScopedConfig)
+	repoShow := runCLI(t, []string{"project", "show", "--json"}, cliRunOptions{
+		env: map[string]string{
+			"XDG_CONFIG_HOME":    repoScopedConfig,
+			"AGORA_API_BASE_URL": api.baseURL,
+			"AGORA_LOG_LEVEL":    "error",
+		},
+		workdir: filepath.Join(boundTarget, "server-python"),
+	})
+	if repoShow.exitCode != 0 || !strings.Contains(repoShow.stdout, `"projectId":"prj_123456"`) {
+		t.Fatalf("expected repo-local .agora binding to resolve project context, got %+v", repoShow)
 	}
 
 	goBoundTarget := filepath.Join(rootDir, "go-demo")
@@ -718,6 +749,9 @@ func TestCLIInitCreatesProjectAndQuickstart(t *testing.T) {
 	}
 	if !strings.Contains(string(localEnv), "NEXT_PUBLIC_AGORA_APP_ID=app_0001") {
 		t.Fatalf("unexpected init env contents: %s", string(localEnv))
+	}
+	if _, err := os.Stat(filepath.Join(rootDir, "starter-demo", ".agora", "project.json")); err != nil {
+		t.Fatalf("expected init to create .agora/project.json: %v", err)
 	}
 	ctx, err := loadContext(map[string]string{"XDG_CONFIG_HOME": configHome})
 	if err != nil {
@@ -905,6 +939,15 @@ func TestCLIProjectUseShowFeatureAndDoctorHappyPath(t *testing.T) {
 	}})
 	if doctor.exitCode != 0 || !strings.Contains(doctor.stdout, `"status":"healthy"`) {
 		t.Fatalf("unexpected doctor result: %+v", doctor)
+	}
+
+	rtmDoctor := runCLI(t, []string{"project", "doctor", "--feature", "rtm", "--json"}, cliRunOptions{env: map[string]string{
+		"XDG_CONFIG_HOME":    configHome,
+		"AGORA_API_BASE_URL": api.baseURL,
+		"AGORA_LOG_LEVEL":    "error",
+	}})
+	if rtmDoctor.exitCode != 0 || !strings.Contains(rtmDoctor.stdout, `"feature":"rtm"`) || !strings.Contains(rtmDoctor.stdout, `"status":"healthy"`) {
+		t.Fatalf("unexpected rtm doctor result: %+v", rtmDoctor)
 	}
 }
 

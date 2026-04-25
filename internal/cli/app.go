@@ -123,6 +123,7 @@ type projectDoctorResult struct {
 	Action         string                `json:"action"`
 	BlockingIssues []doctorIssue         `json:"blockingIssues"`
 	Checks         []doctorCheckCategory `json:"checks"`
+	Feature        string                `json:"feature"`
 	Healthy        bool                  `json:"healthy"`
 	Mode           string                `json:"mode"`
 	Project        any                   `json:"project"`
@@ -247,15 +248,67 @@ func hasFlag(args []string, flag string) bool {
 }
 
 func (a *App) guessCommandLabel(args []string) string {
-	cmd, _, err := a.root.Find(args)
-	if err != nil || cmd == nil {
-		return "agora"
+	cmd, remaining, err := a.root.Find(args)
+	base := "agora"
+	if cmd != nil {
+		base = strings.TrimSpace(strings.TrimPrefix(cmd.CommandPath(), "agora"))
+		if base == "" {
+			base = "agora"
+		}
 	}
-	path := strings.TrimSpace(strings.TrimPrefix(cmd.CommandPath(), "agora"))
-	if path == "" {
-		return "agora"
+	if cmd != nil && cmd.HasAvailableSubCommands() {
+		for _, arg := range remaining {
+			if strings.HasPrefix(arg, "-") {
+				break
+			}
+			if base == "agora" {
+				return arg
+			}
+			return strings.TrimSpace(base + " " + arg)
+		}
 	}
-	return strings.TrimSpace(path)
+	if err == nil {
+		return base
+	}
+	if label := guessUnknownCommandLabel(err.Error()); label != "" {
+		return label
+	}
+	for _, arg := range args {
+		if strings.HasPrefix(arg, "-") {
+			break
+		}
+		return arg
+	}
+	return "agora"
+}
+
+func guessUnknownCommandLabel(message string) string {
+	const prefix = `unknown command "`
+	start := strings.Index(message, prefix)
+	if start == -1 {
+		return ""
+	}
+	start += len(prefix)
+	end := strings.Index(message[start:], `"`)
+	if end == -1 {
+		return ""
+	}
+	unknown := message[start : start+end]
+	forPrefix := ` for "`
+	forIndex := strings.Index(message, forPrefix)
+	if forIndex == -1 {
+		return unknown
+	}
+	forIndex += len(forPrefix)
+	forEnd := strings.Index(message[forIndex:], `"`)
+	if forEnd == -1 {
+		return unknown
+	}
+	base := strings.TrimSpace(strings.TrimPrefix(message[forIndex:forIndex+forEnd], "agora"))
+	if base == "" {
+		return unknown
+	}
+	return strings.TrimSpace(base + " " + unknown)
 }
 
 func snapshotEnv() map[string]string {
@@ -597,17 +650,17 @@ func renderResult(cmd *cobra.Command, command string, data any) error {
 		}
 	case "quickstart create":
 		m := data.(map[string]any)
-		printBlock(out, "Quickstart", [][2]string{{"Template", asString(m["template"])}, {"Path", asString(m["path"])}, {"Project", asString(m["projectName"])}, {"Env", asString(m["envStatus"])}, {"Status", asString(m["status"])}})
+		printBlock(out, "Quickstart", [][2]string{{"Template", asString(m["template"])}, {"Path", asString(m["path"])}, {"Project", asString(m["projectName"])}, {"Env", asString(m["envStatus"])}, {"Metadata", asString(m["metadataPath"])}, {"Status", asString(m["status"])}})
 	case "quickstart env write":
 		m := data.(map[string]any)
-		printBlock(out, "Quickstart Env", [][2]string{{"Template", asString(m["template"])}, {"Project", asString(m["projectName"])}, {"Path", asString(m["path"])}, {"Env Path", asString(m["envPath"])}, {"Status", asString(m["status"])}})
+		printBlock(out, "Quickstart Env", [][2]string{{"Template", asString(m["template"])}, {"Project", asString(m["projectName"])}, {"Path", asString(m["path"])}, {"Env Path", asString(m["envPath"])}, {"Metadata", asString(m["metadataPath"])}, {"Status", asString(m["status"])}})
 	case "init":
 		m := data.(map[string]any)
 		features := "-"
 		if list, ok := m["enabledFeatures"].([]string); ok && len(list) > 0 {
 			features = strings.Join(list, ", ")
 		}
-		printBlock(out, "Init", [][2]string{{"Template", asString(m["template"])}, {"Project", asString(m["projectName"])}, {"Project ID", asString(m["projectId"])}, {"Project Action", asString(m["projectAction"])}, {"Region", asString(m["region"])}, {"Path", asString(m["path"])}, {"Env Path", asString(m["envPath"])}, {"Features", features}, {"Status", asString(m["status"])}})
+		printBlock(out, "Init", [][2]string{{"Template", asString(m["template"])}, {"Project", asString(m["projectName"])}, {"Project ID", asString(m["projectId"])}, {"Project Action", asString(m["projectAction"])}, {"Region", asString(m["region"])}, {"Path", asString(m["path"])}, {"Env Path", asString(m["envPath"])}, {"Metadata", asString(m["metadataPath"])}, {"Features", features}, {"Status", asString(m["status"])}})
 		if steps, ok := m["nextSteps"].([]string); ok && len(steps) > 0 {
 			fmt.Fprintln(out)
 			fmt.Fprintln(out, "Next Steps")
@@ -683,7 +736,7 @@ func printBlock(out io.Writer, title string, rows [][2]string) {
 func printDoctor(out io.Writer, result projectDoctorResult) error {
 	if m, ok := result.Project.(map[string]any); ok {
 		fmt.Fprintf(out, "Checking project: %s\n", asString(m["name"]))
-		mode := "Mode: convoai"
+		mode := "Mode: " + asString(result.Feature)
 		if result.Mode == "deep" {
 			mode += " (deep)"
 		}

@@ -6,21 +6,21 @@
       "source_file": "agora-cli-ts/apps/agora-cli/test/cli.test.ts",
       "source_test": "shows the new top-level command surface",
       "target_kind": "go_test",
-      "target": "internal/cli/integration_test.go::TestCLIHelpSurfaceAndLegacyCommands",
+      "target": "internal/cli/integration_test.go::TestCLIHelpSurfaceAndRemovedCommands",
       "coverage": "direct"
     },
     {
       "source_file": "cli-commands-review.md",
       "source_test": "adds a dedicated quickstart command instead of overloading project create",
       "target_kind": "go_test",
-      "target": "internal/cli/integration_test.go::TestCLIHelpSurfaceAndLegacyCommands",
+      "target": "internal/cli/integration_test.go::TestCLIHelpSurfaceAndRemovedCommands",
       "coverage": "direct"
     },
     {
       "source_file": "user requirement",
       "source_test": "keeps quickstart for standalone quickstart repos and reserves add for existing-code integrations",
       "target_kind": "go_test",
-      "target": "internal/cli/integration_test.go::TestCLIHelpSurfaceAndLegacyCommands",
+      "target": "internal/cli/integration_test.go::TestCLIHelpSurfaceAndRemovedCommands",
       "coverage": "direct"
     },
     {
@@ -46,9 +46,9 @@
     },
     {
       "source_file": "agora-cli-ts/apps/agora-cli/test/cli.test.ts",
-      "source_test": "removes legacy command groups and onboarding",
+      "source_test": "removes superseded command groups and onboarding",
       "target_kind": "go_test",
-      "target": "internal/cli/integration_test.go::TestCLIHelpSurfaceAndLegacyCommands",
+      "target": "internal/cli/integration_test.go::TestCLIHelpSurfaceAndRemovedCommands",
       "coverage": "direct"
     },
     {
@@ -225,7 +225,7 @@
       "source_file": "agora-cli-ts/apps/agora-cli/test/runtime.test.ts",
       "source_test": "allows disabling Sentry telemetry via config",
       "target_kind": "go_test",
-      "target": "internal/cli/app_test.go::TestEnsureAppConfigStateMigratesPartialAndCustomLegacyConfigs",
+      "target": "internal/cli/app_test.go::TestEnsureAppConfigStateMigratesPartialAndCustomPreviousConfigs",
       "coverage": "best_practice_equivalent"
     },
     {
@@ -296,28 +296,28 @@
       "source_file": "agora-cli-ts/apps/agora-cli/test/runtime.test.ts",
       "source_test": "migrates an unversioned partial app config to the latest schema",
       "target_kind": "go_test",
-      "target": "internal/cli/app_test.go::TestEnsureAppConfigStateMigratesPartialAndCustomLegacyConfigs",
+      "target": "internal/cli/app_test.go::TestEnsureAppConfigStateMigratesPartialAndCustomPreviousConfigs",
       "coverage": "direct"
     },
     {
       "source_file": "agora-cli-ts/apps/agora-cli/test/runtime.test.ts",
       "source_test": "migrates version 1 staging defaults to the latest production endpoints",
       "target_kind": "go_test",
-      "target": "internal/cli/app_test.go::TestEnsureAppConfigStateMigratesLegacyDefaults",
+      "target": "internal/cli/app_test.go::TestEnsureAppConfigStateMigratesPreviousDefaults",
       "coverage": "direct"
     },
     {
       "source_file": "agora-cli-ts/apps/agora-cli/test/runtime.test.ts",
       "source_test": "preserves customized endpoints while migrating older config versions",
       "target_kind": "go_test",
-      "target": "internal/cli/app_test.go::TestEnsureAppConfigStateMigratesPartialAndCustomLegacyConfigs",
+      "target": "internal/cli/app_test.go::TestEnsureAppConfigStateMigratesPartialAndCustomPreviousConfigs",
       "coverage": "direct"
     },
     {
       "source_file": "agora-cli-ts/apps/agora-cli/test/runtime.test.ts",
       "source_test": "marks outdated config initialization as migrated",
       "target_kind": "go_test",
-      "target": "internal/cli/app_test.go::TestEnsureAppConfigStateMigratesLegacyDefaults",
+      "target": "internal/cli/app_test.go::TestEnsureAppConfigStateMigratesPreviousDefaults",
       "coverage": "direct"
     },
     {

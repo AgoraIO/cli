@@ -294,30 +294,44 @@ func (a *App) quickstartCreate(template quickstartTemplate, targetDir, explicitP
 			}
 			return nil, fmt.Errorf("failed to configure quickstart env after clone: %v; removed %s", err, absTarget)
 		}
+		if err := writeLocalProjectBinding(absTarget, localProjectBinding{
+			ProjectID:   boundProject.project.ProjectID,
+			ProjectName: boundProject.project.Name,
+			Region:      boundProject.region,
+			Template:    template.ID,
+			EnvPath:     writtenPath,
+		}); err != nil {
+			if cleanupErr := os.RemoveAll(absTarget); cleanupErr != nil {
+				return nil, fmt.Errorf("failed to write .agora project metadata after clone: %v; cleanup also failed for %s: %v", err, absTarget, cleanupErr)
+			}
+			return nil, fmt.Errorf("failed to write .agora project metadata after clone: %v; removed %s", err, absTarget)
+		}
 		envStatus = "configured"
 		envPath = writtenPath
-		written = append(written, writtenPath)
+		written = append(written, writtenPath, filepath.ToSlash(filepath.Join(localAgoraDirName, localProjectFileName)))
 	}
 	sort.Strings(written)
 
 	result := map[string]any{
-		"action":      "create",
-		"cloneUrl":    repoURL,
-		"docsUrl":     template.DocsURL,
-		"envPath":     envPath,
-		"envStatus":   envStatus,
-		"path":        absTarget,
-		"projectId":   nil,
-		"projectName": nil,
-		"runtime":     template.Runtime,
-		"status":      "cloned",
-		"template":    template.ID,
-		"title":       template.Title,
-		"written":     written,
+		"action":       "create",
+		"cloneUrl":     repoURL,
+		"docsUrl":      template.DocsURL,
+		"envPath":      envPath,
+		"envStatus":    envStatus,
+		"metadataPath": "",
+		"path":         absTarget,
+		"projectId":    nil,
+		"projectName":  nil,
+		"runtime":      template.Runtime,
+		"status":       "cloned",
+		"template":     template.ID,
+		"title":        template.Title,
+		"written":      written,
 	}
 	if boundProject != nil {
 		result["projectId"] = boundProject.project.ProjectID
 		result["projectName"] = boundProject.project.Name
+		result["metadataPath"] = filepath.ToSlash(filepath.Join(localAgoraDirName, localProjectFileName))
 	}
 	return result, nil
 }
@@ -351,15 +365,25 @@ func (a *App) quickstartEnvWrite(targetDir, templateID, explicitProject string) 
 	if err != nil {
 		return nil, err
 	}
+	if err := writeLocalProjectBinding(absTarget, localProjectBinding{
+		ProjectID:   target.project.ProjectID,
+		ProjectName: target.project.Name,
+		Region:      target.region,
+		Template:    template.ID,
+		EnvPath:     envPath,
+	}); err != nil {
+		return nil, err
+	}
 	return map[string]any{
-		"action":      "env-write",
-		"envPath":     envPath,
-		"path":        absTarget,
-		"projectId":   target.project.ProjectID,
-		"projectName": target.project.Name,
-		"status":      status,
-		"template":    template.ID,
-		"title":       template.Title,
+		"action":       "env-write",
+		"envPath":      envPath,
+		"metadataPath": filepath.ToSlash(filepath.Join(localAgoraDirName, localProjectFileName)),
+		"path":         absTarget,
+		"projectId":    target.project.ProjectID,
+		"projectName":  target.project.Name,
+		"status":       status,
+		"template":     template.ID,
+		"title":        template.Title,
 	}, nil
 }
 
@@ -389,15 +413,11 @@ func (a *App) resolveOptionalProjectTarget(explicitProject string) (projectTarge
 		target, err := a.resolveProjectTarget(explicitProject)
 		return target, true, err
 	}
-	ctx, err := loadContext(a.env)
-	if err != nil {
-		return projectTarget{}, false, err
-	}
-	if ctx.CurrentProjectID == nil || *ctx.CurrentProjectID == "" {
-		return projectTarget{}, false, nil
-	}
 	target, err := a.resolveProjectTarget("")
 	if err != nil {
+		if strings.Contains(err.Error(), "No project selected.") {
+			return projectTarget{}, false, nil
+		}
 		return projectTarget{}, false, err
 	}
 	return target, true, nil

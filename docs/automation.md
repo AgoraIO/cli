@@ -96,6 +96,8 @@ Required `data` fields:
   Absolute path to the cloned quickstart.
 - `envPath`
   Path of the env file relative to the cloned quickstart root.
+- `metadataPath`
+  Repo-local project binding file path, currently `.agora/project.json`.
 - `enabledFeatures`
   Array of enabled features. For a newly created project this currently includes `rtc` and `convoai`. For an existing project this may be empty because the CLI did not create the project in this run.
 - `nextSteps`
@@ -302,6 +304,8 @@ Required `data` fields:
   `template-only` or `configured`.
 - `envPath`
   Empty when no project was bound during creation.
+- `metadataPath`
+  `.agora/project.json` when the quickstart was bound to a project during creation.
 - `status`
   Currently `cloned`.
 - `written`
@@ -336,6 +340,8 @@ Required `data` fields:
   Absolute path to the quickstart root.
 - `envPath`
   Env file path relative to the quickstart root.
+- `metadataPath`
+  Repo-local project binding file path, currently `.agora/project.json`.
 - `projectId`
 - `projectName`
 - `status`

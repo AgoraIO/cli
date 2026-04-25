@@ -76,8 +76,27 @@ func (a *App) resolveProjectTarget(explicit string) (projectTarget, error) {
 		}
 		return projectTarget{project: project, region: region}, nil
 	}
+	if binding, ok, _, err := detectLocalProjectBinding(); err != nil {
+		return projectTarget{}, err
+	} else if ok && binding.ProjectID != "" {
+		project, err := a.getProject(binding.ProjectID)
+		if err != nil {
+			return projectTarget{}, err
+		}
+		region := binding.Region
+		if region == "" {
+			region = ctx.CurrentRegion
+		}
+		if region == "" {
+			region = "global"
+		}
+		if project.Region != nil && *project.Region != "" {
+			region = *project.Region
+		}
+		return projectTarget{project: project, region: region}, nil
+	}
 	if ctx.CurrentProjectID == nil || *ctx.CurrentProjectID == "" {
-		return projectTarget{}, errors.New("No project selected. Run `agora project use <project>` or pass a project explicitly.")
+		return projectTarget{}, errors.New("No project selected. Run `agora project use <project>`, work inside a repo with `.agora/project.json`, or pass a project explicitly.")
 	}
 	project, err := a.getProject(*ctx.CurrentProjectID)
 	if err != nil {

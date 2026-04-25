@@ -21,7 +21,7 @@ The command model is intentionally layered:
 - `project` for remote Agora resources and env export
 - `auth` for login and session inspection
 - `config` for local CLI defaults
-- `add` reserved for future in-place integrations into an existing codebase
+- `add` hidden and reserved for future in-place integrations into an existing codebase
 
 ## Install / Build
 
@@ -109,7 +109,7 @@ Reads and updates local CLI defaults such as output mode, log level, and browser
 
 ### `add`
 
-Reserved for future in-place integrations into an existing application. It is intentionally not the primary onboarding path today.
+Hidden and reserved for future in-place integrations into an existing application. It is intentionally not part of the normal help surface today.
 
 ## Common Workflows
 
@@ -170,6 +170,11 @@ Template-specific behavior:
 The generated quickstart env block also includes project metadata as comments:
 - `# Project ID: ...`
 - `# Project Name: ...`
+
+The CLI also writes repo-local project metadata to:
+- `.agora/project.json`
+
+That allows the CLI to detect which Agora project a cloned demo is bound to even when you are working inside the repo later.
 
 ## Automation / Agent Usage
 
