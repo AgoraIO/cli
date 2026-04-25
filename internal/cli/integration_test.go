@@ -443,7 +443,7 @@ func TestCLIHelpSurfaceAndLegacyCommands(t *testing.T) {
 
 func TestCLIHelpContentIsTaskOriented(t *testing.T) {
 	root := runCLI(t, []string{"--help"}, cliRunOptions{})
-	if root.exitCode != 0 || !strings.Contains(root.stdout, "project     Manage remote Agora project resources") || !strings.Contains(root.stdout, "quickstart  Clone official standalone quickstart repositories") || !strings.Contains(root.stdout, "init        Create a project and quickstart in one onboarding flow") || strings.Contains(root.stdout, "add         ") {
+	if root.exitCode != 0 || !strings.Contains(root.stdout, "project     Manage remote Agora project resources") || !strings.Contains(root.stdout, "quickstart  Clone official standalone quickstart repositories") || !strings.Contains(root.stdout, "init        Create a project and quickstart in one onboarding flow") || !strings.Contains(root.stdout, "agora --help --all") || strings.Contains(root.stdout, "add         ") {
 		t.Fatalf("unexpected root help output: %+v", root)
 	}
 	rootAll := runCLI(t, []string{"--help", "--all"}, cliRunOptions{})
@@ -460,7 +460,7 @@ func TestCLIHelpContentIsTaskOriented(t *testing.T) {
 		t.Fatalf("unexpected quickstart env write help output: %+v", quickstartEnv)
 	}
 	initHelp := runCLI(t, []string{"init", "--help"}, cliRunOptions{})
-	if initHelp.exitCode != 0 || !strings.Contains(initHelp.stdout, "creates a new Agora project") && !strings.Contains(strings.ToLower(initHelp.stdout), "create a new agora project") {
+	if initHelp.exitCode != 0 || (!strings.Contains(initHelp.stdout, "creates a new Agora project") && !strings.Contains(strings.ToLower(initHelp.stdout), "create a new agora project")) || !strings.Contains(initHelp.stdout, "--project") {
 		t.Fatalf("unexpected init help output: %+v", initHelp)
 	}
 

@@ -14,27 +14,14 @@ func defaultInitFeatures() []string {
 
 func initNextSteps(template quickstartTemplate, targetDir string) []string {
 	dir := filepath.Base(targetDir)
-	switch template.ID {
-	case "nextjs":
-		return []string{
-			"cd " + dir,
-			"pnpm install",
-			"pnpm dev",
-		}
-	case "python":
-		return []string{
-			"cd " + dir,
-			"bun install",
-			"bun run dev",
-		}
-	case "go":
-		return []string{
-			"cd " + dir,
-			"go run ./...",
-		}
-	default:
-		return []string{"cd " + dir}
+	steps := []string{"cd " + dir}
+	if template.InstallCommand != "" {
+		steps = append(steps, template.InstallCommand)
 	}
+	if template.RunCommand != "" {
+		steps = append(steps, template.RunCommand)
+	}
+	return steps
 }
 
 func (a *App) buildInitCommand() *cobra.Command {

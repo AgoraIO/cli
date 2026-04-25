@@ -522,6 +522,8 @@ func renderResult(cmd *cobra.Command, command string, data any) error {
 				fmt.Fprintf(os.Stdout, "- %s: %s\n", asString(item["id"]), asString(item["title"]))
 				fmt.Fprintf(os.Stdout, "  Available: %s\n", asString(item["available"]))
 				fmt.Fprintf(os.Stdout, "  Runtime: %s\n", asString(item["runtime"]))
+				fmt.Fprintf(os.Stdout, "  Supports Init: %s\n", asString(item["supportsInit"]))
+				fmt.Fprintf(os.Stdout, "  Env: %s\n", asString(item["envDocs"]))
 				fmt.Fprintf(os.Stdout, "  Repo: %s\n", asString(item["repoUrl"]))
 			}
 		}
@@ -537,7 +539,7 @@ func renderResult(cmd *cobra.Command, command string, data any) error {
 		if list, ok := m["enabledFeatures"].([]string); ok && len(list) > 0 {
 			features = strings.Join(list, ", ")
 		}
-		printBlock("Init", [][2]string{{"Template", asString(m["template"])}, {"Project", asString(m["projectName"])}, {"Project Action", asString(m["projectAction"])}, {"Path", asString(m["path"])}, {"Env Path", asString(m["envPath"])}, {"Features", features}, {"Status", asString(m["status"])}})
+		printBlock("Init", [][2]string{{"Template", asString(m["template"])}, {"Project", asString(m["projectName"])}, {"Project ID", asString(m["projectId"])}, {"Project Action", asString(m["projectAction"])}, {"Region", asString(m["region"])}, {"Path", asString(m["path"])}, {"Env Path", asString(m["envPath"])}, {"Features", features}, {"Status", asString(m["status"])}})
 		if steps, ok := m["nextSteps"].([]string); ok && len(steps) > 0 {
 			fmt.Fprintln(os.Stdout)
 			fmt.Fprintln(os.Stdout, "Next Steps")

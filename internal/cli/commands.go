@@ -22,13 +22,15 @@ func (a *App) buildRoot() *cobra.Command {
   quickstart  Clone official standalone quickstart repositories
   init        Create a project and quickstart in one onboarding flow
 
-Use "agora <command> --help" to see command-specific guidance and examples.`,
+Use "agora init" for the fastest path to a runnable demo.
+Use "agora --help --all" to inspect the full command tree, including advanced low-level commands.`,
 		Example: strings.TrimSpace(`
   agora login
   agora init my-nextjs-demo --template nextjs
   agora init my-python-demo --template python
-  agora quickstart list
-  agora quickstart create my-go-demo --template go --project my-agent-demo
+  agora init my-go-demo --template go
+  agora project doctor --json
+  agora --help --all
 `),
 		SilenceUsage:  true,
 		SilenceErrors: true,
@@ -340,7 +342,7 @@ func (a *App) buildProjectCommand() *cobra.Command {
 		Long: `Project commands work against remote Agora Console resources.
 
 Use this group to create projects, switch the current project context, inspect feature state, and export project env values.
-These commands do not clone local application code. Use "agora quickstart" for standalone starter repos.`,
+These commands do not clone local application code. Use "agora quickstart" for standalone starter repos or "agora init" for the recommended end-to-end onboarding flow.`,
 		Example: strings.TrimSpace(`
   agora project create my-agent-demo --feature rtc --feature convoai
   agora project list
@@ -373,6 +375,7 @@ func (a *App) buildAddCommand() *cobra.Command {
 		Long: `The add command group is reserved for future in-place integrations into an existing application.
 
 Use "agora quickstart create" when you want a standalone starter repo.
+Use "agora init" when you want the recommended end-to-end onboarding flow.
 Use "agora project" when you want to manage remote Agora resources.`,
 		Example: strings.TrimSpace(`
   agora add --help

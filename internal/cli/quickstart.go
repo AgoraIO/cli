@@ -22,6 +22,10 @@ type quickstartTemplate struct {
 	DetectPaths    []string
 	EnvExamplePath string
 	EnvTargetPath  string
+	InstallCommand string
+	RunCommand     string
+	EnvDocsSummary string
+	SupportsInit   bool
 	Available      bool
 }
 
@@ -37,6 +41,10 @@ func quickstartTemplates() []quickstartTemplate {
 			DetectPaths:    []string{"env.local.example", "app"},
 			EnvExamplePath: "env.local.example",
 			EnvTargetPath:  ".env.local",
+			InstallCommand: "pnpm install",
+			RunCommand:     "pnpm dev",
+			EnvDocsSummary: "Writes NEXT_PUBLIC_AGORA_APP_ID for the browser and NEXT_AGORA_APP_CERTIFICATE for server-side runtime use.",
+			SupportsInit:   true,
 			Available:      true,
 		},
 		{
@@ -49,6 +57,10 @@ func quickstartTemplates() []quickstartTemplate {
 			DetectPaths:    []string{"server-python/.env.example", "server-python", "web-client"},
 			EnvExamplePath: "server-python/.env.example",
 			EnvTargetPath:  "server-python/.env.local",
+			InstallCommand: "bun install",
+			RunCommand:     "bun run dev",
+			EnvDocsSummary: "Writes APP_ID and APP_CERTIFICATE into the backend env file under server-python/.",
+			SupportsInit:   true,
 			Available:      true,
 		},
 		{
@@ -61,6 +73,10 @@ func quickstartTemplates() []quickstartTemplate {
 			DetectPaths:    []string{"server-go/.env.example", "server-go", "web-client"},
 			EnvExamplePath: "server-go/.env.example",
 			EnvTargetPath:  "server-go/.env.local",
+			InstallCommand: "go mod tidy",
+			RunCommand:     "go run ./...",
+			EnvDocsSummary: "Writes APP_ID and APP_CERTIFICATE into the backend env file under server-go/.",
+			SupportsInit:   true,
 			Available:      true,
 		},
 	}
@@ -121,13 +137,15 @@ func (a *App) buildQuickstartList() *cobra.Command {
 					continue
 				}
 				items = append(items, map[string]any{
-					"available":   template.Available,
-					"description": template.Description,
-					"docsUrl":     template.DocsURL,
-					"id":          template.ID,
-					"repoUrl":     template.RepoURL,
-					"runtime":     template.Runtime,
-					"title":       template.Title,
+					"available":    template.Available,
+					"description":  template.Description,
+					"docsUrl":      template.DocsURL,
+					"envDocs":      template.EnvDocsSummary,
+					"id":           template.ID,
+					"repoUrl":      template.RepoURL,
+					"runtime":      template.Runtime,
+					"supportsInit": template.SupportsInit,
+					"title":        template.Title,
 				})
 			}
 			return renderResult(cmd, "quickstart list", map[string]any{

@@ -545,13 +545,16 @@ func TestPathsLogsAndArtifactsParity(t *testing.T) {
 	if int(parsed["version"].(float64)) != currentAppConfigVersion {
 		t.Fatalf("unexpected config.example version: %v", parsed)
 	}
-	for _, file := range []string{"README.md", "RELEASING.md"} {
+	for _, file := range []string{"README.md", "RELEASING.md", filepath.Join("docs", "automation.md")} {
 		raw, err := os.ReadFile(filepath.Join("..", "..", file))
 		if err != nil {
 			t.Fatalf("expected %s: %v", file, err)
 		}
-		if file == "README.md" && (!strings.Contains(string(raw), "go build -o agora .") || !strings.Contains(string(raw), "project doctor")) {
+		if file == "README.md" && (!strings.Contains(string(raw), "go build -o agora .") || !strings.Contains(string(raw), "agora init") || !strings.Contains(string(raw), "quickstart env write") || !strings.Contains(string(raw), "--help --all")) {
 			t.Fatalf("unexpected README contents: %s", string(raw))
+		}
+		if file == filepath.Join("docs", "automation.md") && (!strings.Contains(string(raw), "--json") || !strings.Contains(string(raw), "\"command\": \"init\"") || !strings.Contains(string(raw), "project doctor")) {
+			t.Fatalf("unexpected automation doc contents: %s", string(raw))
 		}
 	}
 }
