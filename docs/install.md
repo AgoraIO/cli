@@ -2,7 +2,16 @@
 
 This page lists supported installation methods.
 
-## Homebrew Formula (Recommended)
+## Quick Install (npm)
+
+```bash
+npm install -g agoraio-cli
+agora --help
+```
+
+Requires Node.js 18+.
+
+## Homebrew Formula
 
 ```bash
 brew tap agora/tap
