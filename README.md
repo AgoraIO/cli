@@ -1,31 +1,38 @@
 # Agora CLI Go
 
-`agora-cli-go` is the native Go CLI for managing Agora authentication, remote projects, official quickstarts, and end-to-end onboarding workflows.
-
-It supports both:
-- high-level setup with `init`
-- explicit low-level workflows with `project` and `quickstart`
+Native Agora CLI for authentication, project management, quickstart setup, and developer onboarding.
 
 ## Install
 
-Install with Homebrew (recommended):
+Quick install (`npm`):
 
 ```bash
-brew tap agora/tap
-brew install agora
+npm install -g agoraio-cli
 agora --help
 ```
 
-For all installation options, including source builds and cask usage, see [docs/install.md](docs/install.md).
+Alternative install (`Homebrew` tap):
 
-## What This CLI Is
+```bash
+brew install agora/tap/agora
+agora --help
+```
 
-Use this CLI when you want to:
-- authenticate with Agora Console
-- create and manage remote Agora projects
-- clone official quickstart repositories for Next.js, Python, or Go
-- inject the correct env file for a selected Agora project
-- automate onboarding flows with stable JSON output
+## First Run
+
+```bash
+agora login
+agora init my-nextjs-demo --template nextjs
+```
+
+## Docs
+
+- Install options (npm, Homebrew cask, source build): [docs/install.md](docs/install.md)
+- Automation and JSON contract: [docs/automation.md](docs/automation.md)
+- Homebrew tap distribution and automation: [docs/homebrew.md](docs/homebrew.md)
+- Homebrew core submission path (`brew install agora`): [docs/homebrew-core.md](docs/homebrew-core.md)
+
+## Command Model
 
 The command model is intentionally layered:
 - `init` for the recommended onboarding path
@@ -34,58 +41,12 @@ The command model is intentionally layered:
 - `auth` for login and session inspection
 - `config` for local CLI defaults
 
-## Build From Source
-
-Build the native binary:
-
-```bash
-go build -o agora .
-```
-
-Runtime dependencies:
-- `git` is required for `quickstart create` and `init`
-- the cloned quickstart may require `pnpm`, `bun`, `go`, or template-specific tooling to install and run locally
-
 Discover the full command tree:
 
 ```bash
 ./agora --help
 ./agora --help --all
 ```
-
-## Quick Start
-
-The primary onboarding path is `init`.
-
-`init` does all of the following:
-- creates a new Agora project by default
-- enables the default features `rtc` and `convoai`
-- clones the selected quickstart
-- writes the framework-specific env file
-- sets the selected project as the current CLI context
-
-Examples:
-
-```bash
-./agora login
-./agora init my-nextjs-demo --template nextjs
-```
-
-```bash
-./agora init my-python-demo --template python
-```
-
-```bash
-./agora init my-go-demo --template go
-```
-
-Use `--project` when you want to bind a quickstart to an existing Agora project instead of creating a new one:
-
-```bash
-./agora init my-nextjs-demo --template nextjs --project my-existing-project
-```
-
-## Command Model
 
 ### `init`
 
