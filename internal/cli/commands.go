@@ -336,14 +336,14 @@ func (a *App) buildConfigCommand() *cobra.Command {
 	})
 	var cfg appConfig
 	cfg = a.cfg
-	var telemetryEnabled, browserAutoOpen, verbose string
+	var telemetryEnabled, browserAutoOpen, verbose bool
 	update := &cobra.Command{
 		Use:   "update",
 		Short: "Update persisted CLI defaults",
 		Long:  "Write new default values to the local Agora CLI config file. Environment variables still take precedence at runtime.",
 		Example: strings.TrimSpace(`
   agora config update --output json
-  agora config update --browser-auto-open false
+  agora config update --browser-auto-open=false
   agora config update --api-base-url https://agora-cli.agora.io
 `),
 		RunE: func(cmd *cobra.Command, _ []string) error {
@@ -361,28 +361,16 @@ func (a *App) buildConfigCommand() *cobra.Command {
 				next.OAuthScope = cfg.OAuthScope
 			}
 			if cmd.Flags().Changed("telemetry-enabled") {
-				value, err := parseBooleanString(telemetryEnabled, "--telemetry-enabled")
-				if err != nil {
-					return err
-				}
-				next.TelemetryEnabled = value
+				next.TelemetryEnabled = telemetryEnabled
 			}
 			if cmd.Flags().Changed("browser-auto-open") {
-				value, err := parseBooleanString(browserAutoOpen, "--browser-auto-open")
-				if err != nil {
-					return err
-				}
-				next.BrowserAutoOpen = value
+				next.BrowserAutoOpen = browserAutoOpen
 			}
 			if cmd.Flags().Changed("log-level") {
 				next.LogLevel = cfg.LogLevel
 			}
 			if cmd.Flags().Changed("verbose") {
-				value, err := parseBooleanString(verbose, "--verbose")
-				if err != nil {
-					return err
-				}
-				next.Verbose = value
+				next.Verbose = verbose
 			}
 			if cmd.Flags().Changed("output") {
 				next.Output = outputMode(cfg.Output)
@@ -403,10 +391,10 @@ func (a *App) buildConfigCommand() *cobra.Command {
 	update.Flags().StringVar(&cfg.OAuthBaseURL, "oauth-base-url", cfg.OAuthBaseURL, "default OAuth base URL")
 	update.Flags().StringVar(&cfg.OAuthClientID, "oauth-client-id", cfg.OAuthClientID, "default OAuth client ID")
 	update.Flags().StringVar(&cfg.OAuthScope, "oauth-scope", cfg.OAuthScope, "default OAuth scope")
-	update.Flags().StringVar(&telemetryEnabled, "telemetry-enabled", "", "persist telemetry preference (true or false)")
-	update.Flags().StringVar(&browserAutoOpen, "browser-auto-open", "", "persist browser auto-open preference (true or false)")
+	update.Flags().BoolVar(&telemetryEnabled, "telemetry-enabled", false, "persist telemetry preference; use --telemetry-enabled=false to disable")
+	update.Flags().BoolVar(&browserAutoOpen, "browser-auto-open", false, "persist browser auto-open preference; use --browser-auto-open=false to disable")
 	update.Flags().StringVar(&cfg.LogLevel, "log-level", cfg.LogLevel, "persist default log level")
-	update.Flags().StringVar(&verbose, "verbose", "", "persist verbose logging preference (true or false)")
+	update.Flags().BoolVar(&verbose, "verbose", false, "persist verbose logging preference; use --verbose=false to disable")
 	update.Flags().Var(newOutputModeValue((*string)(&cfg.Output)), "output", "persist default output mode (pretty or json)")
 	cmd.AddCommand(update)
 	return cmd

@@ -126,7 +126,7 @@ func (a *App) buildQuickstartList() *cobra.Command {
 		Long:  "Show the official quickstart templates known to the CLI. By default, only available templates are listed.",
 		Example: strings.TrimSpace(`
   agora quickstart list
-  agora quickstart list --all
+  agora quickstart list --show-all
   agora quickstart list --json
 `),
 		RunE: func(cmd *cobra.Command, _ []string) error {
@@ -153,7 +153,7 @@ func (a *App) buildQuickstartList() *cobra.Command {
 			})
 		},
 	}
-	cmd.Flags().BoolVar(&showAll, "all", false, "include upcoming or unavailable templates in the list")
+	cmd.Flags().BoolVar(&showAll, "show-all", false, "include upcoming or unavailable templates in the list")
 	return cmd
 }
 

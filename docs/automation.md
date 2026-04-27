@@ -13,7 +13,8 @@ Use this guide for:
 - Prefer `--json` for any command consumed by code, scripts, or agents.
 - Prefer `agora init` for end-to-end setup.
 - Use low-level commands when a workflow must be decomposed, resumed, or partially re-run.
-- Use `agora --help --all` to inspect the full command tree.
+- Use `agora --help --all` to inspect the full command tree (human-readable).
+- Use `agora --help --all --json` for a machine-readable command tree with all flags — the primary capability discovery mechanism for agents.
 - Use `agora project doctor --json` for readiness checks before continuing with automated setup.
 - In JSON mode, both success and failure return the same top-level envelope shape.
 
@@ -88,6 +89,17 @@ Failure example:
   }
 }
 ```
+
+## Exit Codes
+
+| Code | Meaning | Commands |
+|------|---------|----------|
+| 0 | Success | all commands |
+| 1 | General error or blocking issue | most commands; `project doctor` when blocking issues found |
+| 2 | Non-blocking warning | `project doctor` when only warnings found |
+| 3 | Auth or session error | `project doctor` when not authenticated; `auth status` / `whoami` when unauthenticated |
+
+In JSON mode the `meta.exitCode` field in error envelopes carries the same value.
 
 ## Stable Result Shapes
 
@@ -442,6 +454,189 @@ Safe branch fields:
 - `authenticated`
 - `status`
 - `expiresAt`
+
+### `auth login`
+
+Example:
+
+```bash
+./agora login --json
+./agora auth login --json
+```
+
+Required `data` fields:
+- `action`
+  Always `login`.
+- `status`
+  Currently `authenticated`.
+- `scope`
+- `expiresAt`
+
+Safe branch fields:
+- `status`
+- `expiresAt`
+
+### `auth logout`
+
+Example:
+
+```bash
+./agora logout --json
+./agora auth logout --json
+```
+
+Required `data` fields:
+- `action`
+  Always `logout`.
+- `status`
+  Currently `logged-out`.
+- `clearedSession`
+  `true` if a session file was removed; `false` if no session existed.
+
+Safe branch fields:
+- `status`
+- `clearedSession`
+
+### `project list`
+
+Example:
+
+```bash
+./agora project list --json
+./agora project list --keyword demo --page 2 --json
+```
+
+Required `data` fields:
+- `items`
+  Array of project summary objects.
+- `page`
+  Current page number (1-based).
+- `pageSize`
+  Number of items per page.
+- `total`
+  Total number of matching projects across all pages.
+
+Each item includes: `projectId`, `name`, `appId`, `projectType`, `status`, `region`, `createdAt`, `updatedAt`.
+
+Safe branch fields:
+- `items[].projectId`
+- `items[].name`
+- `total`
+- `page`
+- `pageSize`
+
+### `project feature list`
+
+Example:
+
+```bash
+./agora project feature list --json
+./agora project feature list my-project --json
+```
+
+Required `data` fields:
+- `action`
+  Always `feature-list`.
+- `projectId`
+- `projectName`
+- `items`
+  Array of feature status objects.
+
+Each item includes: `feature` (one of `rtc`, `rtm`, `convoai`), `status` (one of `enabled`, `disabled`, `included`, `provisioning`), `message`.
+
+Safe branch fields:
+- `projectId`
+- `items[].feature`
+- `items[].status`
+
+### `project feature status`
+
+Example:
+
+```bash
+./agora project feature status convoai --json
+```
+
+Required `data` fields:
+- `action`
+  Always `feature-status`.
+- `feature`
+- `status`
+  One of `enabled`, `disabled`, `included`, `provisioning`.
+- `message`
+- `projectId`
+- `projectName`
+
+Safe branch fields:
+- `feature`
+- `status`
+- `projectId`
+
+### `project feature enable`
+
+Example:
+
+```bash
+./agora project feature enable convoai --json
+```
+
+Required `data` fields:
+- `action`
+  Always `feature-enable`.
+- `feature`
+- `status`
+  One of `enabled`, `included`.
+- `message`
+- `projectId`
+- `projectName`
+
+Safe branch fields:
+- `feature`
+- `status`
+- `projectId`
+
+### `config path`
+
+Example:
+
+```bash
+./agora config path --json
+```
+
+Required `data` fields:
+- `path`
+  Absolute path to the config file on disk.
+
+Safe branch fields:
+- `path`
+
+### `config get`
+
+Example:
+
+```bash
+./agora config get --json
+```
+
+Returns the current resolved config object. Safe branch fields:
+- `apiBaseUrl`
+- `oauthBaseUrl`
+- `output`
+- `logLevel`
+- `browserAutoOpen`
+- `telemetryEnabled`
+- `verbose`
+
+### `config update`
+
+Example:
+
+```bash
+./agora config update --output json --json
+./agora config update --telemetry-enabled=false --json
+```
+
+Returns the updated config object with the same shape as `config get`. Safe branch fields are the same as `config get`.
 
 ## Human vs Machine Output
 

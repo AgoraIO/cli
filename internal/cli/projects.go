@@ -299,7 +299,7 @@ func (a *App) projectShow(projectArg string) (map[string]any, error) {
 	if err != nil {
 		return nil, err
 	}
-	return map[string]any{"action": "show", "appId": target.project.AppID, "appCertificate": target.project.SignKey, "projectId": target.project.ProjectID, "projectName": target.project.Name, "region": target.region, "signKey": target.project.SignKey, "tokenEnabled": target.project.TokenEnabled}, nil
+	return map[string]any{"action": "show", "appId": target.project.AppID, "appCertificate": target.project.SignKey, "projectId": target.project.ProjectID, "projectName": target.project.Name, "region": target.region, "tokenEnabled": target.project.TokenEnabled}, nil
 }
 
 type envFormat string
@@ -357,7 +357,7 @@ func (a *App) projectEnvValues(projectArg string, withSecrets bool) (map[string]
 	}
 	if withSecrets {
 		if target.project.SignKey == nil || *target.project.SignKey == "" {
-			return nil, fmt.Errorf("Project %q does not have an app certificate.", target.project.Name)
+			return nil, fmt.Errorf("project %q does not have an app certificate. Enable one in Agora Console or use a different project with `agora project use`.", target.project.Name)
 		}
 		values["AGORA_APP_CERTIFICATE"] = *target.project.SignKey
 	}

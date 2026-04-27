@@ -11,6 +11,7 @@
 | Build binary | `go build -o agora .` |
 | Run all tests | `go test ./...` |
 | Inspect full command tree | `./agora --help --all` |
+| Machine-readable full command tree | `./agora --help --all --json` |
 | Machine-readable output | Add `--json` to any command |
 
 ## Source Layout
@@ -67,7 +68,7 @@ agora
 └── config
     ├── path    Print the config file path
     ├── get     Print current config values
-    └── set     Update a config value
+    └── update  Update a config value
 ```
 
 **Design rules — do not break these:**
@@ -135,9 +136,9 @@ When adding a command:
 
 ## Adding a New Command
 
-1. Create `internal/cli/<noun>.go` with `func Register<Noun>Command(app *App) *cobra.Command`
-2. Register it in `commands.go` inside `buildRootCommand`
-3. Accept `--json` via `app.jsonMode`; return results through `app.output(result)`
+1. Create `internal/cli/<noun>.go` with business logic on `*App`
+2. Register the command in `commands.go` inside `buildRoot()`
+3. Accept `--json` via `a.resolveOutputMode(cmd)`; return results through `renderResult(cmd, "command label", data)`
 4. Add the command to the README command model
 5. Add a stable JSON result shape to `docs/automation.md`
 6. Update `docs/parity-matrix.json` if it corresponds to a TypeScript command

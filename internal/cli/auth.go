@@ -414,7 +414,10 @@ func (a *App) apiRequest(method, pathname string, query map[string]string, body 
 			continue
 		}
 		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-			return fmt.Errorf("%s %s failed with status %d: %s", method, pathname, resp.StatusCode, strings.TrimSpace(string(raw)))
+			if resp.StatusCode == http.StatusUnauthorized {
+				return fmt.Errorf("session expired or invalid. Run `agora login` to re-authenticate.")
+			}
+			return fmt.Errorf("API error (HTTP %d): %s", resp.StatusCode, strings.TrimSpace(string(raw)))
 		}
 		return json.Unmarshal(raw, out)
 	}

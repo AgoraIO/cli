@@ -540,12 +540,12 @@ func TestCLIQuickstartListAndCreate(t *testing.T) {
 	if list.exitCode != 0 || !strings.Contains(list.stdout, `"id":"nextjs"`) || !strings.Contains(list.stdout, `"id":"python"`) || !strings.Contains(list.stdout, `"id":"go"`) {
 		t.Fatalf("unexpected quickstart list result: %+v", list)
 	}
-	listAll := runCLI(t, []string{"quickstart", "list", "--all", "--json"}, cliRunOptions{env: map[string]string{
+	listAll := runCLI(t, []string{"quickstart", "list", "--show-all", "--json"}, cliRunOptions{env: map[string]string{
 		"XDG_CONFIG_HOME": configHome,
 		"AGORA_LOG_LEVEL": "error",
 	}})
 	if listAll.exitCode != 0 || !strings.Contains(listAll.stdout, `"id":"go"`) {
-		t.Fatalf("unexpected quickstart list --all result: %+v", listAll)
+		t.Fatalf("unexpected quickstart list --show-all result: %+v", listAll)
 	}
 
 	rootDir := t.TempDir()
@@ -1002,8 +1002,8 @@ func TestCLIProjectUseShowFeatureAndDoctorHappyPath(t *testing.T) {
 		"AGORA_LOG_LEVEL":    "error",
 		"AGORA_OUTPUT":       "pretty",
 	}})
-	if showPretty.exitCode != 0 || !strings.Contains(showPretty.stdout, "App Certificate") || !strings.Contains(showPretty.stdout, "Region") {
-		t.Fatalf("unexpected pretty show output: %+v", showPretty)
+	if showPretty.exitCode != 0 || !strings.Contains(showPretty.stdout, "App Certificate") || !strings.Contains(showPretty.stdout, "Region") || !strings.Contains(showPretty.stdout, "[hidden]") || strings.Contains(showPretty.stdout, "4854d28b48a9439c9f2546e2216fc07a") {
+		t.Fatalf("unexpected pretty show output (cert must be [hidden]): %+v", showPretty)
 	}
 
 	featureStatus := runCLI(t, []string{"project", "feature", "status", "convoai", "--json"}, cliRunOptions{env: map[string]string{

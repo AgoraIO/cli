@@ -626,7 +626,7 @@ func renderResult(cmd *cobra.Command, command string, data any) error {
 		printBlock(out, "Current Project", [][2]string{{"Name", asString(m["projectName"])}, {"Project ID", asString(m["projectId"])}, {"Region", asString(m["region"])}})
 	case "project show":
 		m := data.(map[string]any)
-		printBlock(out, "Project", [][2]string{{"Name", asString(m["projectName"])}, {"Project ID", asString(m["projectId"])}, {"App ID", asString(m["appId"])}, {"App Certificate", asString(m["appCertificate"])}, {"Region", asString(m["region"])}, {"Token Enabled", asString(m["tokenEnabled"])}})
+		printBlock(out, "Project", [][2]string{{"Name", asString(m["projectName"])}, {"Project ID", asString(m["projectId"])}, {"App ID", asString(m["appId"])}, {"App Certificate", redactSensitive(m["appCertificate"])}, {"Region", asString(m["region"])}, {"Token Enabled", asString(m["tokenEnabled"])}})
 	case "project env write":
 		m := data.(map[string]any)
 		printBlock(out, "Project Env", [][2]string{{"Project", asString(m["projectName"])}, {"Project ID", asString(m["projectId"])}, {"Path", asString(m["path"])}, {"Status", asString(m["status"])}})
@@ -682,7 +682,24 @@ func renderResult(cmd *cobra.Command, command string, data any) error {
 		printBlock(out, "Feature", [][2]string{{"Feature", asString(m["feature"])}, {"Project", asString(m["projectName"])}, {"Status", asString(m["status"])}, {"Message", asString(m["message"])}})
 	case "project list":
 		m := data.(map[string]any)
-		printBlock(out, "Projects", [][2]string{{"Total", asString(m["total"])}})
+		total, _ := m["total"].(int)
+		page, _ := m["page"].(int)
+		pageSize, _ := m["pageSize"].(int)
+		if pageSize <= 0 {
+			pageSize = 20
+		}
+		totalPages := (total + pageSize - 1) / pageSize
+		if totalPages == 0 {
+			totalPages = 1
+		}
+		count := 0
+		if items, ok := m["items"].([]projectSummary); ok {
+			count = len(items)
+		}
+		printBlock(out, "Projects", [][2]string{
+			{"Total", asString(total)},
+			{"Page", fmt.Sprintf("%d of %d (showing %d)", page, totalPages, count)},
+		})
 		fmt.Fprintln(out)
 		if items, ok := m["items"].([]projectSummary); ok {
 			for _, item := range items {
@@ -716,6 +733,25 @@ func asString(v any) string {
 		return "no"
 	default:
 		return fmt.Sprint(v)
+	}
+}
+
+func redactSensitive(v any) string {
+	switch x := v.(type) {
+	case nil:
+		return "-"
+	case *string:
+		if x == nil || *x == "" {
+			return "-"
+		}
+		return "[hidden]"
+	case string:
+		if x == "" {
+			return "-"
+		}
+		return "[hidden]"
+	default:
+		return "-"
 	}
 }
 
@@ -783,17 +819,6 @@ func ExitCode(err error) (int, bool) {
 func ErrorRendered(err error) bool {
 	var rendered *renderedError
 	return errors.As(err, &rendered)
-}
-
-func parseBooleanString(value, option string) (bool, error) {
-	switch value {
-	case "true":
-		return true, nil
-	case "false":
-		return false, nil
-	default:
-		return false, fmt.Errorf("%s must be either \"true\" or \"false\".", option)
-	}
 }
 
 func exitIfNeeded(cmd *cobra.Command) error {

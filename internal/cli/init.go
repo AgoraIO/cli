@@ -29,18 +29,21 @@ func (a *App) buildInitCommand() *cobra.Command {
 	var dir string
 	var existingProject string
 	var region string
+	var features []string
 	cmd := &cobra.Command{
 		Use:   "init <name>",
 		Short: "Create a project, clone a quickstart, and write env in one flow",
 		Long: `Init is the recommended onboarding command.
 
-By default it creates a new Agora project, enables the default features for the selected template, clones the official quickstart repository, and writes the expected local env file.
+By default it creates a new Agora project, enables rtc and convoai, clones the official quickstart repository, and writes the expected local env file.
 
-Use --project when you want to bind the quickstart to an existing Agora project instead of creating a new one.`,
+Use --project to bind to an existing Agora project instead of creating a new one.
+Use --feature to specify which features to enable instead of the defaults (repeatable).`,
 		Example: strings.TrimSpace(`
   agora init my-nextjs-demo --template nextjs
   agora init my-python-demo --template python
   agora init my-go-demo --template go --project my-existing-project
+  agora init my-rtm-demo --template nextjs --feature rtc --feature rtm
 `),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) != 1 || strings.TrimSpace(args[0]) == "" {
@@ -54,7 +57,7 @@ Use --project when you want to bind the quickstart to an existing Agora project 
 			if strings.TrimSpace(targetDir) == "" {
 				targetDir = args[0]
 			}
-			result, err := a.initProject(args[0], targetDir, *template, existingProject, region)
+			result, err := a.initProject(args[0], targetDir, *template, existingProject, region, features)
 			if err != nil {
 				return err
 			}
@@ -65,11 +68,12 @@ Use --project when you want to bind the quickstart to an existing Agora project 
 	cmd.Flags().StringVar(&dir, "dir", "", "target directory for the cloned quickstart; defaults to <name>")
 	cmd.Flags().StringVar(&existingProject, "project", "", "existing project ID or exact project name to use instead of creating a new project")
 	cmd.Flags().StringVar(&region, "region", "", "control plane region for newly created projects (global or cn)")
+	cmd.Flags().StringArrayVar(&features, "feature", nil, "enable a feature on the newly created project (repeatable); defaults to rtc and convoai")
 	_ = cmd.MarkFlagRequired("template")
 	return cmd
 }
 
-func (a *App) initProject(name, targetDir string, template quickstartTemplate, existingProject, region string) (map[string]any, error) {
+func (a *App) initProject(name, targetDir string, template quickstartTemplate, existingProject, region string, features []string) (map[string]any, error) {
 	var target projectTarget
 	projectAction := "existing"
 	enabledFeatures := []string{}
@@ -81,7 +85,11 @@ func (a *App) initProject(name, targetDir string, template quickstartTemplate, e
 		}
 		target = resolved
 	} else {
-		projectResult, err := a.projectCreate(name, region, "", defaultInitFeatures())
+		featuresToEnable := features
+		if len(featuresToEnable) == 0 {
+			featuresToEnable = defaultInitFeatures()
+		}
+		projectResult, err := a.projectCreate(name, region, "", featuresToEnable)
 		if err != nil {
 			return nil, err
 		}
