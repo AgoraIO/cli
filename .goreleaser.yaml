@@ -78,7 +78,7 @@ brews:
     license: MIT
     skip_upload: "{{ if not .Env.HOMEBREW_TAP_OWNER }}true{{ end }}"
     test: |
-      system "#{bin}/agora", "--help"
+      system "#{bin}/agora", "--version"
     install: |
       bin.install "agora"
 
