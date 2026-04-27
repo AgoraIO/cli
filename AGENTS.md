@@ -87,7 +87,7 @@ Commands that need a project resolve context in this order:
 
 **Agent rule:** always prefer explicit `--project` for deterministic, reproducible operations. Use repo-local binding only when operating repeatedly inside a bound quickstart.
 
-**Known gap (v0.1.3):** Repo-local detection currently reads `os.Getwd()` instead of the target path argument. Running `quickstart env write /abs/path/to/demo` from another directory may not find `.agora/project.json` inside that path. Workaround: `cd` into the repo first, or pass `--project` explicitly. Fix target: `local_project.go`.
+Repo-local detection correctly traverses upward from the provided target path argument. Running `quickstart env write /abs/path/to/demo` from any working directory will find `.agora/project.json` inside that path.
 
 ## JSON Output Contract
 

@@ -130,7 +130,7 @@ Required `data` fields:
 - `metadataPath`
   Repo-local project binding file path, currently `.agora/project.json`.
 - `enabledFeatures`
-  Array of enabled features. For a newly created project this currently includes `rtc` and `convoai`. For an existing project this may be empty because the CLI did not create the project in this run.
+  Array of features enabled during this run. Defaults to `rtc` and `convoai` for newly created projects unless overridden with `--feature`. Empty for existing projects since the CLI did not create them in this run.
 - `nextSteps`
   Ordered list of suggested follow-up commands for the selected template.
 - `status`
@@ -212,11 +212,10 @@ Required `data` fields:
 
 Optional fields:
 - `appCertificate`
-- `signKey`
+  The app certificate (signing key). Present when the project has one configured. Sensitive — redacted in pretty output; available in JSON mode.
 
 Display-oriented fields:
 - `appCertificate`
-- `signKey`
 
 Safe branch fields:
 - `projectId`
