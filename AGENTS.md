@@ -49,7 +49,7 @@ The surface is deliberately layered. Use the highest-level command that covers t
 
 ```
 agora
-├── init <name>                    Recommended path: project + quickstart + env in one step
+├── init <name>                    Recommended path: reuses existing project (or creates if none); add --new-project to force creation
 ├── project
 │   ├── create <name>              Create a remote Agora project (control-plane only)
 │   ├── use <name>                 Set global project context

@@ -111,7 +111,10 @@ Example:
 
 ```bash
 ./agora init my-nextjs-demo --template nextjs --json
+./agora init my-nextjs-demo --template nextjs --new-project --json
 ```
+
+By default `init` reuses an existing project — preferring one named `"Default Project"`, then the most recent project. Pass `--new-project` to force creation. Use `--project <name|id>` to bind to a specific project.
 
 Required `data` fields:
 - `action`
