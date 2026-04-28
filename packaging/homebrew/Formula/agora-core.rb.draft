@@ -1,8 +1,8 @@
 class Agora < Formula
   desc "Agora CLI for auth, project management, and quickstart workflows"
-  homepage "https://github.com/agora/cli-workspace/agora-cli-go"
+  homepage "https://github.com/AgoraIO-Community/cli"
   # Update url+sha256 for each release candidate submitted to homebrew/core.
-  url "https://github.com/agora/cli-workspace/agora-cli-go/archive/refs/tags/v__VERSION__.tar.gz"
+  url "https://github.com/AgoraIO-Community/cli/archive/refs/tags/v__VERSION__.tar.gz"
   sha256 "__SHA256__"
   license "MIT"
 

@@ -1,6 +1,6 @@
 {
   "name": "@agoraio/cli-win32-x64",
-  "version": "0.0.0",
+  "version": "0.1.4",
   "description": "Agora CLI native binary — Windows x64",
   "os": ["win32"],
   "cpu": ["x64"],

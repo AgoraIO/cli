@@ -1,6 +1,6 @@
 {
   "name": "agoraio-cli",
-  "version": "0.0.0",
+  "version": "0.1.4",
   "description": "Agora CLI — developer onboarding and project management",
   "bin": {
     "agora": "./bin/agora.js"
@@ -9,12 +9,12 @@
     "bin/agora.js"
   ],
   "optionalDependencies": {
-    "@agoraio/cli-darwin-arm64": "0.0.0",
-    "@agoraio/cli-darwin-x64":   "0.0.0",
-    "@agoraio/cli-linux-arm64":  "0.0.0",
-    "@agoraio/cli-linux-x64":    "0.0.0",
-    "@agoraio/cli-win32-x64":    "0.0.0",
-    "@agoraio/cli-win32-arm64":  "0.0.0"
+    "@agoraio/cli-darwin-arm64": "0.1.4",
+    "@agoraio/cli-darwin-x64":   "0.1.4",
+    "@agoraio/cli-linux-arm64":  "0.1.4",
+    "@agoraio/cli-linux-x64":    "0.1.4",
+    "@agoraio/cli-win32-x64":    "0.1.4",
+    "@agoraio/cli-win32-arm64":  "0.1.4"
   },
   "publishConfig": {
     "access": "public"
