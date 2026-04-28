@@ -4,19 +4,22 @@ Native Agora CLI for authentication, project management, quickstart setup, and d
 
 ## Install
 
-Quick install (`npm`):
+```bash
+curl -fsSL https://raw.githubusercontent.com/AgoraIO-Community/cli/main/install.sh | sh -s -- --add-to-path
+```
+
+Run the CLI:
 
 ```bash
-npm install -g agoraio-cli
 agora --help
 ```
 
-Alternative install (`Homebrew` tap):
+Notes:
 
-```bash
-brew install agora/tap/agora
-agora --help
-```
+- The shell installer supports macOS, Linux, and Windows POSIX shells such as Git Bash. Use `install.ps1` for native PowerShell installs on Windows.
+- If the installer says `agora` is not on your PATH, re-run with `--add-to-path` or add the printed install directory to your shell profile.
+- Installer help is always available with `curl -fsSL https://raw.githubusercontent.com/AgoraIO-Community/cli/main/install.sh | sh -s -- --help`.
+- Pinned versions, dry runs, custom install directories, and source builds are documented in [docs/install.md](docs/install.md).
 
 ## First Run
 
@@ -27,14 +30,13 @@ agora init my-nextjs-demo --template nextjs
 
 ## Docs
 
-- Install options (npm, Homebrew cask, source build): [docs/install.md](docs/install.md)
+- Install options (direct installer, Windows, source): [docs/install.md](docs/install.md)
 - Automation and JSON contract: [docs/automation.md](docs/automation.md)
-- Homebrew tap distribution and automation: [docs/homebrew.md](docs/homebrew.md)
-- Homebrew core submission path (`brew install agora`): [docs/homebrew-core.md](docs/homebrew-core.md)
 
 ## Command Model
 
 The command model is intentionally layered:
+
 - `init` for the recommended onboarding path
 - `quickstart` for standalone starter repos
 - `project` for remote Agora resources and env export
@@ -57,6 +59,7 @@ Recommended onboarding command. It creates or binds a project, clones a quicksta
 Manages standalone official starter repos and their runtime-specific env files.
 
 Use this when you want to:
+
 - clone a quickstart without creating a project
 - bind a quickstart to an existing project
 - re-sync env files after changing project selection
@@ -66,6 +69,7 @@ Use this when you want to:
 Manages remote Agora project resources.
 
 Use this when you want to:
+
 - create or inspect projects directly
 - switch the default project context
 - export project env values
@@ -131,15 +135,18 @@ Reads and updates local CLI defaults such as output mode, log level, and browser
 - `quickstart env write` understands the quickstart type and writes the runtime-specific env file the cloned repo expects
 
 Template-specific behavior:
+
 - Next.js writes `.env.local` and uses `NEXT_PUBLIC_AGORA_APP_ID` plus `NEXT_AGORA_APP_CERTIFICATE`
 - Python writes `server-python/.env.local` and uses `APP_ID` plus `APP_CERTIFICATE`
 - Go writes `server-go/.env.local` and uses `APP_ID` plus `APP_CERTIFICATE`
 
 The generated quickstart env block also includes project metadata as comments:
+
 - `# Project ID: ...`
 - `# Project Name: ...`
 
 The CLI also writes repo-local project metadata to:
+
 - `.agora/project.json`
 
 That allows the CLI to detect which Agora project a cloned demo is bound to even when you are working inside the repo later.
@@ -147,16 +154,19 @@ That allows the CLI to detect which Agora project a cloned demo is bound to even
 ## Repo-Local Project Binding
 
 Project resolution precedence is consistent across commands:
+
 1. explicit `--project` or positional project argument
 2. repo-local `.agora/project.json` resolved from the target repo path
 3. global CLI context from `agora project use`
 
 The `.agora/project.json` file is created or updated by:
+
 - `agora init`
 - `agora quickstart create ... --project ...`
 - `agora quickstart env write ...`
 
 It stores durable non-secret metadata:
+
 - `projectId`
 - `projectName`
 - `region`
@@ -179,6 +189,7 @@ Examples:
 ## Automation / Agent Usage
 
 For scripts, CI, and agentic workflows:
+
 - prefer `--json` for machine consumption
 - prefer `init` for end-to-end setup
 - use low-level commands when the workflow must be decomposed or resumed in stages
@@ -202,19 +213,16 @@ The JSON envelope and stable result shapes are documented in [docs/automation.md
 ## CI and Releases
 
 GitHub Actions are configured for:
+
 - push and pull request validation on Linux, macOS, and Windows
 - automated tag-driven releases for `v*` tags
 - cross-platform release artifacts for Linux, macOS, and Windows
 
 Release workflow behavior:
+
 - a pushed tag like `v0.1.4` triggers the release workflow
 - the workflow runs tests, builds release binaries, packages them, and publishes a GitHub release automatically
 - release artifacts include checksums
-
-## Homebrew
-
-Homebrew distribution assets and automation are documented in:
-- [docs/homebrew.md](docs/homebrew.md)
 
 ## Configuration
 
@@ -252,6 +260,7 @@ You can also inspect the current auth state:
 ### Quickstart clone failures
 
 Check:
+
 - network access to GitHub
 - that the target directory does not already exist
 - that the quickstart repo URL is reachable
@@ -278,7 +287,7 @@ go build -o agora .
 ./agora --help
 ```
 
-Requires the Go toolchain pinned in [go.mod](go.mod). For all install options (npm, Homebrew, direct installer, source) see [docs/install.md](docs/install.md).
+Requires the Go toolchain pinned in [go.mod](go.mod). For direct installer options and source install notes, see [docs/install.md](docs/install.md).
 
 ## Migration
 
