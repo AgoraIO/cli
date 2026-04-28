@@ -67,6 +67,15 @@ jobs:
             exit 1
           }
 
+      - name: Smoke test POSIX installer on Windows
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="0.0.0-ci" \
+          INSTALL_DIR="$PWD/.tmp/install-bin-sh" \
+          sh ./install.sh --dry-run --force
+
       - name: Smoke test Unix installer
         if: runner.os != 'Windows'
         shell: bash

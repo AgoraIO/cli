@@ -80,14 +80,6 @@ jobs:
           node-version: "20"
           registry-url: "https://registry.npmjs.org"
 
-      - name: Download release artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: dist
-          pattern: "dist_*"
-          merge-multiple: true
-        # GoReleaser uploads artifacts via the release; download them via gh CLI instead.
-
       - name: Download binaries from release
         env:
           GH_TOKEN: ${{ github.token }}
