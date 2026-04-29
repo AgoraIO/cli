@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"bufio"
 	"bytes"
 	"crypto/rand"
 	"crypto/sha256"
@@ -330,13 +331,104 @@ func isAuthRequired(err error) bool {
 	return strings.Contains(msg, "Run `agora login` first") || strings.Contains(msg, "No refresh token available")
 }
 
+const noLocalSessionErrorMessage = "No local Agora session found. Run `agora login` first."
+
+func noLocalSessionError() error {
+	return errors.New(noLocalSessionErrorMessage)
+}
+
+func currentOutputModeFromArgs(env map[string]string) outputMode {
+	mode := resolveConfiguredOutputMode("", env)
+	if output := readRawFlagValue(os.Args[1:], "--output"); output == "json" || output == "pretty" {
+		mode = outputMode(output)
+	}
+	if hasFlag(os.Args[1:], "--json") {
+		mode = outputJSON
+	}
+	return mode
+}
+
+func (a *App) shouldPromptForLogin() bool {
+	if currentOutputModeFromArgs(a.env) == outputJSON {
+		return false
+	}
+	if strings.TrimSpace(a.env["CI"]) != "" {
+		return false
+	}
+	return isTTY(os.Stdin)
+}
+
+func readConfirmYesDefault(in io.Reader, out io.Writer, prompt string) (bool, error) {
+	reader := bufio.NewReader(in)
+	for {
+		if _, err := fmt.Fprint(out, prompt); err != nil {
+			return false, err
+		}
+		answer, err := reader.ReadString('\n')
+		if err != nil && !errors.Is(err, io.EOF) {
+			return false, err
+		}
+		normalized := strings.ToLower(strings.TrimSpace(answer))
+		switch normalized {
+		case "", "y", "yes":
+			return true, nil
+		case "n", "no":
+			return false, nil
+		}
+		if _, writeErr := fmt.Fprintln(out, "Please answer y or n."); writeErr != nil {
+			return false, writeErr
+		}
+		if errors.Is(err, io.EOF) {
+			return false, io.EOF
+		}
+	}
+}
+
+func (a *App) loginPromptRegion() string {
+	ctx, err := loadContext(a.env)
+	if err != nil {
+		return ""
+	}
+	if ctx.PreferredRegion == "global" || ctx.PreferredRegion == "cn" {
+		return ctx.PreferredRegion
+	}
+	return ""
+}
+
+func (a *App) promptForLogin() error {
+	if !a.shouldPromptForLogin() {
+		return noLocalSessionError()
+	}
+	if _, err := fmt.Fprintln(os.Stderr, "This command requires an Agora account."); err != nil {
+		return err
+	}
+	confirm, err := readConfirmYesDefault(os.Stdin, os.Stderr, "Sign in now? [Y/n]: ")
+	if err != nil {
+		return err
+	}
+	if !confirm {
+		return noLocalSessionError()
+	}
+	_, err = a.login(false, a.loginPromptRegion())
+	return err
+}
+
 func (a *App) ensureValidAccessToken() (*session, error) {
 	s, err := loadSession(a.env)
 	if err != nil {
 		return nil, err
 	}
 	if s == nil {
-		return nil, errors.New("No local Agora session found. Run `agora login` first.")
+		if err := a.promptForLogin(); err != nil {
+			return nil, err
+		}
+		s, err = loadSession(a.env)
+		if err != nil {
+			return nil, err
+		}
+		if s == nil {
+			return nil, noLocalSessionError()
+		}
 	}
 	expiry, err := time.Parse(time.RFC3339, s.ExpiresAt)
 	if err != nil {

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 )
@@ -76,9 +77,73 @@ Use --feature to specify which features to enable on a newly created project (re
 	return cmd
 }
 
+func parseInitProjectTimestamp(value string) (time.Time, bool) {
+	if strings.TrimSpace(value) == "" {
+		return time.Time{}, false
+	}
+	for _, layout := range []string{time.RFC3339Nano, time.RFC3339} {
+		if parsed, err := time.Parse(layout, value); err == nil {
+			return parsed, true
+		}
+	}
+	return time.Time{}, false
+}
+
+func selectInitProjectFromList(items []projectSummary) (projectSummary, bool) {
+	if len(items) == 0 {
+		return projectSummary{}, false
+	}
+	for _, item := range items {
+		if item.Name == "Default Project" {
+			return item, true
+		}
+	}
+	selected := items[0]
+	selectedCreated, selectedCreatedOK := parseInitProjectTimestamp(selected.CreatedAt)
+	selectedUpdated, selectedUpdatedOK := parseInitProjectTimestamp(selected.UpdatedAt)
+	for _, item := range items[1:] {
+		itemCreated, itemCreatedOK := parseInitProjectTimestamp(item.CreatedAt)
+		switch {
+		case itemCreatedOK && !selectedCreatedOK:
+			selected = item
+			selectedCreated = itemCreated
+			selectedCreatedOK = true
+			selectedUpdated, selectedUpdatedOK = parseInitProjectTimestamp(item.UpdatedAt)
+			continue
+		case !itemCreatedOK || !selectedCreatedOK:
+			continue
+		case itemCreated.After(selectedCreated):
+			selected = item
+			selectedCreated = itemCreated
+			selectedUpdated, selectedUpdatedOK = parseInitProjectTimestamp(item.UpdatedAt)
+			continue
+		case !itemCreated.Equal(selectedCreated):
+			continue
+		}
+		itemUpdated, itemUpdatedOK := parseInitProjectTimestamp(item.UpdatedAt)
+		switch {
+		case itemUpdatedOK && !selectedUpdatedOK:
+			selected = item
+			selectedCreated = itemCreated
+			selectedUpdated = itemUpdated
+			selectedUpdatedOK = true
+		case itemUpdatedOK && selectedUpdatedOK && itemUpdated.After(selectedUpdated):
+			selected = item
+			selectedCreated = itemCreated
+			selectedUpdated = itemUpdated
+		case itemUpdatedOK == selectedUpdatedOK && item.ProjectID > selected.ProjectID:
+			selected = item
+			selectedCreated = itemCreated
+			selectedUpdated = itemUpdated
+			selectedUpdatedOK = itemUpdatedOK
+		}
+	}
+	return selected, true
+}
+
 // findDefaultProject returns the user's preferred existing project: "Default Project" if it
-// exists, otherwise the first (most recent) project in the list. Returns found=false when
-// the account has no projects yet.
+// exists, otherwise the most recently created project in the current results page. Returns
+// found=false when the account has no projects yet.
 func (a *App) findDefaultProject() (projectTarget, bool, error) {
 	ctx, err := loadContext(a.env)
 	if err != nil {
@@ -91,12 +156,9 @@ func (a *App) findDefaultProject() (projectTarget, bool, error) {
 	if len(list.Items) == 0 {
 		return projectTarget{}, false, nil
 	}
-	item := list.Items[0]
-	for _, p := range list.Items {
-		if p.Name == "Default Project" {
-			item = p
-			break
-		}
+	item, ok := selectInitProjectFromList(list.Items)
+	if !ok {
+		return projectTarget{}, false, nil
 	}
 	project, err := a.getProject(item.ProjectID)
 	if err != nil {
