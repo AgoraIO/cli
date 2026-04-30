@@ -60,6 +60,10 @@ func TestCLIHelperProcess(t *testing.T) {
 		return
 	}
 	cliArgs := helperCLIArgs(t)
+	if len(cliArgs) == 0 {
+		fmt.Fprintln(os.Stderr, "TestCLIHelperProcess: missing CLI args (GO_CLI_HELPER_ARGS_JSON was empty and no -- fallback args were present)")
+		os.Exit(64)
+	}
 	originalArgs := os.Args
 	defer func() { os.Args = originalArgs }()
 	os.Args = append([]string{"agora"}, cliArgs...)

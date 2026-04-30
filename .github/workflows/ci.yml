@@ -200,15 +200,9 @@ jobs:
             & (Join-Path $installDir 'agora.exe') --help *> $null
 
             Set-Content -Path (Join-Path $downloadDir 'checksums.txt') -Value ('0' * 64 + "  $archive")
-            $failedAsExpected = $false
-            try {
-              & ./install.ps1 -InstallDir $badInstallDir
-            } catch {
-              $failedAsExpected = $true
-            }
-
-            if (-not $failedAsExpected) {
-              throw 'Expected checksum verification to fail.'
+            & ./install.ps1 -InstallDir $badInstallDir
+            if ($LASTEXITCODE -eq 0) {
+              throw 'Expected checksum verification to fail with a non-zero exit code.'
             }
           } finally {
             Stop-Process -Id $server.Id -Force -ErrorAction SilentlyContinue
