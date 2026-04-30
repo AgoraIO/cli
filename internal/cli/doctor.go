@@ -303,7 +303,7 @@ func createDoctorAuthErrorResult(feature string, deep bool, message, suggested s
 	if suggested != "" {
 		item.SuggestedCommand = suggested
 	}
-	issue := doctorIssue{Code: "AUTH_REQUIRED", Message: message}
+	issue := doctorIssue{Code: "AUTH_UNAUTHENTICATED", Message: message}
 	if suggested != "" {
 		issue.SuggestedCommand = suggested
 	}

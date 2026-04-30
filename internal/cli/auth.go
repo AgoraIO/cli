@@ -211,7 +211,7 @@ func waitForOAuthCallback(expectedState string, timeout time.Duration) (*callbac
 			errs <- errors.New("OAuth state mismatch.")
 		default:
 			w.WriteHeader(http.StatusOK)
-			_, _ = io.WriteString(w, "Agora CLI login complete. You can close this browser window.")
+			_, _ = io.WriteString(w, `<!doctype html><html><head><title>Agora CLI Login Complete</title><meta name="viewport" content="width=device-width, initial-scale=1"></head><body style="font-family: system-ui, sans-serif; margin: 3rem; line-height: 1.5;"><h1>Agora CLI login complete</h1><p>You can close this browser window and return to your terminal.</p></body></html>`)
 			wait <- callbackPayload{Code: code, State: state}
 		}
 	})
@@ -327,6 +327,10 @@ func isAuthRequired(err error) bool {
 	if err == nil {
 		return false
 	}
+	var structured *cliError
+	if errors.As(err, &structured) && (structured.Code == "AUTH_UNAUTHENTICATED" || structured.Code == "AUTH_SESSION_EXPIRED") {
+		return true
+	}
 	msg := err.Error()
 	return strings.Contains(msg, "Run `agora login` first") || strings.Contains(msg, "No refresh token available")
 }
@@ -334,7 +338,7 @@ func isAuthRequired(err error) bool {
 const noLocalSessionErrorMessage = "No local Agora session found. Run `agora login` first."
 
 func noLocalSessionError() error {
-	return errors.New(noLocalSessionErrorMessage)
+	return &cliError{Message: noLocalSessionErrorMessage, Code: "AUTH_UNAUTHENTICATED"}
 }
 
 func currentOutputModeFromArgs(env map[string]string) outputMode {
@@ -478,6 +482,7 @@ func (a *App) apiRequest(method, pathname string, query map[string]string, body 
 			return nil, err
 		}
 		req.Header.Set("Authorization", token.TokenType+" "+token.AccessToken)
+		req.Header.Set("User-Agent", agoraUserAgent(a.env))
 		if body != nil {
 			req.Header.Set("content-type", "application/json")
 		}
@@ -507,11 +512,69 @@ func (a *App) apiRequest(method, pathname string, query map[string]string, body 
 		}
 		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 			if resp.StatusCode == http.StatusUnauthorized {
-				return fmt.Errorf("session expired or invalid. Run `agora login` to re-authenticate.")
+				return &cliError{
+					Message:    "session expired or invalid. Run `agora login` to re-authenticate.",
+					Code:       "AUTH_SESSION_EXPIRED",
+					HTTPStatus: resp.StatusCode,
+					RequestID:  responseRequestID(resp.Header),
+				}
 			}
-			return fmt.Errorf("API error (HTTP %d): %s", resp.StatusCode, strings.TrimSpace(string(raw)))
+			return apiResponseError(resp.StatusCode, raw, resp.Header)
 		}
 		return json.Unmarshal(raw, out)
 	}
 	return fmt.Errorf("%s %s failed after retry", method, pathname)
+}
+
+func agoraUserAgent(env map[string]string) string {
+	base := "agora-cli/" + version
+	if agent := strings.TrimSpace(env["AGORA_AGENT"]); agent != "" {
+		return base + " agent/" + sanitizeUserAgentToken(agent)
+	}
+	return base
+}
+
+func sanitizeUserAgentToken(value string) string {
+	value = strings.ReplaceAll(value, "\n", " ")
+	value = strings.ReplaceAll(value, "\r", " ")
+	return strings.TrimSpace(value)
+}
+
+func apiResponseError(statusCode int, raw []byte, header http.Header) error {
+	detail := strings.TrimSpace(string(raw))
+	code := ""
+	var parsed map[string]any
+	if err := json.Unmarshal(raw, &parsed); err == nil {
+		code = firstString(parsed, "code", "errorCode", "error_code")
+		if message := firstString(parsed, "message", "error", "error_description"); message != "" {
+			detail = message
+		}
+	}
+	if detail == "" {
+		detail = http.StatusText(statusCode)
+	}
+	return &cliError{
+		Message:    fmt.Sprintf("API error (HTTP %d): %s", statusCode, detail),
+		Code:       code,
+		HTTPStatus: statusCode,
+		RequestID:  responseRequestID(header),
+	}
+}
+
+func firstString(values map[string]any, keys ...string) string {
+	for _, key := range keys {
+		if value, ok := values[key].(string); ok && strings.TrimSpace(value) != "" {
+			return strings.TrimSpace(value)
+		}
+	}
+	return ""
+}
+
+func responseRequestID(header http.Header) string {
+	for _, key := range []string{"X-Request-ID", "X-Agora-Request-ID", "X-Trace-ID"} {
+		if value := strings.TrimSpace(header.Get(key)); value != "" {
+			return value
+		}
+	}
+	return ""
 }

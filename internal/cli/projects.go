@@ -16,11 +16,18 @@ func (a *App) listProjects(keyword string, page, pageSize int) (projectListRespo
 	return out, err
 }
 
-func (a *App) createProject(name string) (projectDetail, error) {
+func (a *App) createProject(name, idempotencyKey string) (projectDetail, error) {
 	var out projectDetail
 	body := map[string]any{"name": name, "projectType": "paas"}
+	if strings.TrimSpace(idempotencyKey) != "" {
+		body["idempotencyKey"] = strings.TrimSpace(idempotencyKey)
+	}
 	err := a.apiRequest("POST", "/api/cli/v1/projects", nil, body, &out)
 	return out, err
+}
+
+func looksLikeProjectID(value string) bool {
+	return strings.HasPrefix(strings.TrimSpace(value), "prj_")
 }
 
 func (a *App) getProject(projectID string) (projectDetail, error) {
@@ -30,17 +37,53 @@ func (a *App) getProject(projectID string) (projectDetail, error) {
 }
 
 func (a *App) resolveProjectByNameOrID(value string) (*projectSummary, error) {
-	list, err := a.listProjects(value, 1, 20)
-	if err != nil {
-		return nil, err
-	}
-	for _, item := range list.Items {
-		if item.ProjectID == value || item.Name == value {
-			copy := item
-			return &copy, nil
+	if looksLikeProjectID(value) {
+		project, err := a.getProject(value)
+		if err == nil {
+			return &projectSummary{
+				AppID:       project.AppID,
+				CreatedAt:   project.CreatedAt,
+				Name:        project.Name,
+				ProjectID:   project.ProjectID,
+				ProjectType: project.ProjectType,
+				Region:      project.Region,
+				SignKey:     project.SignKey,
+				Stage:       project.Stage,
+				Status:      project.Status,
+				UpdatedAt:   project.UpdatedAt,
+				Vid:         project.Vid,
+			}, nil
+		}
+		var structured *cliError
+		if !errors.As(err, &structured) || structured.HTTPStatus != 404 {
+			return nil, err
 		}
 	}
-	return nil, nil
+	matches := []projectSummary{}
+	page := 1
+	for {
+		list, err := a.listProjects(value, page, 100)
+		if err != nil {
+			return nil, err
+		}
+		for _, item := range list.Items {
+			if item.ProjectID == value || item.Name == value {
+				matches = append(matches, item)
+			}
+		}
+		if page*list.PageSize >= list.Total || len(list.Items) == 0 {
+			break
+		}
+		page++
+	}
+	if len(matches) == 0 {
+		return nil, nil
+	}
+	if len(matches) > 1 {
+		return nil, &cliError{Message: fmt.Sprintf("Project name %q matched multiple projects. Use the project ID instead.", value), Code: "PROJECT_AMBIGUOUS"}
+	}
+	copy := matches[0]
+	return &copy, nil
 }
 
 type projectTarget struct {
@@ -48,7 +91,7 @@ type projectTarget struct {
 	region  string
 }
 
-var errNoProjectSelected = errors.New("No project selected. Pass `--project`, work inside a repo with `.agora/project.json`, or run `agora project use <project>`.")
+var errNoProjectSelected = &cliError{Message: "No project selected. Pass `--project`, work inside a repo with `.agora/project.json`, or run `agora project use <project>`.", Code: "PROJECT_NOT_SELECTED"}
 
 func (a *App) resolveProjectTarget(explicit string) (projectTarget, error) {
 	return a.resolveProjectTargetFrom(explicit, "")
@@ -65,7 +108,7 @@ func (a *App) resolveProjectTargetFrom(explicit, startPath string) (projectTarge
 			return projectTarget{}, err
 		}
 		if resolved == nil {
-			return projectTarget{}, fmt.Errorf("Project %q was not found.", explicit)
+			return projectTarget{}, &cliError{Message: fmt.Sprintf("Project %q was not found. Run `agora project list` to see available projects.", explicit), Code: "PROJECT_NOT_FOUND"}
 		}
 		project, err := a.getProject(resolved.ProjectID)
 		if err != nil {
@@ -223,7 +266,7 @@ func (a *App) enableProjectFeature(feature string, project projectDetail, region
 	}
 }
 
-func (a *App) projectCreate(name, region, template string, features []string) (map[string]any, error) {
+func (a *App) projectCreate(name, region, template string, features []string, idempotencyKey string) (map[string]any, error) {
 	ctx, err := loadContext(a.env)
 	if err != nil {
 		return nil, err
@@ -234,7 +277,7 @@ func (a *App) projectCreate(name, region, template string, features []string) (m
 			region = "global"
 		}
 	}
-	project, err := a.createProject(name)
+	project, err := a.createProject(name, idempotencyKey)
 	if err != nil {
 		return nil, err
 	}
@@ -273,7 +316,7 @@ func (a *App) projectUse(projectArg string) (map[string]any, error) {
 		return nil, err
 	}
 	if resolved == nil {
-		return nil, fmt.Errorf("Project %q was not found.", projectArg)
+		return nil, &cliError{Message: fmt.Sprintf("Project %q was not found. Run `agora project list` to see available projects.", projectArg), Code: "PROJECT_NOT_FOUND"}
 	}
 	region := current.CurrentRegion
 	if region == "" {
@@ -357,11 +400,21 @@ func (a *App) projectEnvValues(projectArg string, withSecrets bool) (map[string]
 	}
 	if withSecrets {
 		if target.project.SignKey == nil || *target.project.SignKey == "" {
-			return nil, fmt.Errorf("project %q does not have an app certificate. Enable one in Agora Console or use a different project with `agora project use`.", target.project.Name)
+			return nil, &cliError{Message: fmt.Sprintf("project %q does not have an app certificate. Enable one in Agora Console or use a different project with `agora project use`.", target.project.Name), Code: "PROJECT_NO_CERTIFICATE"}
 		}
 		values["AGORA_APP_CERTIFICATE"] = *target.project.SignKey
 	}
 	return values, nil
+}
+
+func projectCredentialEnvValues(project projectDetail) (map[string]any, error) {
+	if project.SignKey == nil || *project.SignKey == "" {
+		return nil, &cliError{Message: fmt.Sprintf("project %q does not have an app certificate. Enable one in Agora Console or use a different project with `agora project use`.", project.Name), Code: "PROJECT_NO_CERTIFICATE"}
+	}
+	return map[string]any{
+		"AGORA_APP_ID":          project.AppID,
+		"AGORA_APP_CERTIFICATE": *project.SignKey,
+	}, nil
 }
 
 func enabledFeatures(features map[string]bool) []string {
@@ -385,6 +438,10 @@ func projectEnvKeys(values map[string]any) []string {
 		"AGORA_FEATURE_RTM",
 		"AGORA_FEATURE_CONVOAI",
 		"AGORA_APP_CERTIFICATE",
+		"NEXT_PUBLIC_AGORA_APP_ID",
+		"NEXT_AGORA_APP_CERTIFICATE",
+		"APP_ID",
+		"APP_CERTIFICATE",
 	}
 	out := []string{}
 	for _, key := range keys {
@@ -473,33 +530,35 @@ func writeProjectEnvFile(path string, values map[string]any, appendMode, overwri
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return envWriteResult{}, err
 	}
-	block := renderManagedBlock(values, detectEOL(string(existing)))
+	assignments := strings.TrimRight(renderProjectEnv(values, envDotenv), "\n")
 	status := ""
 	switch {
 	case errors.Is(err, os.ErrNotExist):
-		existing = []byte(block + "\n")
+		existing = []byte(assignments + "\n")
 		status = "created"
 	case overwrite:
-		existing = []byte(block + "\n")
+		existing = []byte(assignments + "\n")
 		status = "overwritten"
-	case strings.Contains(string(existing), "# BEGIN AGORA CLI"):
-		existing = []byte(replaceManagedBlock(string(existing), block))
-		status = "updated"
-	case appendMode || usedDefaultTarget:
-		trimmed := strings.TrimRight(string(existing), "\r\n")
-		sep := "\n\n"
-		if trimmed == "" {
-			sep = ""
-		}
-		existing = []byte(trimmed + sep + block + "\n")
-		status = "appended"
 	default:
-		return envWriteResult{}, fmt.Errorf("%s already exists. Use --append to append it or --overwrite to replace it.", path)
+		merged, mergeStatus := mergeEnvAssignments(string(existing), values, [][2]string{{"# BEGIN AGORA CLI", "# END AGORA CLI"}}, nil)
+		if mergeStatus == "appended" && !appendMode && !usedDefaultTarget && !isDefaultEnvPath(filePath) {
+			return envWriteResult{}, fmt.Errorf("%s already exists. Use --append to append it or --overwrite to replace it.", path)
+		}
+		existing = []byte(merged)
+		status = mergeStatus
+		if status == "empty" {
+			status = "updated"
+		}
 	}
 	if err := os.WriteFile(filePath, existing, 0o644); err != nil {
 		return envWriteResult{}, err
 	}
 	return envWriteResult{Path: filePath, Status: status}, nil
+}
+
+func isDefaultEnvPath(path string) bool {
+	name := filepath.Base(path)
+	return name == ".env" || name == ".env.local"
 }
 
 func detectEOL(v string) string {
@@ -509,24 +568,116 @@ func detectEOL(v string) string {
 	return "\n"
 }
 
-func renderManagedBlock(values map[string]any, eol string) string {
-	body := strings.TrimRight(renderProjectEnv(values, envDotenv), "\n")
-	return strings.Join([]string{"# BEGIN AGORA CLI", "# Generated by `agora project env`", body, "# END AGORA CLI"}, eol)
+func mergeEnvAssignments(existing string, values map[string]any, oldBlocks [][2]string, conflictingKeys []string) (string, string) {
+	eol := detectEOL(existing)
+	normalized := strings.ReplaceAll(existing, "\r\n", "\n")
+	removedOldBlock := false
+	for _, markers := range oldBlocks {
+		var removed bool
+		normalized, removed = removeDelimitedBlock(normalized, markers[0], markers[1])
+		removedOldBlock = removedOldBlock || removed
+	}
+
+	trimmed := strings.TrimRight(normalized, "\n")
+	lines := []string{}
+	if trimmed != "" {
+		lines = strings.Split(trimmed, "\n")
+	}
+
+	keys := projectEnvKeys(values)
+	found := map[string]bool{}
+	conflicts := map[string]bool{}
+	for _, key := range conflictingKeys {
+		if _, expected := values[key]; !expected {
+			conflicts[key] = true
+		}
+	}
+	updatedExisting := removedOldBlock
+	for index, line := range lines {
+		key := dotenvLineKey(line)
+		if key == "" {
+			continue
+		}
+		for _, expected := range keys {
+			if key == expected {
+				if found[expected] {
+					lines[index] = commentReplacedEnvLine(line)
+				} else {
+					lines[index] = expected + "=" + renderDotenvScalar(values[expected])
+					found[expected] = true
+				}
+				updatedExisting = true
+				break
+			}
+		}
+		if conflicts[key] {
+			lines[index] = commentReplacedEnvLine(line)
+			updatedExisting = true
+		}
+	}
+
+	missing := []string{}
+	for _, key := range keys {
+		if !found[key] {
+			missing = append(missing, key+"="+renderDotenvScalar(values[key]))
+		}
+	}
+	status := "updated"
+	if len(lines) == 0 && len(missing) == 0 {
+		return "", "empty"
+	}
+	if len(missing) > 0 {
+		if !updatedExisting {
+			status = "appended"
+		}
+		if len(lines) > 0 {
+			lines = append(lines, "")
+		}
+		lines = append(lines, missing...)
+	}
+	return strings.Join(lines, eol) + eol, status
 }
 
-func replaceManagedBlock(existing, block string) string {
-	start := strings.Index(existing, "# BEGIN AGORA CLI")
-	end := strings.Index(existing, "# END AGORA CLI")
-	if start == -1 || end == -1 {
-		return existing
+func removeDelimitedBlock(existing, begin, end string) (string, bool) {
+	start := strings.Index(existing, begin)
+	if start == -1 {
+		return existing, false
 	}
-	end += len("# END AGORA CLI")
-	suffix := existing[end:]
-	suffix = strings.TrimLeft(suffix, "\r\n")
-	if suffix != "" {
-		suffix = "\n" + suffix
+	endIndex := strings.Index(existing[start:], end)
+	if endIndex == -1 {
+		return existing, false
 	}
-	return existing[:start] + block + suffix
+	endIndex = start + endIndex + len(end)
+	prefix := strings.TrimRight(existing[:start], "\n")
+	suffix := strings.TrimLeft(existing[endIndex:], "\n")
+	switch {
+	case prefix == "":
+		return suffix, true
+	case suffix == "":
+		return prefix + "\n", true
+	default:
+		return prefix + "\n" + suffix, true
+	}
+}
+
+func dotenvLineKey(line string) string {
+	trimmed := strings.TrimSpace(line)
+	if trimmed == "" || strings.HasPrefix(trimmed, "#") || !strings.Contains(trimmed, "=") {
+		return ""
+	}
+	parts := strings.SplitN(trimmed, "=", 2)
+	key := strings.TrimSpace(parts[0])
+	if strings.HasPrefix(key, "export ") {
+		key = strings.TrimSpace(strings.TrimPrefix(key, "export "))
+	}
+	return key
+}
+
+func commentReplacedEnvLine(line string) string {
+	if strings.TrimSpace(line) == "" || strings.HasPrefix(strings.TrimSpace(line), "#") {
+		return line
+	}
+	return "# Replaced by Agora CLI: " + line
 }
 
 func resolveDefaultTargetPath(cwd string) (string, error) {

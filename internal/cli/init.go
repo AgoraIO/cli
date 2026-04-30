@@ -1,8 +1,13 @@
 package cli
 
 import (
+	"bufio"
+	"errors"
 	"fmt"
+	"io"
+	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -42,7 +47,7 @@ By default it reuses your existing Agora project — preferring one named "Defau
 Use --project to bind to a specific existing project by name or ID.
 Use --new-project to always create a fresh project regardless of existing ones.
 Use --feature to specify which features to enable on a newly created project (repeatable).`,
-		Example: strings.TrimSpace(`
+		Example: example(`
   agora init my-nextjs-demo --template nextjs
   agora init my-python-demo --template python
   agora init my-go-demo --template go --project my-existing-project
@@ -52,9 +57,16 @@ Use --feature to specify which features to enable on a newly created project (re
 			if len(args) != 1 || strings.TrimSpace(args[0]) == "" {
 				return fmt.Errorf("project name is required")
 			}
+			if strings.TrimSpace(templateID) == "" {
+				selected, err := a.selectInitTemplate(cmd)
+				if err != nil {
+					return err
+				}
+				templateID = selected
+			}
 			template, ok := findQuickstartTemplate(templateID)
 			if !ok {
-				return fmt.Errorf("unknown quickstart template %q", templateID)
+				return &cliError{Message: fmt.Sprintf("unknown quickstart template %q. Run `agora quickstart list` to see available templates.", templateID), Code: "QUICKSTART_TEMPLATE_UNKNOWN"}
 			}
 			targetDir := dir
 			if strings.TrimSpace(targetDir) == "" {
@@ -73,8 +85,44 @@ Use --feature to specify which features to enable on a newly created project (re
 	cmd.Flags().StringVar(&region, "region", "", "control plane region for newly created projects (global or cn)")
 	cmd.Flags().StringArrayVar(&features, "feature", nil, "enable a feature on the newly created project (repeatable); defaults to rtc and convoai")
 	cmd.Flags().BoolVar(&newProject, "new-project", false, "always create a new Agora project instead of reusing an existing one")
-	_ = cmd.MarkFlagRequired("template")
 	return cmd
+}
+
+func (a *App) selectInitTemplate(cmd *cobra.Command) (string, error) {
+	if a.resolveOutputMode(cmd) == outputJSON || strings.TrimSpace(a.env["CI"]) != "" || !isTTY(os.Stdin) {
+		return "", &cliError{Message: "quickstart template is required. Pass `--template` or run `agora quickstart list`.", Code: "QUICKSTART_TEMPLATE_REQUIRED"}
+	}
+	templates := []quickstartTemplate{}
+	for _, template := range quickstartTemplates() {
+		if template.Available && template.SupportsInit {
+			templates = append(templates, template)
+		}
+	}
+	if len(templates) == 0 {
+		return "", &cliError{Message: "no init-compatible quickstart templates are available.", Code: "QUICKSTART_TEMPLATE_UNAVAILABLE"}
+	}
+	out := cmd.ErrOrStderr()
+	fmt.Fprintln(out, "Choose a quickstart template:")
+	for index, template := range templates {
+		fmt.Fprintf(out, "  %d. %s (%s)\n", index+1, template.ID, template.Title)
+	}
+	fmt.Fprint(out, "Template: ")
+	reader := bufio.NewReader(os.Stdin)
+	answer, err := reader.ReadString('\n')
+	if err != nil && !errors.Is(err, io.EOF) {
+		return "", err
+	}
+	answer = strings.TrimSpace(answer)
+	if answer == "" {
+		return templates[0].ID, nil
+	}
+	if index, err := strconv.Atoi(answer); err == nil && index >= 1 && index <= len(templates) {
+		return templates[index-1].ID, nil
+	}
+	if _, ok := findQuickstartTemplate(answer); ok {
+		return answer, nil
+	}
+	return "", &cliError{Message: fmt.Sprintf("unknown quickstart template %q. Run `agora quickstart list` to see available templates.", answer), Code: "QUICKSTART_TEMPLATE_UNKNOWN"}
 }
 
 func parseInitProjectTimestamp(value string) (time.Time, bool) {
@@ -209,7 +257,7 @@ func (a *App) initProject(name, targetDir string, template quickstartTemplate, e
 		if len(featuresToEnable) == 0 {
 			featuresToEnable = defaultInitFeatures()
 		}
-		projectResult, err := a.projectCreate(name, region, "", featuresToEnable)
+		projectResult, err := a.projectCreate(name, region, "", featuresToEnable, "")
 		if err != nil {
 			return nil, err
 		}
@@ -224,7 +272,7 @@ func (a *App) initProject(name, targetDir string, template quickstartTemplate, e
 		target = resolved
 	}
 
-	quickstartResult, err := a.quickstartCreate(template, targetDir, target.project.ProjectID)
+	quickstartResult, err := a.quickstartCreate(template, targetDir, target.project.ProjectID, "")
 	if err != nil {
 		return nil, err
 	}
@@ -244,19 +292,20 @@ func (a *App) initProject(name, targetDir string, template quickstartTemplate, e
 	}
 
 	result := map[string]any{
-		"action":          "init",
-		"enabledFeatures": enabledFeatures,
-		"envPath":         quickstartResult["envPath"],
-		"metadataPath":    filepath.ToSlash(filepath.Join(localAgoraDirName, localProjectFileName)),
-		"nextSteps":       initNextSteps(template, asString(quickstartResult["path"])),
-		"path":            quickstartResult["path"],
-		"projectAction":   projectAction,
-		"projectId":       target.project.ProjectID,
-		"projectName":     target.project.Name,
-		"region":          target.region,
-		"status":          "ready",
-		"template":        template.ID,
-		"title":           template.Title,
+		"action":                "init",
+		"enabledFeatures":       enabledFeatures,
+		"envPath":               quickstartResult["envPath"],
+		"metadataPath":          filepath.ToSlash(filepath.Join(localAgoraDirName, localProjectFileName)),
+		"nextSteps":             initNextSteps(template, asString(quickstartResult["path"])),
+		"path":                  quickstartResult["path"],
+		"projectAction":         projectAction,
+		"projectId":             target.project.ProjectID,
+		"projectName":           target.project.Name,
+		"region":                target.region,
+		"reusedExistingProject": projectAction == "existing",
+		"status":                "ready",
+		"template":              template.ID,
+		"title":                 template.Title,
 	}
 	return result, nil
 }
