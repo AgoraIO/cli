@@ -287,6 +287,7 @@ type fakeOAuthServer struct {
 	server                *http.Server
 	baseURL               string
 	authorizeRedirectURIs []string
+	authorizeRawQueries   []string
 	tokenRequests         []string
 }
 
@@ -302,6 +303,7 @@ func newFakeOAuthServer() *fakeOAuthServer {
 				return
 			}
 			oauth.authorizeRedirectURIs = append(oauth.authorizeRedirectURIs, redirectURI)
+			oauth.authorizeRawQueries = append(oauth.authorizeRawQueries, r.URL.RawQuery)
 			http.Redirect(w, r, redirectURI+"?code=test-auth-code&state="+state, http.StatusFound)
 		case r.Method == http.MethodPost && r.URL.Path == "/api/v0/oauth/token":
 			body, _ := io.ReadAll(r.Body)

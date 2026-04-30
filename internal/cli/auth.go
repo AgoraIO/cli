@@ -158,16 +158,21 @@ func randomToken(n int) (string, error) {
 }
 
 func openBrowser(target string) bool {
-	var cmd *exec.Cmd
-	switch runtime.GOOS {
+	name, args := browserOpenCommand(runtime.GOOS, target)
+	return exec.Command(name, args...).Start() == nil
+}
+
+func browserOpenCommand(goos, target string) (string, []string) {
+	switch goos {
 	case "darwin":
-		cmd = exec.Command("open", target)
+		return "open", []string{target}
 	case "windows":
-		cmd = exec.Command("cmd", "/c", "start", "", target)
+		// Avoid `cmd /c start` because unescaped '&' in OAuth query strings can
+		// be interpreted by cmd.exe, truncating the URL before PKCE parameters.
+		return "rundll32", []string{"url.dll,FileProtocolHandler", target}
 	default:
-		cmd = exec.Command("xdg-open", target)
+		return "xdg-open", []string{target}
 	}
-	return cmd.Start() == nil
 }
 
 type callbackServer struct {

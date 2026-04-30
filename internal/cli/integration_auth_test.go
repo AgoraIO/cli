@@ -55,6 +55,12 @@ func TestCLILoginAndWhoAmIParity(t *testing.T) {
 	if len(oauth.authorizeRedirectURIs) != 1 || !strings.Contains(oauth.authorizeRedirectURIs[0], "http://localhost:") {
 		t.Fatalf("expected localhost redirect URI, got %+v", oauth.authorizeRedirectURIs)
 	}
+	if len(oauth.authorizeRawQueries) != 1 || !strings.Contains(oauth.authorizeRawQueries[0], "code_challenge=") || !strings.Contains(oauth.authorizeRawQueries[0], "code_challenge_method=S256") {
+		t.Fatalf("expected authorize URL to include PKCE challenge, got %+v", oauth.authorizeRawQueries)
+	}
+	if len(oauth.tokenRequests) != 1 || !strings.Contains(oauth.tokenRequests[0], "code_verifier=") {
+		t.Fatalf("expected token request to include PKCE verifier, got %+v", oauth.tokenRequests)
+	}
 	var envelope map[string]any
 	if err := json.Unmarshal([]byte(status.stdout), &envelope); err != nil {
 		t.Fatal(err)

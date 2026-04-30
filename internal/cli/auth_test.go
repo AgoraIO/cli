@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bytes"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -54,5 +55,22 @@ func TestEnsureValidAccessTokenSkipsPromptInJSONMode(t *testing.T) {
 	}
 	if err == nil || err.Error() != noLocalSessionErrorMessage {
 		t.Fatalf("expected missing session error, got %v", err)
+	}
+}
+
+func TestBrowserOpenCommandWindowsPreservesOAuthQuery(t *testing.T) {
+	target := "https://sso.example/authorize?response_type=code&code_challenge=abc&code_challenge_method=S256&state=xyz"
+	name, args := browserOpenCommand("windows", target)
+	if name != "rundll32" {
+		t.Fatalf("expected rundll32 opener, got %s", name)
+	}
+	expected := []string{"url.dll,FileProtocolHandler", target}
+	if !reflect.DeepEqual(args, expected) {
+		t.Fatalf("unexpected args: %#v", args)
+	}
+	for _, arg := range args {
+		if arg == "cmd" || arg == "/c" || arg == "start" {
+			t.Fatalf("windows opener must not shell through cmd.exe, got %#v", args)
+		}
 	}
 }
