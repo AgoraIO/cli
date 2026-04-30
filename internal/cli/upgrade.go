@@ -25,6 +25,26 @@ import (
 // preventing a hostile archive from filling the user's disk.
 const maxExtractedBinaryBytes int64 = 256 << 20
 
+const installReceiptFileName = "agora.install.json"
+
+type installReceipt struct {
+	SchemaVersion int    `json:"schemaVersion"`
+	Tool          string `json:"tool"`
+	InstallMethod string `json:"installMethod"`
+	InstallPath   string `json:"installPath"`
+	Version       string `json:"version"`
+	InstalledAt   string `json:"installedAt"`
+	Source        string `json:"source"`
+}
+
+type installProvenance struct {
+	Method         string
+	Source         string
+	InstalledPath  string
+	ReceiptPath    string
+	UpgradeCommand string
+}
+
 // performSelfUpdate downloads and atomically replaces the running binary with
 // the latest release from GitHub when the install was managed by install.sh /
 // install.ps1. For Homebrew, npm, or any other managed channel, it returns
@@ -34,7 +54,7 @@ const maxExtractedBinaryBytes int64 = 256 << 20
 //
 // Returns a result map for the upgrade envelope and any error.
 func (a *App) performSelfUpdate(dryRun bool) (map[string]any, error) {
-	method, command := detectUpgradeCommand(a.env)
+	provenance := detectInstallProvenance(a.env)
 
 	current := strings.TrimSpace(version)
 	if current == "" {
@@ -42,13 +62,19 @@ func (a *App) performSelfUpdate(dryRun bool) (map[string]any, error) {
 	}
 	result := map[string]any{
 		"action":         "upgrade",
-		"command":        command,
-		"installMethod":  method,
+		"command":        provenance.UpgradeCommand,
 		"currentVersion": current,
+		"installMethod":  provenance.Method,
+		"installSource":  provenance.Source,
+		"installedPath":  provenance.InstalledPath,
+		"upgradeCommand": provenance.UpgradeCommand,
+	}
+	if provenance.ReceiptPath != "" {
+		result["receiptPath"] = provenance.ReceiptPath
 	}
 
 	// Channels we don't manage in-process. Defer to the package manager.
-	if method != "installer" {
+	if provenance.Method != "installer" {
 		result["status"] = "manual"
 		return result, nil
 	}
@@ -180,7 +206,176 @@ func (a *App) performSelfUpdate(dryRun bool) (map[string]any, error) {
 
 	result["status"] = "upgraded"
 	result["installedPath"] = exePath
+	if receiptPath, err := writeInstallReceipt(exePath, latest, "agora upgrade"); err == nil {
+		result["receiptPath"] = receiptPath
+	} else {
+		result["receiptWarning"] = fmt.Sprintf("could not write install receipt: %v", err)
+	}
 	return result, nil
+}
+
+func detectInstallProvenance(env map[string]string) installProvenance {
+	exePath := ""
+	if path, err := os.Executable(); err == nil {
+		exePath = path
+		if resolved, err := filepath.EvalSymlinks(path); err == nil {
+			exePath = resolved
+		}
+	}
+	return detectInstallProvenanceForPath(env, exePath)
+}
+
+func detectInstallProvenanceForPath(_ map[string]string, exePath string) installProvenance {
+	exePath = filepath.Clean(strings.TrimSpace(exePath))
+	if exePath != "" {
+		receiptPath := installReceiptPath(exePath)
+		if receipt, err := readInstallReceipt(receiptPath); err == nil && receipt.validForPath(exePath) {
+			return installProvenance{
+				Method:         receipt.InstallMethod,
+				Source:         receipt.Source,
+				InstalledPath:  exePath,
+				ReceiptPath:    receiptPath,
+				UpgradeCommand: upgradeCommandForInstallMethod(receipt.InstallMethod),
+			}
+		}
+	}
+
+	method, source := inferInstallMethodFromPath(exePath)
+	return installProvenance{
+		Method:         method,
+		Source:         source,
+		InstalledPath:  exePath,
+		UpgradeCommand: upgradeCommandForInstallMethod(method),
+	}
+}
+
+func installReceiptPath(exePath string) string {
+	if strings.TrimSpace(exePath) == "" {
+		return ""
+	}
+	return filepath.Join(filepath.Dir(exePath), installReceiptFileName)
+}
+
+func readInstallReceipt(path string) (installReceipt, error) {
+	var receipt installReceipt
+	if strings.TrimSpace(path) == "" {
+		return receipt, os.ErrNotExist
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return receipt, err
+	}
+	if err := json.Unmarshal(raw, &receipt); err != nil {
+		return receipt, err
+	}
+	return receipt, nil
+}
+
+func writeInstallReceipt(exePath, installedVersion, source string) (string, error) {
+	receiptPath := installReceiptPath(exePath)
+	if receiptPath == "" {
+		return "", errors.New("install receipt path is empty")
+	}
+	receipt := installReceipt{
+		SchemaVersion: 1,
+		Tool:          "agora",
+		InstallMethod: "installer",
+		InstallPath:   exePath,
+		Version:       strings.TrimPrefix(strings.TrimSpace(installedVersion), "v"),
+		InstalledAt:   time.Now().UTC().Format(time.RFC3339),
+		Source:        source,
+	}
+	raw, err := json.MarshalIndent(receipt, "", "  ")
+	if err != nil {
+		return "", err
+	}
+	raw = append(raw, '\n')
+	tmpPath := filepath.Join(filepath.Dir(receiptPath), fmt.Sprintf(".%s.%d.tmp", installReceiptFileName, time.Now().UnixNano()))
+	if err := os.WriteFile(tmpPath, raw, 0o644); err != nil {
+		return "", err
+	}
+	if err := os.Rename(tmpPath, receiptPath); err != nil {
+		_ = os.Remove(tmpPath)
+		return "", err
+	}
+	return receiptPath, nil
+}
+
+func (r installReceipt) validForPath(exePath string) bool {
+	if r.SchemaVersion != 1 || r.Tool != "agora" || strings.TrimSpace(r.InstallMethod) == "" {
+		return false
+	}
+	if !knownInstallMethod(r.InstallMethod) {
+		return false
+	}
+	if strings.TrimSpace(r.InstallPath) == "" || strings.TrimSpace(exePath) == "" {
+		return false
+	}
+	return sameCleanPath(r.InstallPath, exePath)
+}
+
+func knownInstallMethod(method string) bool {
+	switch method {
+	case "installer", "npm", "homebrew", "scoop", "chocolatey", "winget", "unknown":
+		return true
+	default:
+		return false
+	}
+}
+
+func sameCleanPath(a, b string) bool {
+	left := filepath.Clean(strings.TrimSpace(a))
+	right := filepath.Clean(strings.TrimSpace(b))
+	if runtime.GOOS == "windows" {
+		return strings.EqualFold(left, right)
+	}
+	return left == right
+}
+
+func inferInstallMethodFromPath(exePath string) (string, string) {
+	normalizedPath := strings.ToLower(filepath.ToSlash(filepath.Clean(strings.TrimSpace(exePath))))
+	baseName := strings.ToLower(filepath.Base(strings.TrimSpace(exePath)))
+	switch {
+	case strings.Contains(normalizedPath, "/node_modules/"):
+		return "npm", "path"
+	case strings.Contains(normalizedPath, "/cellar/"):
+		return "homebrew", "path"
+	case strings.Contains(normalizedPath, "/scoop/shims/") || strings.Contains(normalizedPath, "/scoop/apps/"):
+		return "scoop", "path"
+	case strings.Contains(normalizedPath, "/chocolatey/bin/") || strings.Contains(normalizedPath, "/chocolatey/lib/"):
+		return "chocolatey", "path"
+	case strings.Contains(normalizedPath, "/winget/packages/"):
+		return "winget", "path"
+	case baseName != "agora" && baseName != "agora.exe":
+		return "unknown", "fallback"
+	default:
+		return "installer", "fallback"
+	}
+}
+
+func upgradeCommandForInstallMethod(method string) string {
+	switch method {
+	case "npm":
+		return "npm update -g agoraio-cli"
+	case "homebrew":
+		return "brew upgrade agoraio/tap/agora-cli"
+	case "scoop":
+		return "scoop update agora"
+	case "chocolatey":
+		return "choco upgrade agora"
+	case "winget":
+		return "winget upgrade Agora.Cli"
+	case "installer":
+		if runtime.GOOS == "windows" {
+			return "irm https://raw.githubusercontent.com/AgoraIO/cli/main/install.ps1 | iex"
+		}
+		return "curl -fsSL https://raw.githubusercontent.com/AgoraIO/cli/main/install.sh | sh -s -- --add-to-path"
+	default:
+		if runtime.GOOS == "windows" {
+			return "irm https://raw.githubusercontent.com/AgoraIO/cli/main/install.ps1 | iex"
+		}
+		return "curl -fsSL https://raw.githubusercontent.com/AgoraIO/cli/main/install.sh | sh -s -- --add-to-path"
+	}
 }
 
 // upgradeArchiveName returns the GoReleaser archive filename for the given

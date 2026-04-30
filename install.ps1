@@ -12,7 +12,7 @@
 #   irm https://raw.githubusercontent.com/AgoraIO/cli/main/install.ps1 | iex
 #
 # Pin a version:
-#   $env:VERSION = '0.1.8'; & ([scriptblock]::Create((irm .../install.ps1)))
+#   $env:VERSION = '0.1.9'; & ([scriptblock]::Create((irm .../install.ps1)))
 #
 [CmdletBinding()]
 param(
@@ -37,6 +37,7 @@ $EXIT_NETWORK        = 5
 $EXIT_CHECKSUM       = 6
 $EXIT_INSTALL        = 7
 $EXIT_VERIFY         = 8
+$InstallReceiptFileName = 'agora.install.json'
 
 $GitHubApiUrl            = if ($env:GITHUB_API_URL) { $env:GITHUB_API_URL } else { 'https://api.github.com' }
 $ReleasesDownloadBaseUrl = if ($env:RELEASES_DOWNLOAD_BASE_URL) { $env:RELEASES_DOWNLOAD_BASE_URL } else { "https://github.com/$GitHubRepo/releases/download" }
@@ -194,6 +195,23 @@ function Verify-Binary {
     } catch {
         Fail "Installed binary did not start correctly: $Path" -ExitCode $EXIT_VERIFY
     }
+}
+
+function Write-InstallReceipt {
+    param(
+        [Parameter(Mandatory = $true)][string]$BinaryPath
+    )
+    $receiptPath = Join-Path (Split-Path -Parent $BinaryPath) $InstallReceiptFileName
+    $receipt = [ordered]@{
+        schemaVersion = 1
+        tool = 'agora'
+        installMethod = 'installer'
+        installPath = $BinaryPath
+        version = $Version
+        installedAt = [DateTimeOffset]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ssZ')
+        source = 'install.ps1'
+    }
+    $receipt | ConvertTo-Json -Depth 3 | Set-Content -Path $receiptPath -Encoding UTF8
 }
 
 function Get-InstalledVersion {
@@ -356,6 +374,7 @@ try {
     Move-Item -LiteralPath $tempDestinationBinary -Destination $destinationBinary -Force
 
     Verify-Binary -Path $destinationBinary
+    Write-InstallReceipt -BinaryPath $destinationBinary
     Write-Info "Installed agora to $destinationBinary"
 
     $resolved = Get-Command agora -ErrorAction SilentlyContinue

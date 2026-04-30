@@ -819,6 +819,55 @@ Example:
 
 Returns the updated config object with the same shape as `config get`. Safe branch fields are the same as `config get`.
 
+### `upgrade`
+
+Example:
+
+```bash
+./agora upgrade --json
+./agora upgrade --check --json
+./agora --upgrade-check --json
+```
+
+Required `data` fields:
+- `action`
+  `upgrade` for the subcommand and `upgrade-check` for the root `--upgrade-check` pseudo-command.
+- `installMethod`
+  One of `installer`, `npm`, `homebrew`, `scoop`, `chocolatey`, `winget`, or `unknown`.
+- `installSource`
+  `install.sh` / `install.ps1` when read from a valid direct-installer receipt, `path` when inferred from the resolved executable path, or `fallback` when no durable source was available.
+- `installedPath`
+  Resolved executable path used for receipt validation and path inference.
+- `upgradeCommand`
+  The user-facing command for the owning install channel.
+- `command`
+  Backwards-compatible alias for `upgradeCommand`.
+- `status`
+  One of `manual`, `dry-run`, `up-to-date`, or `upgraded`.
+
+Optional fields:
+- `receiptPath`
+  Path to the validated `agora.install.json` receipt when present.
+- `currentVersion`
+  Version of the running binary for `agora upgrade`.
+- `latestVersion`
+  Latest resolved release version when the command resolves GitHub release metadata.
+- `version`
+  Structured version payload for `agora --upgrade-check`.
+- `receiptWarning`
+  Nonfatal warning when a direct-installer self-update succeeded but the CLI could not refresh `agora.install.json`.
+
+Upgrade behavior:
+- direct-installer installs (`installMethod: "installer"`) self-update in place after downloading the GitHub release archive and verifying it against `checksums.txt`
+- package-manager installs return `status: "manual"` with the owning package-manager command; agents should run that command only after user approval
+- `unknown` means the CLI could not verify the install channel, usually because the binary is a development/test build
+
+Safe branch fields:
+- `installMethod`
+- `installSource`
+- `upgradeCommand`
+- `status`
+
 ## Human vs Machine Output
 
 - Pretty output is optimized for humans.

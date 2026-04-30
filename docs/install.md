@@ -16,7 +16,7 @@ agora --help
 Install a pinned version:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/AgoraIO/cli/main/install.sh | sh -s -- --version 0.1.8 --add-to-path
+curl -fsSL https://raw.githubusercontent.com/AgoraIO/cli/main/install.sh | sh -s -- --version 0.1.9 --add-to-path
 agora --help
 ```
 
@@ -50,7 +50,7 @@ agora --help
 Install a pinned version and add the default install directory to your user PATH:
 
 ```powershell
-$env:VERSION = "0.1.8"
+$env:VERSION = "0.1.9"
 & ([scriptblock]::Create((irm https://raw.githubusercontent.com/AgoraIO/cli/main/install.ps1))) -AddToPath
 agora --help
 ```
@@ -86,7 +86,7 @@ If another managed `agora` install is detected, the installer refuses by default
 Both direct installers support these core overrides:
 
 - `GITHUB_REPO`: install from a fork or alternate repository.
-- `VERSION`: install a specific version. Both `0.1.8` and `v0.1.8` are accepted.
+- `VERSION`: install a specific version. Both `0.1.9` and `v0.1.9` are accepted.
 - `INSTALL_DIR`: install to a custom directory.
 - `GITHUB_TOKEN` or `GH_TOKEN`: optional GitHub token to avoid API rate limits when resolving the latest release.
 
@@ -135,6 +135,19 @@ Both installers refuse to overwrite an `agora` binary that came from a package m
 | Chocolatey (Windows) | `$env:ChocolateyInstall` or path contains `\chocolatey\bin\` | `choco upgrade agora` |
 | winget (Windows) | path contains `\WinGet\Packages\` | `winget upgrade Agora.Cli` |
 
+### Install receipt and upgrades
+
+Direct installer runs (`install.sh` and `install.ps1`) write `agora.install.json` next to the installed binary after the binary has been downloaded, checksum-verified, installed, and smoke-tested. Direct self-updates refresh the same receipt after replacing the binary. The receipt records the install method, install path, version, timestamp, and installer source so `agora upgrade` can choose the right update path without relying on shell environment variables.
+
+`agora upgrade` uses this order:
+
+1. Read and validate the adjacent `agora.install.json` receipt.
+2. Fall back to the resolved binary path for package-manager installs (`node_modules`, Homebrew `Cellar`, Scoop, Chocolatey, or winget paths).
+3. Fall back to the direct installer path when the binary is named `agora` / `agora.exe` and no package-manager path is detected.
+4. Report `unknown` for development/test binaries where the install method cannot be verified.
+
+Direct-installer installs self-update in place. Package-manager installs print the package-manager command and exit successfully so the package manager remains the owner of the installed files.
+
 ## Build From Source
 
 Requirements:
@@ -172,7 +185,7 @@ agora --help
 npx agoraio-cli --help
 
 # Pin a specific version
-npm install -g agoraio-cli@0.1.8
+npm install -g agoraio-cli@0.1.9
 
 # Update to the latest published version
 npm update -g agoraio-cli
@@ -200,12 +213,12 @@ For one-off shell sessions, source the generated script according to your shell'
 If latest-version resolution fails, retry with a pinned version or provide `GITHUB_TOKEN` / `GH_TOKEN`:
 
 ```bash
-GITHUB_TOKEN=your-token-here VERSION=0.1.8 sh install.sh
+GITHUB_TOKEN=your-token-here VERSION=0.1.9 sh install.sh
 ```
 
 ```powershell
 $env:GITHUB_TOKEN = "your-token-here"
-$env:VERSION = "0.1.8"
+$env:VERSION = "0.1.9"
 & ([scriptblock]::Create((irm https://raw.githubusercontent.com/AgoraIO/cli/main/install.ps1)))
 ```
 
@@ -251,7 +264,7 @@ For CI, automation, and reproducible environments, pin `VERSION` explicitly inst
 Every release is signed with [Cosign](https://docs.sigstore.dev/cosign/overview/) using GitHub Actions OIDC (keyless mode) and ships an [SPDX 2.3](https://spdx.dev/) SBOM per archive and per Linux package. To verify the `checksums.txt` file before trusting any artifact:
 
 ```bash
-TAG=v0.1.8
+TAG=v0.1.9
 ASSET_BASE="https://github.com/AgoraIO/cli/releases/download/${TAG}"
 curl -fsSLO "${ASSET_BASE}/checksums.txt"
 curl -fsSLO "${ASSET_BASE}/checksums.txt.sig"
@@ -275,8 +288,8 @@ cosign verify "ghcr.io/agoraio/agora-cli:${TAG#v}" \
   --certificate-oidc-issuer 'https://token.actions.githubusercontent.com'
 ```
 
-To audit dependencies, download the `*.spdx.json` SBOM that ships next to each archive (e.g. `agora-cli-go_v0.1.8_linux_amd64.tar.gz.spdx.json`) and feed it to a scanner such as [Grype](https://github.com/anchore/grype):
+To audit dependencies, download the `*.spdx.json` SBOM that ships next to each archive (e.g. `agora-cli-go_v0.1.9_linux_amd64.tar.gz.spdx.json`) and feed it to a scanner such as [Grype](https://github.com/anchore/grype):
 
 ```bash
-grype sbom:agora-cli-go_v0.1.8_linux_amd64.tar.gz.spdx.json
+grype sbom:agora-cli-go_v0.1.9_linux_amd64.tar.gz.spdx.json
 ```
