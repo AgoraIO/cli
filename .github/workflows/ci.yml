@@ -46,6 +46,26 @@ jobs:
             exit 1
           fi
 
+      - name: Audit error code coverage
+        if: runner.os != 'Windows'
+        shell: bash
+        run: ./scripts/check-error-codes.sh
+
+      - name: Check docs/commands.md is up to date
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          # Generated reference must track the cobra tree. If this fails,
+          # run `make docs-commands` locally and commit the result.
+          go run ./cmd/gendocs -check
+
+      - name: golangci-lint
+        if: runner.os == 'Linux'
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: v1.64.8
+          args: --timeout=5m
+
       - name: Build CLI
         shell: bash
         run: |

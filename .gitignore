@@ -2,6 +2,7 @@
 
 # Local Go build and test artifacts
 .gocache/
+.tmp/
 bin/
 dist/
 coverage.out

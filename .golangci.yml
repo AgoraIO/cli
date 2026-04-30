@@ -1,0 +1,119 @@
+# golangci-lint configuration for agora-cli-go.
+#
+# This is a deliberately conservative ruleset suitable for a public CLI:
+#   - Catches real correctness bugs (errcheck, govet, staticcheck, ineffassign)
+#   - Catches obvious security issues (gosec) without drowning the build in
+#     false positives (we tune G104/G304/G306 below).
+#   - Avoids style-only linters that would generate broad noise on the
+#     existing codebase.
+#
+# Run locally:
+#   make lint            # runs gofmt, go vet, golangci-lint, error-code audit
+#   golangci-lint run    # standalone
+#
+# CI runs `golangci-lint run --timeout=5m` from .github/workflows/ci.yml.
+
+run:
+  timeout: 5m
+  tests: true
+  build-tags: []
+  modules-download-mode: readonly
+
+linters:
+  disable-all: true
+  enable:
+    # correctness — must always pass
+    - errcheck
+    - govet
+    - staticcheck
+    - ineffassign
+    - unused
+    - typecheck
+
+    # security — must always pass (with tuned exclusions below)
+    - gosec
+
+    # quality-of-life — cheap to satisfy, catches real bugs
+    - bodyclose
+    - errorlint
+    - misspell
+    - unconvert
+
+linters-settings:
+  errcheck:
+    # We allow ignoring errors from these methods because they are best-effort
+    # cleanup paths; the right thing to do is fall through.
+    exclude-functions:
+      - (io.Closer).Close
+      - (*os.File).Close
+      - fmt.Fprint
+      - fmt.Fprintf
+      - fmt.Fprintln
+      - (net/http.Client).Do
+      - (*net/http.Response).Body.Close
+
+  gosec:
+    excludes:
+      # G104: many `_ = ...` patterns are intentional best-effort cleanup
+      # (already covered by errcheck which is the more granular linter).
+      - G104
+      # G304: file paths are validated by callers; the CLI necessarily reads
+      # files at user-supplied paths (e.g. .env, config.json).
+      - G304
+      # G306: 0o644 vs 0o600 — we already use 0o600 for secret-bearing files
+      # via writeSecureJSON; the rest are user-readable artefacts by design.
+      - G306
+      # G401/G501: SHA-1 / MD5 — not used by us; in case a transitive caller
+      # surfaces in tests, suppress to avoid noise.
+      - G401
+      - G501
+
+  govet:
+    enable-all: true
+    disable:
+      # fieldalignment is purely a micro-optimization; not worth churn.
+      - fieldalignment
+      # shadow is not in govet's default set and flags every `if err := ...`
+      # block. Idiomatic Go uses scoped err shadowing inside short blocks; we
+      # rely on errcheck + staticcheck to catch real assignment bugs instead.
+      - shadow
+
+  staticcheck:
+    checks:
+      - all
+      # SA1019 covers deprecated APIs; we lean on this elsewhere via go vet
+      # and want to keep it active. No exclusions.
+
+  misspell:
+    locale: US
+
+  errorlint:
+    # %w wrapping is preferred but legacy %v errors are still acceptable
+    # while we incrementally migrate; keep this off-by-default check off.
+    errorf: false
+    asserts: true
+    comparison: true
+
+issues:
+  exclude-dirs:
+    - packaging
+  exclude-rules:
+    # Test files commonly use t.TempDir() / os.Setenv / panic patterns
+    # that gosec flags; keep the production code strict but loosen tests.
+    - path: _test\.go
+      linters:
+        - gosec
+        - errcheck
+        - bodyclose
+
+    # The OAuth callback handler intentionally writes a fixed HTML response
+    # without checking the io.Writer error (the connection may already be
+    # closed by the time we write).
+    - path: internal/cli/auth\.go
+      text: "Error return value of `\\(net/http\\.ResponseWriter\\)\\.Write` is not checked"
+      linters:
+        - errcheck
+
+  # Show every issue (don't truncate). Useful for an aggregate fix pass.
+  max-issues-per-linter: 0
+  max-same-issues: 0
