@@ -12,7 +12,7 @@
 #   irm https://raw.githubusercontent.com/AgoraIO/cli/main/install.ps1 | iex
 #
 # Pin a version:
-#   $env:VERSION = '0.1.8'; & ([scriptblock]::Create((irm .../install.ps1)))
+#   $env:VERSION = '0.1.9'; & ([scriptblock]::Create((irm .../install.ps1)))
 #
 [CmdletBinding()]
 param(

@@ -67,7 +67,7 @@ func TestDetectInstallProvenanceFallsBackToExecutablePath(t *testing.T) {
 		{
 			name:       "homebrew detected from resolved Cellar path",
 			env:        map[string]string{"HOMEBREW_PREFIX": "/usr/local"},
-			exePath:    "/usr/local/Cellar/agora-cli/0.1.8/bin/agora",
+			exePath:    "/usr/local/Cellar/agora-cli/0.1.9/bin/agora",
 			wantMethod: "homebrew",
 		},
 		{
