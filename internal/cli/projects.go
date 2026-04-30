@@ -225,13 +225,14 @@ func (a *App) getFeatureItem(feature string, project projectDetail, region strin
 		}
 		return featureItem{Feature: "convoai", Message: "convoai not enabled", Status: "disabled"}, nil
 	default:
-		return featureItem{}, fmt.Errorf("%q must be one of: rtc, rtm, convoai.", feature)
+		return featureItem{}, validateFeatureID(feature)
 	}
 }
 
 func (a *App) listProjectFeatures(project projectDetail, region string) ([]featureItem, error) {
-	items := make([]featureItem, 0, 3)
-	for _, feature := range []string{"rtc", "rtm", "convoai"} {
+	ids := featureIDs()
+	items := make([]featureItem, 0, len(ids))
+	for _, feature := range ids {
 		item, err := a.getFeatureItem(feature, project, region)
 		if err != nil {
 			return nil, err
@@ -268,7 +269,7 @@ func (a *App) enableProjectFeature(feature string, project projectDetail, region
 		}
 		return map[string]any{"action": "feature-enable", "feature": "convoai", "message": "convoai enabled", "projectId": project.ProjectID, "projectName": project.Name, "status": "enabled"}, nil
 	default:
-		return nil, fmt.Errorf("%q must be one of: rtc, rtm, convoai.", feature)
+		return nil, validateFeatureID(feature)
 	}
 }
 
@@ -357,7 +358,7 @@ func normalizeProjectCreateFeatures(features []string) []string {
 func projectCreateFeatures(template string, features []string) []string {
 	next := append([]string{}, features...)
 	if template == "voice-agent" {
-		next = append(next, "rtc", "rtm", "convoai")
+		next = append(next, featureIDs()...)
 	}
 	next = normalizeProjectCreateFeatures(next)
 	if featureListIncludes(next, "convoai") && !featureListIncludes(next, "rtm") {
@@ -703,7 +704,7 @@ func nextConfigPresent(dir string) bool {
 
 func enabledFeatures(features map[string]bool) []string {
 	out := []string{}
-	for _, name := range []string{"rtc", "rtm", "convoai"} {
+	for _, name := range featureIDs() {
 		if features[name] {
 			out = append(out, name)
 		}

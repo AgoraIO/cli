@@ -1,6 +1,24 @@
 # Agora CLI
 
-Native Agora CLI for authentication, project management, quickstart setup, and developer onboarding.
+[![CI](https://github.com/AgoraIO/cli/actions/workflows/ci.yml/badge.svg)](https://github.com/AgoraIO/cli/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/AgoraIO/cli?label=release)](https://github.com/AgoraIO/cli/releases)
+[![npm](https://img.shields.io/npm/v/agoraio-cli?label=npm)](https://www.npmjs.com/package/agoraio-cli)
+[![License](https://img.shields.io/github/license/AgoraIO/cli)](LICENSE)
+
+Native Agora CLI for authentication, project management, quickstart setup, and developer onboarding. Use it to go from an Agora account to a runnable app with one command.
+
+```bash
+agora login
+agora init my-nextjs-demo --template nextjs
+```
+
+## What You Can Build Quickly
+
+| Goal | Command | What You Get |
+|------|---------|--------------|
+| Next.js video app | `agora init my-nextjs-demo --template nextjs` | A cloned Next.js quickstart, project binding, and `.env.local` |
+| Python voice agent | `agora init my-python-demo --template python` | A Python quickstart with Agora credentials written for the backend |
+| Go token service | `agora init my-go-demo --template go` | A Go server quickstart with project metadata and env wiring |
 
 ## Install
 
@@ -48,7 +66,7 @@ agora init my-nextjs-demo --template nextjs
 - Telemetry controls: [docs/telemetry.md](docs/telemetry.md)
 - Contributor and agent guide: [AGENTS.md](AGENTS.md)
 
-Command examples use `agora` for an installed CLI. Use `./agora` when running a local binary built from this repository with `go build -o agora .`.
+Command examples use `agora` for the installed CLI. Local source builds are covered in [Build From Source](#build-from-source).
 
 ## Command Model
 
@@ -65,9 +83,9 @@ The command model is intentionally layered:
 Discover the full command tree:
 
 ```bash
-./agora --help
-./agora --help --all
-./agora introspect --json
+agora --help
+agora --help --all
+agora introspect --json
 ```
 
 ### `init`
@@ -116,43 +134,43 @@ Prints build metadata. Release binaries include version, commit, and build date.
 ### Onboard a new demo
 
 ```bash
-./agora login
-./agora init my-nextjs-demo --template nextjs
+agora login
+agora init my-nextjs-demo --template nextjs
 ```
 
 ### Use an existing project with a quickstart
 
 ```bash
-./agora quickstart create my-go-demo --template go --project my-existing-project
-./agora quickstart env write my-go-demo --project my-existing-project
+agora quickstart create my-go-demo --template go --project my-existing-project
+agora quickstart env write my-go-demo --project my-existing-project
 ```
 
 ### Update env after changing projects
 
 ```bash
-./agora project use my-agent-demo
-./agora quickstart env write my-go-demo
+agora project use my-agent-demo
+agora quickstart env write my-go-demo
 ```
 
 ### Inspect project readiness
 
 ```bash
-./agora project doctor
-./agora project doctor --json
+agora project doctor
+agora project doctor --json
 ```
 
 ### Use low-level commands directly
 
 ```bash
-./agora project create my-agent-demo --feature rtc --feature convoai
-./agora quickstart create my-go-demo --template go --project my-agent-demo
-./agora quickstart env write my-go-demo --project my-agent-demo
+agora project create my-agent-demo --feature rtc --feature convoai
+agora quickstart create my-go-demo --template go --project my-agent-demo
+agora quickstart env write my-go-demo --project my-agent-demo
 ```
 
 ### Inspect the full command tree
 
 ```bash
-./agora --help --all
+agora --help --all
 ```
 
 ## Quickstart Env Conventions
@@ -202,13 +220,13 @@ Examples:
 
 ```bash
 # Inside a bound quickstart repo
-./agora project show --json
+agora project show --json
 
 # From any directory, target a repo path directly
-./agora quickstart env write /abs/path/to/my-go-demo --json
+agora quickstart env write /abs/path/to/my-go-demo --json
 
 # Rebind a repo to a different project
-./agora quickstart env write /abs/path/to/my-go-demo --project my-other-project --json
+agora quickstart env write /abs/path/to/my-go-demo --project my-other-project --json
 ```
 
 ## Automation / Agent Usage
@@ -219,7 +237,7 @@ For scripts, CI, and agentic workflows:
 - set `AGORA_HOME` to an isolated temporary directory in CI or multi-agent runs
 - prefer `init` for end-to-end setup
 - use low-level commands when the workflow must be decomposed or resumed in stages
-- use `./agora --help --all` to inspect the full command tree
+- use `agora --help --all` to inspect the full command tree
 - use `quickstart env write` to re-sync env files after changing project selection
 - use `project doctor --json` for readiness checks
 - rely on the same JSON envelope for both success and failure
@@ -228,11 +246,11 @@ Examples:
 
 ```bash
 export AGORA_HOME="$(mktemp -d)"
-./agora init my-nextjs-demo --template nextjs --json
-./agora quickstart create my-python-demo --template python --project my-project --json
-./agora quickstart env write my-python-demo --json
-./agora project doctor --json
-./agora auth status --json
+agora init my-nextjs-demo --template nextjs --json
+agora quickstart create my-python-demo --template python --project my-project --json
+agora quickstart env write my-python-demo --json
+agora project doctor --json
+agora auth status --json
 ```
 
 The JSON envelope and stable result shapes are documented in [docs/automation.md](docs/automation.md). `auth status --json` exits `3` with `error.code` set to `AUTH_UNAUTHENTICATED` when no local session exists.
@@ -258,8 +276,8 @@ The CLI stores config, session, context, and logs under the Agora CLI config dir
 Useful commands:
 
 ```bash
-./agora config path
-./agora config get
+agora config path
+agora config get
 ```
 
 Built-in default config values are documented in [config.example.json](config.example.json).
@@ -271,13 +289,13 @@ Built-in default config values are documented in [config.example.json](config.ex
 Try:
 
 ```bash
-./agora login --no-browser
+agora login --no-browser
 ```
 
 You can also inspect the current auth state:
 
 ```bash
-./agora whoami
+agora whoami
 ```
 
 ### `git` is missing
@@ -301,8 +319,8 @@ Quickstart env injection requires a project with an app certificate. If the sele
 If a command needs a project and none is currently selected, either:
 
 ```bash
-./agora quickstart env write my-go-demo --project my-project
-./agora project use my-project
+agora quickstart env write my-go-demo --project my-project
+agora project use my-project
 ```
 
 or run it inside a repo that already has `.agora/project.json`.

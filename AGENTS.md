@@ -42,7 +42,6 @@ internal/cli/
 docs/
   automation.md             Stable JSON output contract — machine-consumption source of truth
   install.md                Direct installer, platform, CI, and security guidance
-brew_tap_walkthrough.md     Homebrew tap setup and verification notes
 .github/workflows/
   ci.yml                    Push/PR matrix: Ubuntu, macOS, Windows
   release.yml               Tag-driven cross-platform release
@@ -133,7 +132,7 @@ The full stable contract with all result shapes is in [`docs/automation.md`](doc
 
 `auth status`, `whoami`, and API-touching commands return exit code `3` plus `ok: false` with `error.code == "AUTH_UNAUTHENTICATED"` when no local session exists. Treat that as the unauthenticated state and run `agora login` before commands that require a session.
 
-Set `AGORA_AGENT=<tool-name>` in agent runs so API requests include agent context in `User-Agent`.
+Set `AGORA_AGENT=<tool-name>` in agent runs to explicitly label API requests in `User-Agent`. If it is unset, the CLI infers a coarse label from known agent environment markers (Cursor, Claude Code, Cline, Windsurf, Codex, Aider) unless `AGORA_AGENT_DISABLE_INFER=1` is set.
 
 ## Testing
 
@@ -205,20 +204,19 @@ packaging/npm/
   agoraio-cli/              ← the published npm package (Node shim only)
     bin/agora.js            ← entry point: resolves platform binary and spawns it
     package.json            ← optionalDependencies for all 6 platforms
-  @agoraio/
-    cli-darwin-arm64/       ← one package per platform
-    cli-darwin-x64/
-    cli-linux-arm64/
-    cli-linux-x64/
-    cli-win32-x64/
-    cli-win32-arm64/
-      package.json          ← os/cpu fields restrict install to matching platform
-      bin/                  ← .gitignored; populated by CI at release time
+  agoraio-cli-darwin-arm64/ ← one unscoped package per platform
+  agoraio-cli-darwin-x64/
+  agoraio-cli-linux-arm64/
+  agoraio-cli-linux-x64/
+  agoraio-cli-win32-x64/
+  agoraio-cli-win32-arm64/
+    package.json            ← os/cpu fields restrict install to matching platform
+    bin/                    ← .gitignored; populated by CI at release time
 ```
 
 **How it works:**
 1. `npm install -g agoraio-cli` installs the shim + the matching platform package via `optionalDependencies`
-2. `bin/agora.js` resolves `@agoraio/cli-<platform>/bin/agora` and `spawnSync`s it with all args inherited
+2. `bin/agora.js` resolves `agoraio-cli-<platform>/bin/agora` and `spawnSync`s it with all args inherited
 3. If the platform package is missing, the shim prints a helpful error pointing to Homebrew or GitHub releases
 
 **Release flow (automated and active):** the `publish-npm` job in `release.yml`:
@@ -230,7 +228,7 @@ packaging/npm/
 6. Smoke-tests the published wrapper with `npx --yes agoraio-cli@<tag> --version` (retry/backoff for registry propagation)
 
 **Prerequisites:**
-- `NPM_TOKEN` secret in the repo, with publish access to the `@agoraio` scope and `agoraio-cli`.
+- `NPM_TOKEN` secret in the repo, with publish access to `agoraio-cli` and all unscoped `agoraio-cli-*` platform packages.
 - `id-token: write` workflow permission (already set in `release.yml`) — required for npm provenance.
 
 **Manual dry-run:** the workflow exposes `workflow_dispatch` with a `dry_run` input that runs `npm publish --dry-run` against a synthetic version, validating packaging without publishing.

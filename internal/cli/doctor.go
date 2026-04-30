@@ -1,19 +1,16 @@
 package cli
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 )
 
+// validateDoctorFeature defers to the canonical feature catalog so the
+// list of accepted `--feature` values stays in lockstep with the rest
+// of the CLI.
 func validateDoctorFeature(feature string) error {
-	switch feature {
-	case "rtc", "rtm", "convoai":
-		return nil
-	default:
-		return fmt.Errorf("%q must be one of: rtc, rtm, convoai.", feature)
-	}
+	return validateFeatureID(feature)
 }
 
 func doctorFeatureDependencies(feature string) map[string]bool {

@@ -15,8 +15,12 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// defaultInitFeatures returns the features enabled on a freshly created
+// Agora project when no `--feature` flags are passed. Sourced from the
+// canonical feature catalog so adding a new feature in features.go
+// flows here automatically.
 func defaultInitFeatures() []string {
-	return []string{"rtc", "rtm", "convoai"}
+	return featureIDs()
 }
 
 func initNextSteps(template quickstartTemplate, targetDir string) []string {
@@ -105,7 +109,7 @@ Use --feature to specify which features to enable on a newly created project (re
 	cmd.Flags().StringVar(&existingProject, "project", "", "existing project ID or exact project name to bind to")
 	cmd.Flags().StringVar(&region, "region", "", "control plane region for newly created projects (global or cn)")
 	cmd.Flags().StringVar(&rtmDataCenter, "rtm-data-center", "", "RTM data center to configure when rtm is enabled on a newly created project (CN, NA, EU, or AP); defaults to NA")
-	cmd.Flags().StringArrayVar(&features, "feature", nil, "enable a feature on the newly created project (repeatable); defaults to rtc, rtm, and convoai; convoai also enables rtm")
+	cmd.Flags().StringArrayVar(&features, "feature", nil, fmt.Sprintf("enable a feature on the newly created project (repeatable); defaults to %s; convoai also enables rtm", featureListString()))
 	cmd.Flags().StringArrayVar(&agentRules, "add-agent-rules", nil, "write AI agent rules into the quickstart (repeatable: cursor, claude, windsurf)")
 	cmd.Flags().BoolVar(&newProject, "new-project", false, "always create a new Agora project instead of reusing an existing one")
 	return cmd

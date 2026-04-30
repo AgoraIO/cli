@@ -77,7 +77,7 @@ func buildIntrospectionData(root *cobra.Command) map[string]any {
 		"globalFlags":    globalFlags,
 		"pseudoCommands": buildPseudoCommands(),
 		"enums": map[string][]string{
-			"features":     {"rtc", "rtm", "convoai"},
+			"features":     featureIDs(),
 			"outputModes":  {"pretty", "json"},
 			"doctorStatus": {"healthy", "warning", "not_ready", "auth_error"},
 		},
