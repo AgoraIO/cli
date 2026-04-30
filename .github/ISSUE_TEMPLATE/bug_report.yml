@@ -1,0 +1,114 @@
+name: Bug report
+description: Report a problem with the Agora CLI
+title: "[Bug] "
+labels: ["bug", "needs triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for filing a bug report! Please fill out the sections below so we
+        can reproduce and triage the issue quickly.
+
+        - **Do not** include credentials, App Certificates, or session tokens
+          in any field. Run `agora doctor --json` redacted if needed.
+        - For security issues, email <security@agora.io> instead.
+
+  - type: input
+    id: cli-version
+    attributes:
+      label: CLI version
+      description: Output of `agora --version`
+      placeholder: "e.g. agora-cli-go 0.1.7 (commit abc1234, built 2026-04-29)"
+    validations:
+      required: true
+
+  - type: input
+    id: install-method
+    attributes:
+      label: Install method
+      description: How did you install the CLI?
+      placeholder: "install.sh / install.ps1 / Homebrew / npm / Scoop / Chocolatey / winget / GitHub release / built from source"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      multiple: false
+      options:
+        - macOS
+        - Linux
+        - Windows
+        - Other (please describe in repro steps)
+    validations:
+      required: true
+
+  - type: input
+    id: os-version
+    attributes:
+      label: OS version
+      placeholder: "e.g. macOS 14.4 (arm64), Ubuntu 22.04 (amd64), Windows 11 23H2"
+    validations:
+      required: true
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: Describe the bug in plain language. What did you expect, and what happened instead?
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: Exact commands and any minimal config to reproduce. Please include `--json` output for any failing command if possible.
+      render: shell
+      placeholder: |
+        # Example
+        agora init my-app --template nextjs --json
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual-output
+    attributes:
+      label: Actual output (with `--json` when possible)
+      description: Paste the JSON envelope or pretty output (REDACT any credentials).
+      render: json
+    validations:
+      required: false
+
+  - type: textarea
+    id: doctor
+    attributes:
+      label: `agora doctor --json` output
+      description: |
+        Optional but very helpful. Run `agora doctor --json` and paste the output here. Redact anything sensitive first.
+      render: json
+    validations:
+      required: false
+
+  - type: textarea
+    id: log-snippet
+    attributes:
+      label: Log file snippet
+      description: |
+        The CLI writes structured logs to `~/.agora-cli/logs/agora-cli.log` (or `$AGORA_HOME/logs/agora-cli.log`). Paste the relevant lines around the failure. Sensitive fields are auto-redacted, but please double-check.
+      render: shell
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: confirmations
+    attributes:
+      label: Confirmations
+      options:
+        - label: I have searched existing issues and this is not a duplicate.
+          required: true
+        - label: This report does not include credentials, App Certificates, or session tokens.
+          required: true
+        - label: For security-related issues I will use security@agora.io instead.
+          required: true

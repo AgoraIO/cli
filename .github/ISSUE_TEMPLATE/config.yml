@@ -1,0 +1,14 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security report
+    url: mailto:security@agora.io
+    about: Please email security@agora.io for security issues. Do not file a public issue. Never include credentials or App Certificates.
+  - name: Agora developer documentation
+    url: https://docs.agora.io
+    about: Product documentation, SDK references, and platform guides for Agora's full product line.
+  - name: Agora Console
+    url: https://console.agora.io
+    about: Manage your Agora account, projects, and credentials.
+  - name: Agora CLI documentation
+    url: https://github.com/AgoraIO/cli/tree/main/agora-cli-go/docs
+    about: Installation, automation, error code catalog, and JSON envelope reference.
