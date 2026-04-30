@@ -10,7 +10,7 @@ body:
         can reproduce and triage the issue quickly.
 
         - **Do not** include credentials, App Certificates, or session tokens
-          in any field. Run `agora doctor --json` redacted if needed.
+          in any field. Run `agora project doctor --json` redacted if needed.
         - For security issues, email <security@agora.io> instead.
 
   - type: input
@@ -18,7 +18,7 @@ body:
     attributes:
       label: CLI version
       description: Output of `agora --version`
-      placeholder: "e.g. agora-cli-go 0.1.9 (commit abc1234, built 2026-04-30)"
+      placeholder: "e.g. agora-cli-go 0.1.10 (commit abc1234, built 2026-04-30)"
     validations:
       required: true
 
@@ -84,9 +84,9 @@ body:
   - type: textarea
     id: doctor
     attributes:
-      label: `agora doctor --json` output
+      label: `agora project doctor --json` output
       description: |
-        Optional but very helpful. Run `agora doctor --json` and paste the output here. Redact anything sensitive first.
+        Optional but very helpful. Run `agora project doctor --json` and paste the output here. Redact anything sensitive first.
       render: json
     validations:
       required: false

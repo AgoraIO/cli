@@ -6,7 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 When tagging a new release, rename the `[Unreleased]` section to the new version
-(e.g. `[0.1.9] - 2026-04-30`), add a fresh empty `[Unreleased]` heading at the top,
+(e.g. `[0.1.10] - 2026-04-30`), add a fresh empty `[Unreleased]` heading at the top,
 and update the link references at the bottom of this file.
 
 When adding a new entry, link the change to the PR or commit that introduced it
@@ -15,10 +15,37 @@ Earlier entries pre-date this convention and only carry their version's compare 
 
 ## [Unreleased]
 
+### Added
+
+- Add GitHub Pages publishing for generated CLI docs and route `agora open --target docs` to the CLI docs site, with `product-docs` available for Agora product docs.
+- Add global `--yes` / `-y` and `AGORA_NO_INPUT=1` support to accept defaults and suppress prompts.
+- Add pretty-mode progress status lines for long-running clone, OAuth, and project creation work.
+- Add dynamic shell completions for project names, quickstart templates, and project features.
+- Add `agora mcp serve --transport stdio` so MCP-capable agents can use local Agora CLI tools.
+- Add drop-in agent rule snippets under `docs/agents/` and `agora init --add-agent-rules`.
+- Add `install.sh --uninstall` and `install.ps1 -Uninstall`.
+- Add CODEOWNERS, Dependabot, and a scheduled `govulncheck` workflow.
+- Infer coarse agent labels for API `User-Agent` when `AGORA_AGENT` is unset; explicit `AGORA_AGENT` still takes precedence.
+
+### Changed
+
+- Switch npm platform package wiring from scoped `@agoraio/cli-*` packages to unscoped `agoraio-cli-*` packages.
+- Standardize README command examples on the installed `agora` command.
+- Standardize contributor contact email on `devrel@agora.io`.
+
+### Fixed
+
+- Fix bug report template references to use `agora project doctor --json`.
+- Return structured `INIT_NAME_REQUIRED`, `AUTH_OAUTH_EXCHANGE_FAILED`, and `AUTH_OAUTH_RESPONSE_INVALID` errors for previously unclassified paths.
+
+## [0.1.10] - 2026-04-30
+
 ### Changed
 
 - Default newly created projects to enable `rtc`, `rtm`, and `convoai`, make `convoai` imply `rtm` during project creation, and add `--rtm-data-center` for `init` / `project create` when RTM should be configured for a specific data center.
 - Refine `agora init` project selection so `--project` binds explicitly, `--new-project` creates explicitly, `"Default Project"` auto-selects by exact name, and interactive sessions without a default show existing projects plus a create-new option.
+- `agora project env write` detects Next.js workspaces and writes `NEXT_PUBLIC_AGORA_APP_ID` / `NEXT_AGORA_APP_CERTIFICATE`, with `--template nextjs|standard` to override auto-detection.
+- `project env write` now creates or updates repo-local `.agora/project.json` for the selected project, recording `projectType` (framework/language detection such as `nextjs`, `go`, `python`, `node`, `standard`) and `envPath`, while quickstart-bound repos continue using a single `template` field for template lineage.
 
 ## [0.1.9] - 2026-04-30
 
@@ -41,7 +68,7 @@ Earlier entries pre-date this convention and only carry their version's compare 
 - Auto-detect CI environments (`CI`, `GITHUB_ACTIONS`, `GITLAB_CI`, `BUILDKITE`, `CIRCLECI`, `JENKINS_URL`, `TF_BUILD`) and automatically default `--output` to `json`, suppress the first-run config banner, and short-circuit interactive prompts. Explicit `--output` flags, user-set `AGORA_OUTPUT`, and `AGORA_DISABLE_CI_DETECT=1` always take precedence.
 - Add a `.golangci.yml` ruleset (errcheck, govet, staticcheck, ineffassign, unused, gosec, bodyclose, errorlint, misspell, unconvert) and wire `golangci-lint v1.64.8` into the Linux CI matrix. The `make lint` target now runs `gofmt`, `golangci-lint`, and the error-code coverage audit together.
 - Add an interactive sign-in prompt for human CLI sessions when an account connection is required and no local session exists. The prompt defaults to yes on Enter and launches the existing OAuth login flow.
-- Re-enable the npm distribution channel (`agoraio-cli` wrapper plus six `@agoraio/cli-{os}-{arch}` platform packages). The release workflow now downloads the GitHub release archives, verifies them against `checksums.txt` (SHA-256), stages binaries into platform packages, stamps the tag version into every `package.json`, and publishes all packages with `npm publish --provenance` (sigstore-backed supply-chain attestations).
+- Re-enable the npm distribution channel (`agoraio-cli` wrapper plus six platform packages). The release workflow now downloads the GitHub release archives, verifies them against `checksums.txt` (SHA-256), stages binaries into platform packages, stamps the tag version into every `package.json`, and publishes all packages with `npm publish --provenance` (sigstore-backed supply-chain attestations).
 - Add a post-publish smoke test that runs `npx --yes agoraio-cli@<tag> --version` with retry/backoff to catch registry-propagation or platform-package-mismatch bugs before users hit them.
 - Add a `workflow_dispatch` trigger to the release workflow with a `dry_run` input so maintainers can validate npm packaging end-to-end without minting a real release.
 - Enrich every npm `package.json` (wrapper + 6 platform packages) with `repository`, `homepage`, `bugs`, `license`, `author`, `keywords`, and `publishConfig.provenance` for a higher-quality npmjs.com listing and supply-chain attestation.
@@ -124,7 +151,8 @@ Earlier entries pre-date this convention and only carry their version's compare 
 - Support machine-readable JSON output for automation and agent workflows.
 - Ship automated release packaging through GoReleaser, including cross-platform archives, Linux packages, Homebrew, Scoop, npm wrapper packages, Docker images, and install scripts.
 
-[Unreleased]: https://github.com/AgoraIO/cli/compare/v0.1.9...HEAD
+[Unreleased]: https://github.com/AgoraIO/cli/compare/v0.1.10...HEAD
+[0.1.10]: https://github.com/AgoraIO/cli/compare/v0.1.9...v0.1.10
 [0.1.9]: https://github.com/AgoraIO/cli/compare/v0.1.8...v0.1.9
 [0.1.8]: https://github.com/AgoraIO/cli/compare/v0.1.7...v0.1.8
 [0.1.7]: https://github.com/AgoraIO/cli/compare/v0.1.6...v0.1.7

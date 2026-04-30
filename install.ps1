@@ -12,7 +12,7 @@
 #   irm https://raw.githubusercontent.com/AgoraIO/cli/main/install.ps1 | iex
 #
 # Pin a version:
-#   $env:VERSION = '0.1.9'; & ([scriptblock]::Create((irm .../install.ps1)))
+#   $env:VERSION = '0.1.10'; & ([scriptblock]::Create((irm .../install.ps1)))
 #
 [CmdletBinding()]
 param(
@@ -21,7 +21,8 @@ param(
     [string]$GitHubRepo = $(if ($env:GITHUB_REPO) { $env:GITHUB_REPO } else { 'AgoraIO/cli' }),
     [switch]$AddToPath,
     [switch]$Force,
-    [switch]$NoColor
+    [switch]$NoColor,
+    [switch]$Uninstall
 )
 
 Set-StrictMode -Version Latest
@@ -314,11 +315,34 @@ function Show-ExistingInstall {
     }
 }
 
+function Uninstall-Agora {
+    $destinationBinary = Join-Path $InstallDir 'agora.exe'
+    $receiptPath = Join-Path $InstallDir $InstallReceiptFileName
+
+    Write-Info "Uninstalling Agora CLI from $InstallDir"
+    if (Test-Path -LiteralPath $destinationBinary) {
+        Remove-Item -LiteralPath $destinationBinary -Force
+        Write-Info "Removed $destinationBinary"
+    } else {
+        Write-Info "No agora binary found at $destinationBinary"
+    }
+    if (Test-Path -LiteralPath $receiptPath) {
+        Remove-Item -LiteralPath $receiptPath -Force
+        Write-Info "Removed $receiptPath"
+    }
+    Write-Info "Config, session, context, and logs are preserved under the Agora CLI config directory."
+}
+
 # ---- Main ------------------------------------------------------------------
+$destinationBinary = Join-Path $InstallDir 'agora.exe'
+if ($Uninstall) {
+    Uninstall-Agora
+    exit $EXIT_OK
+}
+
 $Version = Normalize-Version $Version
 $arch = Resolve-Architecture
 $tempRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("agora-install-" + [System.Guid]::NewGuid().ToString('N'))
-$destinationBinary = Join-Path $InstallDir 'agora.exe'
 
 try {
     Resolve-Version

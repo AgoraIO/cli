@@ -16,7 +16,7 @@ agora --help
 Install a pinned version:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/AgoraIO/cli/main/install.sh | sh -s -- --version 0.1.9 --add-to-path
+curl -fsSL https://raw.githubusercontent.com/AgoraIO/cli/main/install.sh | sh -s -- --version 0.1.10 --add-to-path
 agora --help
 ```
 
@@ -50,7 +50,7 @@ agora --help
 Install a pinned version and add the default install directory to your user PATH:
 
 ```powershell
-$env:VERSION = "0.1.9"
+$env:VERSION = "0.1.10"
 & ([scriptblock]::Create((irm https://raw.githubusercontent.com/AgoraIO/cli/main/install.ps1))) -AddToPath
 agora --help
 ```
@@ -72,6 +72,7 @@ If your PowerShell execution policy blocks inline scripts, download `install.ps1
 --add-to-path           Append INSTALL_DIR to your shell rc file (bash, zsh,
                         fish, or .profile).
 --dry-run               Show what would happen without writing any files.
+--uninstall             Remove the installer-managed binary and receipt.
 --no-color              Disable colored output.
 -q, --quiet             Suppress non-error output.
 -v, --verbose           Verbose debug output.
@@ -81,12 +82,28 @@ If your PowerShell execution policy blocks inline scripts, download `install.ps1
 
 If another managed `agora` install is detected, the installer refuses by default to avoid creating two installs that shadow each other on PATH. Pass `--force` to install alongside it.
 
+## Uninstall
+
+Direct installer installs can be removed with:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/AgoraIO/cli/main/install.sh | sh -s -- --uninstall
+```
+
+On Windows PowerShell:
+
+```powershell
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/AgoraIO/cli/main/install.ps1))) -Uninstall
+```
+
+Uninstall removes the binary and `agora.install.json` receipt from the install directory. It preserves config, session, context, and logs.
+
 ## Supported Environment Variables
 
 Both direct installers support these core overrides:
 
 - `GITHUB_REPO`: install from a fork or alternate repository.
-- `VERSION`: install a specific version. Both `0.1.9` and `v0.1.9` are accepted.
+- `VERSION`: install a specific version. Both `0.1.10` and `v0.1.10` are accepted.
 - `INSTALL_DIR`: install to a custom directory.
 - `GITHUB_TOKEN` or `GH_TOKEN`: optional GitHub token to avoid API rate limits when resolving the latest release.
 
@@ -107,17 +124,17 @@ Advanced or test overrides supported by both direct installers:
 
 Both `install.sh` and `install.ps1` use the same stable exit-code contract for scripted callers:
 
-| Code | Meaning                                                                                                            |
-| ---- | ------------------------------------------------------------------------------------------------------------------ |
-| 0    | success (or already at target version on idempotent re-run)                                                        |
-| 1    | generic / unknown error                                                                                            |
-| 2    | invalid arguments                                                                                                  |
-| 3    | missing prerequisite (`curl`/`wget`, `tar`/`unzip`, `sha256sum`, ... — Unix only)                                  |
-| 4    | unsupported platform / architecture                                                                                |
-| 5    | network or download failure                                                                                        |
-| 6    | checksum verification failed                                                                                       |
+| Code | Meaning                                                                                                                        |
+| ---- | ------------------------------------------------------------------------------------------------------------------------------ |
+| 0    | success (or already at target version on idempotent re-run)                                                                    |
+| 1    | generic / unknown error                                                                                                        |
+| 2    | invalid arguments                                                                                                              |
+| 3    | missing prerequisite (`curl`/`wget`, `tar`/`unzip`, `sha256sum`, ... — Unix only)                                              |
+| 4    | unsupported platform / architecture                                                                                            |
+| 5    | network or download failure                                                                                                    |
+| 6    | checksum verification failed                                                                                                   |
 | 7    | install or permission failure (non-writable dir, sudo, or refused to overwrite a managed install without `--force` / `-Force`) |
-| 8    | post-install verification failed                                                                                   |
+| 8    | post-install verification failed                                                                                               |
 
 ### Idempotent re-runs
 
@@ -127,13 +144,13 @@ Both installers short-circuit with exit `0` when the target install path already
 
 Both installers refuse to overwrite an `agora` binary that came from a package manager and exit `7` with a recommended upgrade command. Override with `--force` / `-Force`.
 
-| Manager | Detected by | Recommended upgrade |
-|---------|-------------|---------------------|
-| Homebrew (Unix) | binary path under `brew --prefix` | `brew upgrade agora` |
-| npm (Unix and Windows) | binary path under `npm prefix -g` | `npm update -g agoraio-cli` |
-| Scoop (Windows) | `$env:SCOOP` or path contains `\scoop\shims\` | `scoop update agora` |
-| Chocolatey (Windows) | `$env:ChocolateyInstall` or path contains `\chocolatey\bin\` | `choco upgrade agora` |
-| winget (Windows) | path contains `\WinGet\Packages\` | `winget upgrade Agora.Cli` |
+| Manager                | Detected by                                                  | Recommended upgrade         |
+| ---------------------- | ------------------------------------------------------------ | --------------------------- |
+| Homebrew (Unix)        | binary path under `brew --prefix`                            | `brew upgrade agora`        |
+| npm (Unix and Windows) | binary path under `npm prefix -g`                            | `npm update -g agoraio-cli` |
+| Scoop (Windows)        | `$env:SCOOP` or path contains `\scoop\shims\`                | `scoop update agora`        |
+| Chocolatey (Windows)   | `$env:ChocolateyInstall` or path contains `\chocolatey\bin\` | `choco upgrade agora`       |
+| winget (Windows)       | path contains `\WinGet\Packages\`                            | `winget upgrade Agora.Cli`  |
 
 ### Install receipt and upgrades
 
@@ -162,15 +179,15 @@ go build -o agora .
 
 ## Package Channels
 
-| Channel | Status | Command |
-|---------|--------|---------|
-| Shell installer | Available | `curl -fsSL https://raw.githubusercontent.com/AgoraIO/cli/main/install.sh \| sh -s -- --add-to-path` |
-| Windows PowerShell | Available | `irm https://raw.githubusercontent.com/AgoraIO/cli/main/install.ps1 \| iex` |
-| Linux `.deb` / `.rpm` / `.apk` artifacts | Available on GitHub releases | Download the package for your distro from the release page. |
-| apt repository | Available when `apt-repo.yml` publishes the release | Use the signed repository documented by the release. |
-| Docker / GHCR | Available when release images publish | `docker run --rm ghcr.io/agoraio/agora-cli:latest --help` |
-| npm wrapper | Available | `npm install -g agoraio-cli` |
-| Homebrew / Scoop | Coming soon | Use the direct installer until package-manager taps are published. |
+| Channel                                  | Status                                              | Command                                                                                              |
+| ---------------------------------------- | --------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| Shell installer                          | Available                                           | `curl -fsSL https://raw.githubusercontent.com/AgoraIO/cli/main/install.sh \| sh -s -- --add-to-path` |
+| Windows PowerShell                       | Available                                           | `irm https://raw.githubusercontent.com/AgoraIO/cli/main/install.ps1 \| iex`                          |
+| Linux `.deb` / `.rpm` / `.apk` artifacts | Available on GitHub releases                        | Download the package for your distro from the release page.                                          |
+| apt repository                           | Available when `apt-repo.yml` publishes the release | Use the signed repository documented by the release.                                                 |
+| Docker / GHCR                            | Available when release images publish               | `docker run --rm ghcr.io/agoraio/agora-cli:latest --help`                                            |
+| npm wrapper                              | Available                                           | `npm install -g agoraio-cli`                                                                         |
+| Homebrew / Scoop                         | Coming soon                                         | Use the direct installer until package-manager taps are published.                                   |
 
 ### npm wrapper
 
@@ -185,7 +202,7 @@ agora --help
 npx agoraio-cli --help
 
 # Pin a specific version
-npm install -g agoraio-cli@0.1.9
+npm install -g agoraio-cli@0.1.10
 
 # Update to the latest published version
 npm update -g agoraio-cli
@@ -213,12 +230,12 @@ For one-off shell sessions, source the generated script according to your shell'
 If latest-version resolution fails, retry with a pinned version or provide `GITHUB_TOKEN` / `GH_TOKEN`:
 
 ```bash
-GITHUB_TOKEN=your-token-here VERSION=0.1.9 sh install.sh
+GITHUB_TOKEN=your-token-here VERSION=0.1.10 sh install.sh
 ```
 
 ```powershell
 $env:GITHUB_TOKEN = "your-token-here"
-$env:VERSION = "0.1.9"
+$env:VERSION = "0.1.10"
 & ([scriptblock]::Create((irm https://raw.githubusercontent.com/AgoraIO/cli/main/install.ps1)))
 ```
 
@@ -264,7 +281,7 @@ For CI, automation, and reproducible environments, pin `VERSION` explicitly inst
 Every release is signed with [Cosign](https://docs.sigstore.dev/cosign/overview/) using GitHub Actions OIDC (keyless mode) and ships an [SPDX 2.3](https://spdx.dev/) SBOM per archive and per Linux package. To verify the `checksums.txt` file before trusting any artifact:
 
 ```bash
-TAG=v0.1.9
+TAG=v0.1.10
 ASSET_BASE="https://github.com/AgoraIO/cli/releases/download/${TAG}"
 curl -fsSLO "${ASSET_BASE}/checksums.txt"
 curl -fsSLO "${ASSET_BASE}/checksums.txt.sig"
@@ -288,8 +305,8 @@ cosign verify "ghcr.io/agoraio/agora-cli:${TAG#v}" \
   --certificate-oidc-issuer 'https://token.actions.githubusercontent.com'
 ```
 
-To audit dependencies, download the `*.spdx.json` SBOM that ships next to each archive (e.g. `agora-cli-go_v0.1.9_linux_amd64.tar.gz.spdx.json`) and feed it to a scanner such as [Grype](https://github.com/anchore/grype):
+To audit dependencies, download the `*.spdx.json` SBOM that ships next to each archive (e.g. `agora-cli-go_v0.1.10_linux_amd64.tar.gz.spdx.json`) and feed it to a scanner such as [Grype](https://github.com/anchore/grype):
 
 ```bash
-grype sbom:agora-cli-go_v0.1.9_linux_amd64.tar.gz.spdx.json
+grype sbom:agora-cli-go_v0.1.10_linux_amd64.tar.gz.spdx.json
 ```
