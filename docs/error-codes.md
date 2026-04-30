@@ -12,6 +12,8 @@ This catalog is the source of truth for stable codes. CI runs `make snapshot-err
 |------|------|---------|----------|
 | `AUTH_UNAUTHENTICATED` | 3 | No usable local session exists. | Run `agora login`. |
 | `AUTH_SESSION_EXPIRED` | 3 | The stored session is expired or rejected after refresh. | Run `agora login` again. |
+| `AUTH_OAUTH_EXCHANGE_FAILED` | 1 | The OAuth token endpoint rejected the authorization-code or refresh-token exchange. | Retry login; if persistent, file a bug with the HTTP status and request ID. |
+| `AUTH_OAUTH_RESPONSE_INVALID` | 1 | The OAuth token endpoint returned a response missing required token fields. | Retry login; if persistent, file a bug. |
 
 ### Project resolution
 
@@ -21,6 +23,7 @@ This catalog is the source of truth for stable codes. CI runs `make snapshot-err
 | `PROJECT_NOT_FOUND` | 1 | The requested project ID or exact name was not found. | Run `agora project list` and retry with the project ID. |
 | `PROJECT_AMBIGUOUS` | 1 | A project name matched multiple projects. | Retry with the project ID. |
 | `PROJECT_NO_CERTIFICATE` | 1 | The selected project has no app certificate for env seeding. | Enable an app certificate in Console or select another project. |
+| `PROJECT_ENV_TEMPLATE_UNKNOWN` | 1 | The `--template` value for `project env write` is not supported. | Use `nextjs` or `standard`. |
 | `PROJECT_NOT_READY` | 1 | `project doctor` could not surface a more specific issue. | Re-run `project doctor` for details. |
 
 ### Quickstart / init
@@ -32,6 +35,7 @@ This catalog is the source of truth for stable codes. CI runs `make snapshot-err
 | `QUICKSTART_TEMPLATE_UNAVAILABLE` | 1 | The template exists but is not currently available. | Choose an available template. |
 | `QUICKSTART_TEMPLATE_ENV_UNSUPPORTED` | 1 | The selected template does not define an env target path. | Choose a template with env support or configure the env file manually. |
 | `QUICKSTART_TARGET_EXISTS` | 1 | The clone target already exists. | Choose a new directory. |
+| `INIT_NAME_REQUIRED` | 1 | `agora init` was run without the required target directory name. | Pass a directory name, for example `agora init my-nextjs-demo --template nextjs`. |
 | `INIT_ABORTED` | 1 | The interactive `agora init` reuse prompt was answered "no". | Re-run with `--project <id>`, `--new-project`, or accept the prompt. |
 
 ### Self-update (`agora upgrade`)

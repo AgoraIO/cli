@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -74,7 +76,8 @@ Use "agora --help --all --json" for a machine-readable command tree (agent tooli
 	root.PersistentFlags().BoolVar(&a.rootPrettyJSON, "pretty", false, "pretty-print JSON output when used with --json")
 	root.PersistentFlags().BoolVar(&a.rootQuiet, "quiet", false, "suppress success output (both pretty and JSON envelopes); rely on exit code. Errors still print on stderr.")
 	root.PersistentFlags().BoolVar(&a.rootNoColor, "no-color", false, "disable ANSI color in pretty output")
-	root.PersistentFlags().BoolVar(&a.rootVerbose, "verbose", false, "echo structured logs to stderr (equivalent to AGORA_VERBOSE=1); does not change exit codes or JSON envelopes")
+	root.PersistentFlags().BoolVarP(&a.rootVerbose, "verbose", "v", false, "echo structured logs to stderr (equivalent to AGORA_VERBOSE=1); does not change exit codes or JSON envelopes")
+	root.PersistentFlags().BoolVarP(&a.rootYes, "yes", "y", false, "accept default answers and suppress interactive prompts (equivalent to AGORA_NO_INPUT=1)")
 	root.PersistentFlags().Bool("all", false, "show the full command tree in help output")
 	root.PersistentFlags().BoolVar(&a.rootUpgradeCheck, "upgrade-check", false, "print non-interactive upgrade guidance and exit")
 	root.AddCommand(a.buildLoginCommand("login"))
@@ -90,6 +93,7 @@ Use "agora --help --all --json" for a machine-readable command tree (agent tooli
 	root.AddCommand(a.buildTelemetryCommand())
 	root.AddCommand(a.buildUpgradeCommand())
 	root.AddCommand(a.buildOpenCommand())
+	root.AddCommand(a.buildMCPCommand())
 	// Keep "add" unregistered until it has a real implementation. Calls to
 	// `agora add` should behave as unknown command for now.
 	defaultHelp := root.HelpFunc()
@@ -253,11 +257,18 @@ func (a *App) buildOpenCommand() *cobra.Command {
 		Example: example(`
   agora open --target console
   agora open --target docs
+  agora open --target product-docs
 `),
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			url := "https://console.agora.io"
-			if target == "docs" {
+			switch target {
+			case "docs":
+				url = "https://agoraio.github.io/cli/"
+			case "product-docs":
 				url = "https://docs.agora.io"
+			case "console":
+			default:
+				return fmt.Errorf("unknown open target %q. Use console, docs, or product-docs.", target)
 			}
 			status := "printed"
 			if !noBrowser && a.resolveOutputMode(cmd) != outputJSON && openBrowser(url) {
@@ -266,7 +277,7 @@ func (a *App) buildOpenCommand() *cobra.Command {
 			return renderResult(cmd, "open", map[string]any{"action": "open", "status": status, "target": target, "url": url})
 		},
 	}
-	cmd.Flags().StringVar(&target, "target", "console", "target to open: console or docs")
+	cmd.Flags().StringVar(&target, "target", "console", "target to open: console, docs, or product-docs")
 	cmd.Flags().BoolVar(&noBrowser, "no-browser", false, "print the URL without opening a browser")
 	return cmd
 }
@@ -648,6 +659,7 @@ func (a *App) buildProjectUse() *cobra.Command {
 			}
 			return renderResult(cmd, "project use", data)
 		},
+		ValidArgsFunction: a.completeProjectNames,
 	}
 }
 
@@ -672,6 +684,7 @@ func (a *App) buildProjectShow() *cobra.Command {
 			}
 			return renderResult(cmd, "project show", data)
 		},
+		ValidArgsFunction: a.completeProjectNames,
 	}
 }
 
@@ -727,7 +740,11 @@ Use "project env write" when you want to persist the values into a managed doten
 		Short: "Write project environment variables to a dotenv file",
 		Long: `Write Agora App ID and App Certificate values to a dotenv file.
 
-If no path is provided, the CLI chooses the default target using the existing env files in the working directory.`,
+If no path is provided, the CLI chooses the default target using the existing env files in the working directory.
+
+Next.js apps are detected from package.json (a next dependency), a next.config file, env.local.example, or repo .agora project.json fields template (quickstart) or projectType; those workspaces receive NEXT_PUBLIC_AGORA_APP_ID and NEXT_AGORA_APP_CERTIFICATE. Use --template nextjs or --template standard to override detection.
+
+When .agora/project.json exists, this command updates it for the selected project and records projectType/envPath when missing. If no repo-local binding exists yet, it creates .agora/project.json in the current working directory.`,
 		Example: example(`
   agora project env write
   agora project env write .env.local
@@ -752,19 +769,57 @@ If no path is provided, the CLI chooses the default target using the existing en
 			if err != nil {
 				return err
 			}
-			values, err := projectCredentialEnvValues(target.project)
+			cwd, err := os.Getwd()
 			if err != nil {
 				return err
 			}
-			file, err := writeProjectEnvFile(path, values, appendFlag, overwriteFlag)
+			pathFromUser := strings.TrimSpace(path)
+			absPath, err := resolveProjectEnvWriteAbsolutePath(cwd, pathFromUser)
 			if err != nil {
 				return err
 			}
-			return renderResult(cmd, "project env write", map[string]any{"action": "env-write", "keysWritten": projectEnvKeys(values), "path": file.Path, "projectId": target.project.ProjectID, "projectName": target.project.Name, "status": file.Status})
+			workspaceDir := filepath.Dir(absPath)
+			projectType, err := detectProjectType(workspaceDir, a.projectEnvWriteTemplate)
+			if err != nil {
+				return err
+			}
+			layout, err := detectProjectEnvCredentialLayout(workspaceDir, a.projectEnvWriteTemplate)
+			if err != nil {
+				return err
+			}
+			values, err := projectCredentialEnvValuesForLayout(target.project, layout)
+			if err != nil {
+				return err
+			}
+			conflicting := conflictingKeysForProjectEnvLayout(layout)
+			file, err := writeProjectEnvFile(absPath, values, appendFlag, overwriteFlag, conflicting, pathFromUser == "")
+			if err != nil {
+				return err
+			}
+			metaUpdated, metadataPath, err := syncLocalProjectBindingAfterEnvWrite(workspaceDir, cwd, absPath, target, projectType)
+			if err != nil {
+				return err
+			}
+			payload := map[string]any{
+				"action":           "env-write",
+				"credentialLayout": credentialLayoutLabel(layout),
+				"keysWritten":      projectEnvKeys(values),
+				"projectType":      projectType,
+				"path":             file.Path,
+				"projectId":        target.project.ProjectID,
+				"projectName":      target.project.Name,
+				"status":           file.Status,
+			}
+			if metaUpdated {
+				payload["metadataUpdated"] = true
+				payload["metadataPath"] = metadataPath
+			}
+			return renderResult(cmd, "project env write", payload)
 		},
 	}
 	write.Flags().Bool("overwrite", false, "replace the target file with only Agora App ID and App Certificate values")
 	write.Flags().Bool("append", false, "append Agora App ID and App Certificate values when no existing values are present")
+	write.Flags().StringVar(&a.projectEnvWriteTemplate, "template", "", "credential key layout: nextjs or standard; if omitted, detect Next.js from the workspace")
 	cmd.AddCommand(write)
 	return cmd
 }
@@ -808,6 +863,7 @@ func (a *App) buildProjectFeature() *cobra.Command {
 			}
 			return renderResult(cmd, "project feature list", map[string]any{"action": "feature-list", "items": items, "projectId": target.project.ProjectID, "projectName": target.project.Name})
 		},
+		ValidArgsFunction: a.completeProjectNames,
 	})
 	cmd.AddCommand(&cobra.Command{
 		Use:   "status <feature> [project]",
@@ -830,6 +886,7 @@ func (a *App) buildProjectFeature() *cobra.Command {
 			}
 			return renderResult(cmd, "project feature status", data)
 		},
+		ValidArgsFunction: a.completeFeatureThenProject,
 	})
 	cmd.AddCommand(&cobra.Command{
 		Use:   "enable <feature> [project]",
@@ -852,6 +909,7 @@ func (a *App) buildProjectFeature() *cobra.Command {
 			}
 			return renderResult(cmd, "project feature enable", data)
 		},
+		ValidArgsFunction: a.completeFeatureThenProject,
 	})
 	return cmd
 }

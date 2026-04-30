@@ -15,6 +15,7 @@ This page lists every enumerable command and its local flags. For long descripti
 | `--quiet` | `bool` | — | suppress success output (both pretty and JSON envelopes); rely on exit code. Errors still print on stderr. |
 | `--upgrade-check` | `bool` | — | print non-interactive upgrade guidance and exit |
 | `--verbose` | `bool` | — | echo structured logs to stderr (equivalent to AGORA_VERBOSE=1); does not change exit codes or JSON envelopes |
+| `--yes` | `bool` | — | accept default answers and suppress interactive prompts (equivalent to AGORA_NO_INPUT=1) |
 
 ## Pseudo Commands
 
@@ -93,6 +94,7 @@ Create a project, clone a quickstart, and write env in one flow
 
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
+| `--add-agent-rules` | `stringArray` | `[]` | write AI agent rules into the quickstart (repeatable: cursor, claude, windsurf) |
 | `--dir` | `string` | — | target directory for the cloned quickstart; defaults to <name> |
 | `--feature` | `stringArray` | `[]` | enable a feature on the newly created project (repeatable); defaults to rtc, rtm, and convoai; convoai also enables rtm |
 | `--new-project` | `bool` | — | always create a new Agora project instead of reusing an existing one |
@@ -122,6 +124,20 @@ Clear the local Agora session
 
 _No local flags. Inherited global flags still apply (see [Global Flags](#global-flags))._
 
+### `agora mcp`
+
+Run Agora CLI as a local MCP server
+
+_No local flags. Inherited global flags still apply (see [Global Flags](#global-flags))._
+
+### `agora mcp serve`
+
+Serve Agora CLI tools over MCP
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--transport` | `string` | `stdio` | MCP transport: stdio |
+
 ### `agora open`
 
 Open Agora Console or CLI docs
@@ -129,7 +145,7 @@ Open Agora Console or CLI docs
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
 | `--no-browser` | `bool` | — | print the URL without opening a browser |
-| `--target` | `string` | `console` | target to open: console or docs |
+| `--target` | `string` | `console` | target to open: console, docs, or product-docs |
 
 ### `agora project`
 
@@ -178,6 +194,7 @@ Write project environment variables to a dotenv file
 |------|------|---------|-------------|
 | `--append` | `bool` | — | append Agora App ID and App Certificate values when no existing values are present |
 | `--overwrite` | `bool` | — | replace the target file with only Agora App ID and App Certificate values |
+| `--template` | `string` | — | credential key layout: nextjs or standard; if omitted, detect Next.js from the workspace |
 
 ### `agora project feature`
 

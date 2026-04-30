@@ -18,10 +18,13 @@
 package cli
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -136,23 +139,25 @@ type projectDoctorResult struct {
 // owns the shared HTTP client, the loaded config, the env snapshots, and the
 // fully-built cobra root command.
 type App struct {
-	root              *cobra.Command
-	env               map[string]string
-	osEnv             map[string]string // raw OS env snapshot before applyConfigToEnv; used for CI detection & user-set env precedence
-	cfg               appConfig
-	cfgState          configState
-	rootOutput        string
-	rootJSON          bool
-	rootPrettyJSON    bool
-	rootQuiet         bool
-	rootNoColor       bool
-	rootUpgradeCheck  bool
-	rootVerbose       bool
-	httpClient        *http.Client
-	projectEnvProject string
-	projectEnvFormat  string
-	projectEnvShell   bool
-	projectEnvSecrets bool
+	root                    *cobra.Command
+	env                     map[string]string
+	osEnv                   map[string]string // raw OS env snapshot before applyConfigToEnv; used for CI detection & user-set env precedence
+	cfg                     appConfig
+	cfgState                configState
+	rootOutput              string
+	rootJSON                bool
+	rootPrettyJSON          bool
+	rootQuiet               bool
+	rootNoColor             bool
+	rootUpgradeCheck        bool
+	rootVerbose             bool
+	rootYes                 bool
+	httpClient              *http.Client
+	projectEnvProject       string
+	projectEnvFormat        string
+	projectEnvShell         bool
+	projectEnvSecrets       bool
+	projectEnvWriteTemplate string
 }
 
 // NewApp boots the App: snapshot env (before any mutation), load or migrate
@@ -186,6 +191,9 @@ func NewApp() (*App, error) {
 // stderr path depending on the mode. Returns *exitError or *renderedError
 // for the cmd/main.go shim to translate into the process exit code.
 func (a *App) Execute() error {
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	a.root.SetContext(ctx)
 	rawOutput := readRawFlagValue(os.Args[1:], "--output")
 	if rawOutput != "json" && rawOutput != "pretty" {
 		rawOutput = ""
@@ -199,7 +207,7 @@ func (a *App) Execute() error {
 			fmt.Fprintln(os.Stderr, banner)
 		}
 	}
-	if err := a.root.Execute(); err != nil {
+	if err := a.root.ExecuteContext(ctx); err != nil {
 		if _, ok := ExitCode(err); ok {
 			return err
 		}
@@ -358,6 +366,14 @@ func snapshotEnv() map[string]string {
 		}
 	}
 	return env
+}
+
+func (a *App) noInput() bool {
+	if a.rootYes {
+		return true
+	}
+	value := strings.ToLower(strings.TrimSpace(a.env["AGORA_NO_INPUT"]))
+	return value == "1" || value == "true" || value == "yes" || value == "y"
 }
 
 // isTTY reports whether the given file is connected to a terminal. Used for

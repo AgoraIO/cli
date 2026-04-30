@@ -33,9 +33,11 @@ Use this guide for:
 - Use `--json --pretty` when a human needs to inspect JSON directly. Scripts should keep the default single-line JSON.
 - Use `--quiet` to suppress the success envelope in **both** pretty and JSON modes; the exit code becomes the only result. Errors are still printed on stderr (and as a JSON envelope on stdout when `--json` is set without `--quiet`). NDJSON progress events are still emitted because they are observability, not results.
 - Use `--verbose` (equivalent to `AGORA_VERBOSE=1`) to echo structured log records to stderr. The flag does not change exit codes, JSON envelope shape, or NDJSON progress events; it only mirrors the entries that would normally be written to the log file. Pair with `--json` for fully machine-parseable runs that also surface internal events to your CI logs.
-- Interactive login prompts only appear in interactive pretty-mode runs. Automation should still authenticate up front with `agora login`; `--json`, `AGORA_OUTPUT=json`, and detected CI environments never prompt.
+- Use `--yes` (or `-y`) / `AGORA_NO_INPUT=1` to accept default choices and suppress prompts in automation.
+- Interactive login prompts only appear in interactive pretty-mode runs. Automation should still authenticate up front with `agora login`; `--json`, `AGORA_OUTPUT=json`, `--yes`, `AGORA_NO_INPUT=1`, and detected CI environments never prompt.
 - Output mode precedence is: explicit CLI flag (`--json` or `--output`) first, user-set `AGORA_OUTPUT` second, then user-customized config file value, then **CI auto-detect → JSON** (see below), then pretty.
-- Set `AGORA_AGENT=<tool-name>` in automated environments so support and analytics can distinguish agent traffic in the API `User-Agent`.
+- Set `AGORA_AGENT=<tool-name>` in automated environments to explicitly label agent traffic in the API `User-Agent`. When unset, the CLI may infer a coarse label such as `cursor`, `claude-code`, `cline`, `windsurf`, `codex`, or `aider` from known agent environment markers. Set `AGORA_AGENT_DISABLE_INFER=1` to disable inference.
+- Use `agora mcp serve --transport stdio` to expose local Agora CLI tools to MCP-capable agents.
 
 ### CI auto-detect
 
@@ -389,6 +391,10 @@ Example:
 ./agora project env write apps/web/.env.local --json
 ```
 
+Optional `data` fields:
+- `credentialLayout`
+  Either `standard` (AGORA_* keys) or `nextjs` (`NEXT_PUBLIC_AGORA_APP_ID` and `NEXT_AGORA_APP_CERTIFICATE`) when the workspace is detected or overridden as Next.js.
+
 Required `data` fields:
 - `action`
   Always `env-write`.
@@ -396,10 +402,20 @@ Required `data` fields:
 - `projectName`
 - `path`
   Absolute path to the written dotenv file.
+- `projectType`
+  Detected workspace type used for future repo metadata (`nextjs`, `go`, `python`, `node`, or `standard`).
 - `status`
   One of `created`, `updated`, `appended`, or `overwritten`.
 - `keysWritten`
-  Ordered list of credential keys that were written. `project env write` writes only `AGORA_APP_ID` and `AGORA_APP_CERTIFICATE`; non-secret project metadata is stored in `.agora/project.json` for repo-bound quickstarts instead of dotenv files.
+  Ordered list of credential keys that were written. By default `project env write` uses `AGORA_APP_ID` and `AGORA_APP_CERTIFICATE`. Next.js workspaces (detected via `package.json` / `next.config.*` / `env.local.example` / repo `.agora` `projectType` / `template: nextjs`, or forced with `--template nextjs`) use `NEXT_PUBLIC_AGORA_APP_ID` and `NEXT_AGORA_APP_CERTIFICATE` instead. Non-secret project metadata stays in `.agora/project.json`.
+
+Optional `data` fields (present when the CLI updates or creates repo metadata):
+- `metadataUpdated`
+  `true` when `.agora/project.json` was created or updated for the selected project (including `projectType` and `envPath` when missing).
+- `metadataPath`
+  Relative path `.agora/project.json` from the repo root when `metadataUpdated` is true.
+
+Pass `--template standard` to force AGORA_* keys when auto-detection would pick Next.js.
 
 Write behavior:
 - existing `.env` and `.env.local` files are preserved; missing credential keys are appended and existing credential keys are updated
@@ -411,6 +427,10 @@ Safe branch fields:
 - `path`
 - `status`
 - `keysWritten`
+- `credentialLayout`
+- `projectType`
+- `metadataUpdated` (when repo binding was updated)
+- `metadataPath` (when `metadataUpdated` is true)
 
 ### `project env`
 
@@ -547,7 +567,7 @@ Env write behavior:
 - quickstart env files contain only the App ID and App Certificate variable names required by the template
 - Next.js uses `NEXT_PUBLIC_AGORA_APP_ID` and `NEXT_AGORA_APP_CERTIFICATE`
 - Python and Go use `APP_ID` and `APP_CERTIFICATE`
-- project metadata such as project ID, project name, region, template, and env path is stored in `.agora/project.json`
+- project metadata such as project ID, project name, region, template, projectType, and env path is stored in `.agora/project.json`
 - existing quickstart env files are preserved; missing credential keys are appended and existing credential keys are updated
 - stale Agora credential aliases for another runtime are commented out to avoid ambiguous dotenv resolution; for example, a Next.js quickstart prefers `NEXT_PUBLIC_AGORA_APP_ID` and comments out old `AGORA_APP_ID` / `APP_ID` entries when replacing them
 

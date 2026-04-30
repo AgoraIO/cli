@@ -33,7 +33,7 @@ func TestDetectInstallProvenanceUsesReceiptThenExecutablePath(t *testing.T) {
 		Tool:          "agora",
 		InstallMethod: "installer",
 		InstallPath:   installerPath,
-		Version:       "0.1.9",
+		Version:       "0.1.10",
 		InstalledAt:   "2026-04-30T11:00:00Z",
 		Source:        "install.sh",
 	}
@@ -67,7 +67,7 @@ func TestDetectInstallProvenanceFallsBackToExecutablePath(t *testing.T) {
 		{
 			name:       "homebrew detected from resolved Cellar path",
 			env:        map[string]string{"HOMEBREW_PREFIX": "/usr/local"},
-			exePath:    "/usr/local/Cellar/agora-cli/0.1.9/bin/agora",
+			exePath:    "/usr/local/Cellar/agora-cli/0.1.10/bin/agora",
 			wantMethod: "homebrew",
 		},
 		{
@@ -79,7 +79,7 @@ func TestDetectInstallProvenanceFallsBackToExecutablePath(t *testing.T) {
 		{
 			name:       "npm detected from node_modules path",
 			env:        map[string]string{"npm_config_prefix": "/usr/local"},
-			exePath:    "/usr/local/lib/node_modules/@agoraio/cli-darwin-arm64/bin/agora",
+			exePath:    "/usr/local/lib/node_modules/agoraio-cli-darwin-arm64/bin/agora",
 			wantMethod: "npm",
 		},
 		{
@@ -107,7 +107,7 @@ func TestDetectInstallProvenanceIgnoresStaleReceipt(t *testing.T) {
 		Tool:          "agora",
 		InstallMethod: "npm",
 		InstallPath:   filepath.Join(dir, "old-agora"),
-		Version:       "0.1.9",
+		Version:       "0.1.10",
 		InstalledAt:   "2026-04-30T11:00:00Z",
 		Source:        "test",
 	}
@@ -127,7 +127,7 @@ func TestDetectInstallProvenanceIgnoresStaleReceipt(t *testing.T) {
 
 func TestWriteInstallReceiptRoundTrips(t *testing.T) {
 	exePath := filepath.Join(t.TempDir(), "agora")
-	receiptPath, err := writeInstallReceipt(exePath, "v0.1.9", "agora upgrade")
+	receiptPath, err := writeInstallReceipt(exePath, "v0.1.10", "agora upgrade")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -138,7 +138,7 @@ func TestWriteInstallReceiptRoundTrips(t *testing.T) {
 	if !receipt.validForPath(exePath) {
 		t.Fatalf("expected valid receipt for %s: %+v", exePath, receipt)
 	}
-	if receipt.Version != "0.1.9" || receipt.Source != "agora upgrade" {
+	if receipt.Version != "0.1.10" || receipt.Source != "agora upgrade" {
 		t.Fatalf("unexpected receipt contents: %+v", receipt)
 	}
 }
@@ -172,7 +172,7 @@ func TestWriteProjectEnvFileWritesOnlyCredentials(t *testing.T) {
 	first, err := writeProjectEnvFile(path, map[string]any{
 		"AGORA_APP_ID":          "app_1",
 		"AGORA_APP_CERTIFICATE": "cert_1",
-	}, false, false)
+	}, false, false, nil, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -182,7 +182,7 @@ func TestWriteProjectEnvFileWritesOnlyCredentials(t *testing.T) {
 	second, err := writeProjectEnvFile(path, map[string]any{
 		"AGORA_APP_ID":          "app_2",
 		"AGORA_APP_CERTIFICATE": "cert_2",
-	}, false, false)
+	}, false, false, nil, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -218,7 +218,7 @@ func TestWriteProjectEnvFileReplacesOldManagedBlockWithCredentials(t *testing.T)
 	result, err := writeProjectEnvFile(path, map[string]any{
 		"AGORA_APP_ID":          "app_1",
 		"AGORA_APP_CERTIFICATE": "cert_1",
-	}, false, false)
+	}, false, false, nil, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -387,7 +387,7 @@ func TestWriteProjectEnvFileRequiresAppendOrOverwriteForExplicitFile(t *testing.
 	_, err := writeProjectEnvFile(path, map[string]any{
 		"AGORA_APP_ID":          "app_1",
 		"AGORA_APP_CERTIFICATE": "cert_1",
-	}, false, false)
+	}, false, false, nil, false)
 	if err == nil || !strings.Contains(err.Error(), "--append") || !strings.Contains(err.Error(), "--overwrite") {
 		t.Fatalf("expected explicit file error, got %v", err)
 	}
@@ -399,7 +399,7 @@ func TestWriteProjectEnvFileCreatesNestedDirectories(t *testing.T) {
 	result, err := writeProjectEnvFile(path, map[string]any{
 		"AGORA_APP_ID":          "app_1",
 		"AGORA_APP_CERTIFICATE": "cert_1",
-	}, false, false)
+	}, false, false, nil, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -718,7 +718,7 @@ func TestExchangeAuthorizationCodeFailureAndScopeArray(t *testing.T) {
 	defer failServer.Close()
 
 	app := &App{httpClient: failServer.Client(), env: map[string]string{}}
-	if _, err := app.exchangeAuthorizationCode(failServer.URL, "cli_demo", "bad-code", "code-verifier", "http://localhost/callback"); err == nil || !strings.Contains(err.Error(), "OAuth token exchange failed with status 400") {
+	if _, err := app.exchangeAuthorizationCode(failServer.URL, "cli_demo", "bad-code", "code-verifier", "http://localhost/callback"); err == nil || !strings.Contains(err.Error(), "OAuth token exchange failed (HTTP 400)") {
 		t.Fatalf("unexpected auth-code failure error: %v", err)
 	}
 

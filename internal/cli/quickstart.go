@@ -202,6 +202,8 @@ If a current project context exists, or if --project is passed, the CLI also wri
 	cmd.Flags().StringVar(&project, "project", "", "project ID or exact project name to use for env seeding")
 	cmd.Flags().StringVar(&ref, "ref", "", "git branch, tag, or ref to clone for pinned workshops")
 	_ = cmd.MarkFlagRequired("template")
+	_ = cmd.RegisterFlagCompletionFunc("template", completeQuickstartTemplateIDs)
+	_ = cmd.RegisterFlagCompletionFunc("project", a.completeProjectNames)
 	return cmd
 }
 
@@ -256,6 +258,8 @@ Python and Go quickstarts receive backend APP_ID and APP_CERTIFICATE values.`,
 	}
 	write.Flags().StringVar(&templateID, "template", "", "quickstart template ID; if omitted, the CLI detects it from the repo layout")
 	write.Flags().StringVar(&project, "project", "", "project ID or exact project name to use for env seeding")
+	_ = write.RegisterFlagCompletionFunc("template", completeQuickstartTemplateIDs)
+	_ = write.RegisterFlagCompletionFunc("project", a.completeProjectNames)
 	cmd.AddCommand(write)
 	return cmd
 }

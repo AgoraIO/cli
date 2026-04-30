@@ -476,14 +476,229 @@ func (a *App) projectEnvValues(projectArg string, withSecrets bool) (map[string]
 	return values, nil
 }
 
+type projectEnvCredentialLayout int
+
+const (
+	projectEnvLayoutStandard projectEnvCredentialLayout = iota
+	projectEnvLayoutNextjs
+)
+
+func credentialLayoutLabel(layout projectEnvCredentialLayout) string {
+	if layout == projectEnvLayoutNextjs {
+		return "nextjs"
+	}
+	return "standard"
+}
+
+func credentialLayoutFromProjectType(projectType string) projectEnvCredentialLayout {
+	switch strings.ToLower(strings.TrimSpace(projectType)) {
+	case "nextjs":
+		return projectEnvLayoutNextjs
+	default:
+		return projectEnvLayoutStandard
+	}
+}
+
 func projectCredentialEnvValues(project projectDetail) (map[string]any, error) {
+	return projectCredentialEnvValuesForLayout(project, projectEnvLayoutStandard)
+}
+
+func projectCredentialEnvValuesForLayout(project projectDetail, layout projectEnvCredentialLayout) (map[string]any, error) {
 	if project.SignKey == nil || *project.SignKey == "" {
 		return nil, &cliError{Message: fmt.Sprintf("project %q does not have an app certificate. Enable one in Agora Console or use a different project with `agora project use`.", project.Name), Code: "PROJECT_NO_CERTIFICATE"}
 	}
-	return map[string]any{
-		"AGORA_APP_ID":          project.AppID,
-		"AGORA_APP_CERTIFICATE": *project.SignKey,
-	}, nil
+	switch layout {
+	case projectEnvLayoutNextjs:
+		return map[string]any{
+			"NEXT_PUBLIC_AGORA_APP_ID":   project.AppID,
+			"NEXT_AGORA_APP_CERTIFICATE": *project.SignKey,
+		}, nil
+	default:
+		return map[string]any{
+			"AGORA_APP_ID":          project.AppID,
+			"AGORA_APP_CERTIFICATE": *project.SignKey,
+		}, nil
+	}
+}
+
+func conflictingKeysForProjectEnvLayout(layout projectEnvCredentialLayout) []string {
+	switch layout {
+	case projectEnvLayoutNextjs:
+		return []string{"AGORA_APP_ID", "AGORA_APP_CERTIFICATE", "APP_ID", "APP_CERTIFICATE"}
+	default:
+		return nil
+	}
+}
+
+func detectProjectType(workspaceDir, explicitTemplate string) (string, error) {
+	if t := strings.TrimSpace(strings.ToLower(explicitTemplate)); t != "" {
+		switch t {
+		case "nextjs":
+			return "nextjs", nil
+		case "standard", "default", "agora":
+			return "standard", nil
+		default:
+			return "", &cliError{
+				Message: fmt.Sprintf("unknown env template %q (use nextjs or standard)", strings.TrimSpace(explicitTemplate)),
+				Code:    "PROJECT_ENV_TEMPLATE_UNKNOWN",
+			}
+		}
+	}
+
+	absWorkspace, err := filepath.Abs(workspaceDir)
+	if err != nil {
+		return "", err
+	}
+	if _, statErr := os.Stat(filepath.Join(absWorkspace, "env.local.example")); statErr == nil {
+		return "nextjs", nil
+	}
+
+	cur := absWorkspace
+	for step := 0; step < 8; step++ {
+		if packageJSONDeclaresNext(filepath.Join(cur, "package.json")) || nextConfigPresent(cur) {
+			return "nextjs", nil
+		}
+		if _, err := os.Stat(filepath.Join(cur, "go.mod")); err == nil {
+			return "go", nil
+		}
+		if _, err := os.Stat(filepath.Join(cur, "pyproject.toml")); err == nil {
+			return "python", nil
+		}
+		if _, err := os.Stat(filepath.Join(cur, "requirements.txt")); err == nil {
+			return "python", nil
+		}
+		if _, err := os.Stat(filepath.Join(cur, "package.json")); err == nil {
+			return "node", nil
+		}
+		parent := filepath.Dir(cur)
+		if parent == cur {
+			break
+		}
+		cur = parent
+	}
+
+	if binding, ok, _, err := detectLocalProjectBindingFrom(absWorkspace); err == nil && ok {
+		if projectType := strings.ToLower(strings.TrimSpace(binding.ProjectType)); projectType != "" {
+			return projectType, nil
+		}
+		if template := strings.ToLower(strings.TrimSpace(binding.Template)); template != "" {
+			return template, nil
+		}
+	}
+	return "standard", nil
+}
+
+// syncLocalProjectBindingAfterEnvWrite updates or creates repo-local .agora/project.json
+// so non-template repos keep a durable projectType signal for later env/framework decisions.
+func syncLocalProjectBindingAfterEnvWrite(workspaceDir, cwd, envFileAbs string, target projectTarget, projectType string) (bool, string, error) {
+	projectType = strings.TrimSpace(projectType)
+	if projectType == "" {
+		projectType = "standard"
+	}
+	resolveEnvPath := func(root string) string {
+		if rel, relErr := filepath.Rel(root, envFileAbs); relErr == nil && rel != "" && !strings.HasPrefix(rel, "..") {
+			return filepath.ToSlash(rel)
+		}
+		return ""
+	}
+
+	root, hasRoot, err := detectLocalProjectRoot(workspaceDir)
+	if err != nil {
+		return false, "", err
+	}
+	if !hasRoot {
+		root = cwd
+		binding := localProjectBinding{
+			ProjectID:   target.project.ProjectID,
+			ProjectName: target.project.Name,
+			Region:      target.region,
+			ProjectType: projectType,
+			EnvPath:     resolveEnvPath(root),
+		}
+		if err := writeLocalProjectBinding(root, binding); err != nil {
+			return false, "", err
+		}
+		return true, filepath.ToSlash(filepath.Join(localAgoraDirName, localProjectFileName)), nil
+	}
+
+	binding, err := loadLocalProjectBinding(root)
+	if err != nil {
+		return false, "", err
+	}
+	changed := false
+	if binding.ProjectID != target.project.ProjectID {
+		binding.ProjectID = target.project.ProjectID
+		changed = true
+	}
+	if binding.ProjectName != target.project.Name {
+		binding.ProjectName = target.project.Name
+		changed = true
+	}
+	if strings.TrimSpace(binding.Region) == "" || !strings.EqualFold(binding.Region, target.region) {
+		binding.Region = target.region
+		changed = true
+	}
+	// Respect quickstart template bindings; only set projectType when template is unset.
+	if strings.TrimSpace(binding.Template) == "" && strings.TrimSpace(binding.ProjectType) == "" {
+		binding.ProjectType = projectType
+		changed = true
+	}
+	if strings.TrimSpace(binding.EnvPath) == "" {
+		if envPath := resolveEnvPath(root); envPath != "" {
+			binding.EnvPath = envPath
+			changed = true
+		}
+	}
+	if !changed {
+		return false, "", nil
+	}
+	if err := writeLocalProjectBinding(root, binding); err != nil {
+		return false, "", err
+	}
+	return true, filepath.ToSlash(filepath.Join(localAgoraDirName, localProjectFileName)), nil
+}
+
+func detectProjectEnvCredentialLayout(workspaceDir, explicitTemplate string) (projectEnvCredentialLayout, error) {
+	projectType, err := detectProjectType(workspaceDir, explicitTemplate)
+	if err != nil {
+		return projectEnvLayoutStandard, err
+	}
+	return credentialLayoutFromProjectType(projectType), nil
+}
+
+func packageJSONDeclaresNext(packageJSONPath string) bool {
+	raw, err := os.ReadFile(packageJSONPath)
+	if err != nil {
+		return false
+	}
+	var meta struct {
+		Dependencies     map[string]any `json:"dependencies"`
+		DevDependencies  map[string]any `json:"devDependencies"`
+		PeerDependencies map[string]any `json:"peerDependencies"`
+	}
+	if err := json.Unmarshal(raw, &meta); err != nil {
+		return false
+	}
+	return depMapHasPackage(meta.Dependencies, "next") ||
+		depMapHasPackage(meta.DevDependencies, "next") ||
+		depMapHasPackage(meta.PeerDependencies, "next")
+}
+
+func depMapHasPackage(section map[string]any, name string) bool {
+	if section == nil {
+		return false
+	}
+	_, ok := section[name]
+	return ok
+}
+
+func nextConfigPresent(dir string) bool {
+	for _, name := range []string{"next.config.js", "next.config.mjs", "next.config.ts", "next.config.mts"} {
+		if _, err := os.Stat(filepath.Join(dir, name)); err == nil {
+			return true
+		}
+	}
+	return false
 }
 
 func enabledFeatures(features map[string]bool) []string {
@@ -579,15 +794,22 @@ type envWriteResult struct {
 	Status string
 }
 
-func writeProjectEnvFile(path string, values map[string]any, appendMode, overwrite bool) (envWriteResult, error) {
-	usedDefaultTarget := path == ""
-	if path == "" {
-		resolved, err := resolveDefaultTargetPath(".")
+func resolveProjectEnvWriteAbsolutePath(cwd, pathArg string) (string, error) {
+	if strings.TrimSpace(pathArg) == "" {
+		rel, err := resolveDefaultTargetPath(cwd)
 		if err != nil {
-			return envWriteResult{}, err
+			return "", err
 		}
-		path = resolved
+		return filepath.Abs(filepath.Join(cwd, rel))
 	}
+	p := pathArg
+	if !filepath.IsAbs(p) {
+		p = filepath.Join(cwd, p)
+	}
+	return filepath.Abs(p)
+}
+
+func writeProjectEnvFile(path string, values map[string]any, appendMode, overwrite bool, conflictingKeys []string, defaultPathChosen bool) (envWriteResult, error) {
 	filePath, err := filepath.Abs(path)
 	if err != nil {
 		return envWriteResult{}, err
@@ -609,8 +831,8 @@ func writeProjectEnvFile(path string, values map[string]any, appendMode, overwri
 		existing = []byte(assignments + "\n")
 		status = "overwritten"
 	default:
-		merged, mergeStatus := mergeEnvAssignments(string(existing), values, [][2]string{{"# BEGIN AGORA CLI", "# END AGORA CLI"}}, nil)
-		if mergeStatus == "appended" && !appendMode && !usedDefaultTarget && !isDefaultEnvPath(filePath) {
+		merged, mergeStatus := mergeEnvAssignments(string(existing), values, [][2]string{{"# BEGIN AGORA CLI", "# END AGORA CLI"}}, conflictingKeys)
+		if mergeStatus == "appended" && !appendMode && !defaultPathChosen && !isDefaultEnvPath(filePath) {
 			return envWriteResult{}, fmt.Errorf("%s already exists. Use --append to append it or --overwrite to replace it.", path)
 		}
 		existing = []byte(merged)
