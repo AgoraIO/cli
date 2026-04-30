@@ -106,6 +106,10 @@ func assertGolden(t *testing.T, name string, actual []byte) {
 	if err != nil {
 		t.Fatalf("missing golden %s (run `go test ./internal/cli -run Golden -update` to create it): %v", path, err)
 	}
+	// Windows checkouts may materialize text fixtures with CRLF line endings.
+	// The renderer always produces LF, so normalize before comparing the JSON
+	// contract itself.
+	expected = bytes.ReplaceAll(expected, []byte("\r\n"), []byte("\n"))
 	if !bytes.Equal(canonical, expected) {
 		t.Fatalf("golden %s mismatch — diff below.\nIf this change is intentional, regenerate with `go test ./internal/cli -run Golden -update` and commit testdata/golden/%s.\n--- expected\n%s\n--- actual\n%s",
 			name, name, string(expected), string(canonical))

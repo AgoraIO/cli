@@ -112,7 +112,7 @@ func helperCLIArgs(t *testing.T) []string {
 // URL the moment we see it).
 func runCLI(t *testing.T, args []string, options cliRunOptions) cliResult {
 	t.Helper()
-	cmd := exec.Command(os.Args[0], append([]string{"-test.run=TestCLIHelperProcess", "--"}, args...)...)
+	cmd := exec.Command(os.Args[0], "-test.run=TestCLIHelperProcess")
 	if options.workdir != "" {
 		cmd.Dir = options.workdir
 	}
