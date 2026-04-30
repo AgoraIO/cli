@@ -124,17 +124,17 @@ func runCLI(t *testing.T, args []string, options cliRunOptions) cliResult {
 	if err != nil {
 		t.Fatal(err)
 	}
-	cmd.Env = append(os.Environ(),
-		"GO_WANT_CLI_HELPER_PROCESS=1",
-		"GO_CLI_HELPER_ARGS_JSON="+string(encodedArgs),
+	cmd.Env = helperEnv(os.Environ(), map[string]string{
+		"GO_WANT_CLI_HELPER_PROCESS": "1",
+		"GO_CLI_HELPER_ARGS_JSON":    string(encodedArgs),
 		// Keep integration tests deterministic when the suite itself runs in CI.
 		// Unit tests cover CI auto-detection explicitly; command-surface tests
 		// should not silently switch from pretty to JSON because CI=true leaked
 		// in from the parent process.
-		"AGORA_DISABLE_CI_DETECT=1",
-	)
+		"AGORA_DISABLE_CI_DETECT": "1",
+	})
 	for key, value := range options.env {
-		cmd.Env = append(cmd.Env, key+"="+value)
+		cmd.Env = helperEnv(cmd.Env, map[string]string{key: value})
 	}
 
 	stdoutPipe, err := cmd.StdoutPipe()
@@ -198,6 +198,23 @@ func runCLI(t *testing.T, args []string, options cliRunOptions) cliResult {
 		stdout:   stdoutBuf.String(),
 		stderr:   stderrBuf.String(),
 	}
+}
+
+func helperEnv(base []string, overrides map[string]string) []string {
+	result := make([]string, 0, len(base)+len(overrides))
+	for _, item := range base {
+		key, _, ok := strings.Cut(item, "=")
+		if ok {
+			if _, replaced := overrides[key]; replaced {
+				continue
+			}
+		}
+		result = append(result, item)
+	}
+	for key, value := range overrides {
+		result = append(result, key+"="+value)
+	}
+	return result
 }
 
 // createLocalGitRepo materializes a minimal git repository in a temp dir
