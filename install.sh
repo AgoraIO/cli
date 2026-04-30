@@ -23,6 +23,7 @@ if (set -o pipefail) >/dev/null 2>&1; then
 fi
 
 INSTALLER_VERSION="2026.04.27"
+INSTALL_RECEIPT_FILE="agora.install.json"
 
 # ---- Defaults --------------------------------------------------------------
 GITHUB_REPO="${GITHUB_REPO:-AgoraIO/cli}"
@@ -600,6 +601,38 @@ install_binary() {
   mv -f "$temp_dest" "$final_dest"
 }
 
+json_escape() {
+  printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'
+}
+
+write_install_receipt() {
+  final_dest=$1
+  receipt_path="${INSTALL_DIR}/${INSTALL_RECEIPT_FILE}"
+  receipt_tmp="${TMP}/${INSTALL_RECEIPT_FILE}"
+  installed_at=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
+
+  {
+    printf '{\n'
+    printf '  "schemaVersion": 1,\n'
+    printf '  "tool": "agora",\n'
+    printf '  "installMethod": "installer",\n'
+    printf '  "installPath": "%s",\n' "$(json_escape "$final_dest")"
+    printf '  "version": "%s",\n' "$(json_escape "$VERSION")"
+    printf '  "installedAt": "%s",\n' "$(json_escape "$installed_at")"
+    printf '  "source": "install.sh"\n'
+    printf '}\n'
+  } >"$receipt_tmp"
+
+  if [ "$USE_SUDO" = "1" ]; then
+    run_elevated cp "$receipt_tmp" "$receipt_path"
+    run_elevated chmod 644 "$receipt_path" || true
+    return
+  fi
+
+  cp "$receipt_tmp" "$receipt_path"
+  chmod 644 "$receipt_path" || true
+}
+
 extract_archive() {
   archive_path=$1
   if [ "$OS" = "windows" ]; then
@@ -983,6 +1016,7 @@ main() {
   if ! verify_installed_binary "$DESTINATION"; then
     die "Installed binary did not start correctly." "$EXIT_VERIFY"
   fi
+  write_install_receipt "$DESTINATION"
   say_ok "agora ${VERSION} installed."
 
   if [ "$ADD_TO_PATH" = "1" ]; then

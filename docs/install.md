@@ -135,6 +135,19 @@ Both installers refuse to overwrite an `agora` binary that came from a package m
 | Chocolatey (Windows) | `$env:ChocolateyInstall` or path contains `\chocolatey\bin\` | `choco upgrade agora` |
 | winget (Windows) | path contains `\WinGet\Packages\` | `winget upgrade Agora.Cli` |
 
+### Install receipt and upgrades
+
+Direct installer runs (`install.sh` and `install.ps1`) write `agora.install.json` next to the installed binary after the binary has been downloaded, checksum-verified, installed, and smoke-tested. Direct self-updates refresh the same receipt after replacing the binary. The receipt records the install method, install path, version, timestamp, and installer source so `agora upgrade` can choose the right update path without relying on shell environment variables.
+
+`agora upgrade` uses this order:
+
+1. Read and validate the adjacent `agora.install.json` receipt.
+2. Fall back to the resolved binary path for package-manager installs (`node_modules`, Homebrew `Cellar`, Scoop, Chocolatey, or winget paths).
+3. Fall back to the direct installer path when the binary is named `agora` / `agora.exe` and no package-manager path is detected.
+4. Report `unknown` for development/test binaries where the install method cannot be verified.
+
+Direct-installer installs self-update in place. Package-manager installs print the package-manager command and exit successfully so the package manager remains the owner of the installed files.
+
 ## Build From Source
 
 Requirements:

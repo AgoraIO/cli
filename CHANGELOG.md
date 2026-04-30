@@ -15,6 +15,10 @@ Earlier entries pre-date this convention and only carry their version's compare 
 
 ## [Unreleased]
 
+### Changed
+
+- Add direct-installer provenance receipts (`agora.install.json`) and make `agora upgrade` use receipt-first install-method detection before falling back to package-manager path inference.
+
 ## [0.1.8] - 2026-04-30
 
 ### Fixed

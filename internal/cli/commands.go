@@ -36,13 +36,16 @@ Use "agora --help --all --json" for a machine-readable command tree (agent tooli
 `),
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if a.rootUpgradeCheck {
-				method, command := detectUpgradeCommand(a.env)
+				provenance := detectInstallProvenance(a.env)
 				return renderResult(cmd, "upgrade check", map[string]any{
-					"action":        "upgrade-check",
-					"command":       command,
-					"installMethod": method,
-					"status":        "manual",
-					"version":       versionInfo(),
+					"action":         "upgrade-check",
+					"command":        provenance.UpgradeCommand,
+					"installMethod":  provenance.Method,
+					"installSource":  provenance.Source,
+					"installedPath":  provenance.InstalledPath,
+					"status":         "manual",
+					"upgradeCommand": provenance.UpgradeCommand,
+					"version":        versionInfo(),
 				})
 			}
 			return cmd.Help()
@@ -239,16 +242,6 @@ Use --check to resolve the latest version and report what would happen without w
 	}
 	cmd.Flags().BoolVar(&check, "check", false, "resolve the latest release and report what would happen without writing anything")
 	return cmd
-}
-
-func detectUpgradeCommand(env map[string]string) (string, string) {
-	if strings.TrimSpace(env["npm_config_prefix"]) != "" {
-		return "npm", "npm install -g agoraio-cli@latest"
-	}
-	if strings.Contains(strings.ToLower(strings.TrimSpace(env["HOMEBREW_PREFIX"])), "brew") {
-		return "homebrew", "brew upgrade agoraio/tap/agora-cli"
-	}
-	return "installer", "curl -fsSL https://raw.githubusercontent.com/AgoraIO/cli/main/install.sh | sh -s -- --add-to-path"
 }
 
 func (a *App) buildOpenCommand() *cobra.Command {

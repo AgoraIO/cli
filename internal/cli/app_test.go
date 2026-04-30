@@ -25,6 +25,124 @@ func TestResolveAgoraDirectoryUsesAgoraHomeDirectly(t *testing.T) {
 	}
 }
 
+func TestDetectInstallProvenanceUsesReceiptThenExecutablePath(t *testing.T) {
+	installerDir := t.TempDir()
+	installerPath := filepath.Join(installerDir, "agora")
+	receipt := installReceipt{
+		SchemaVersion: 1,
+		Tool:          "agora",
+		InstallMethod: "installer",
+		InstallPath:   installerPath,
+		Version:       "0.1.9",
+		InstalledAt:   "2026-04-30T11:00:00Z",
+		Source:        "install.sh",
+	}
+	raw, err := json.Marshal(receipt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(installReceiptPath(installerPath), raw, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	provenance := detectInstallProvenanceForPath(map[string]string{"HOMEBREW_PREFIX": "/usr/local"}, installerPath)
+	if provenance.Method != "installer" || provenance.Source != "install.sh" || provenance.ReceiptPath == "" {
+		t.Fatalf("expected installer receipt provenance, got %+v", provenance)
+	}
+}
+
+func TestDetectInstallProvenanceFallsBackToExecutablePath(t *testing.T) {
+	tests := []struct {
+		name       string
+		env        map[string]string
+		exePath    string
+		wantMethod string
+	}{
+		{
+			name:       "installer wins when Homebrew is only in environment",
+			env:        map[string]string{"HOMEBREW_PREFIX": "/usr/local"},
+			exePath:    "/usr/local/bin/agora",
+			wantMethod: "installer",
+		},
+		{
+			name:       "homebrew detected from resolved Cellar path",
+			env:        map[string]string{"HOMEBREW_PREFIX": "/usr/local"},
+			exePath:    "/usr/local/Cellar/agora-cli/0.1.8/bin/agora",
+			wantMethod: "homebrew",
+		},
+		{
+			name:       "installer wins when npm is only in environment",
+			env:        map[string]string{"npm_config_prefix": "/usr/local"},
+			exePath:    "/usr/local/bin/agora",
+			wantMethod: "installer",
+		},
+		{
+			name:       "npm detected from node_modules path",
+			env:        map[string]string{"npm_config_prefix": "/usr/local"},
+			exePath:    "/usr/local/lib/node_modules/@agoraio/cli-darwin-arm64/bin/agora",
+			wantMethod: "npm",
+		},
+		{
+			name:       "unknown detected for test binary",
+			env:        map[string]string{},
+			exePath:    "/tmp/go-build/cli.test",
+			wantMethod: "unknown",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			provenance := detectInstallProvenanceForPath(tt.env, tt.exePath)
+			if provenance.Method != tt.wantMethod {
+				t.Fatalf("expected %s, got %s", tt.wantMethod, provenance.Method)
+			}
+		})
+	}
+}
+
+func TestDetectInstallProvenanceIgnoresStaleReceipt(t *testing.T) {
+	dir := t.TempDir()
+	exePath := filepath.Join(dir, "agora")
+	receipt := installReceipt{
+		SchemaVersion: 1,
+		Tool:          "agora",
+		InstallMethod: "npm",
+		InstallPath:   filepath.Join(dir, "old-agora"),
+		Version:       "0.1.9",
+		InstalledAt:   "2026-04-30T11:00:00Z",
+		Source:        "test",
+	}
+	raw, err := json.Marshal(receipt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(installReceiptPath(exePath), raw, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	provenance := detectInstallProvenanceForPath(map[string]string{}, exePath)
+	if provenance.Method != "installer" || provenance.Source != "fallback" {
+		t.Fatalf("expected stale receipt fallback, got %+v", provenance)
+	}
+}
+
+func TestWriteInstallReceiptRoundTrips(t *testing.T) {
+	exePath := filepath.Join(t.TempDir(), "agora")
+	receiptPath, err := writeInstallReceipt(exePath, "v0.1.9", "agora upgrade")
+	if err != nil {
+		t.Fatal(err)
+	}
+	receipt, err := readInstallReceipt(receiptPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !receipt.validForPath(exePath) {
+		t.Fatalf("expected valid receipt for %s: %+v", exePath, receipt)
+	}
+	if receipt.Version != "0.1.9" || receipt.Source != "agora upgrade" {
+		t.Fatalf("unexpected receipt contents: %+v", receipt)
+	}
+}
+
 func TestRenderProjectEnvDotenvAndShell(t *testing.T) {
 	values := map[string]any{
 		"AGORA_PROJECT_ID":       "prj_123",
