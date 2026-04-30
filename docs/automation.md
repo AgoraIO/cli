@@ -14,6 +14,7 @@ Use this guide for:
 - [Project Resolution Precedence](#project-resolution-precedence)
 - [Config Isolation](#config-isolation)
 - [JSON Envelope](#json-envelope)
+- [Progress Events (NDJSON Stream)](#progress-events-ndjson-stream)
 - [Exit Codes](#exit-codes)
 - [Stable Result Shapes](#stable-result-shapes)
 - [Human vs Machine Output](#human-vs-machine-output)
@@ -30,10 +31,37 @@ Use this guide for:
 - Use `agora whoami --plain` for shell `if` chains that only need `authenticated` / `unauthenticated`.
 - In JSON mode, both success and failure return the same top-level envelope shape.
 - Use `--json --pretty` when a human needs to inspect JSON directly. Scripts should keep the default single-line JSON.
-- Use `--quiet` only for pretty-mode commands where the exit code is the result.
-- Interactive login prompts only appear in interactive pretty-mode runs. Automation should still authenticate up front with `agora login`; `--json`, `AGORA_OUTPUT=json`, and non-TTY runs never prompt.
-- Output mode precedence is: explicit CLI flag (`--json` or `--output`) first, `AGORA_OUTPUT` second, config file default last.
+- Use `--quiet` to suppress the success envelope in **both** pretty and JSON modes; the exit code becomes the only result. Errors are still printed on stderr (and as a JSON envelope on stdout when `--json` is set without `--quiet`). NDJSON progress events are still emitted because they are observability, not results.
+- Use `--verbose` (equivalent to `AGORA_VERBOSE=1`) to echo structured log records to stderr. The flag does not change exit codes, JSON envelope shape, or NDJSON progress events; it only mirrors the entries that would normally be written to the log file. Pair with `--json` for fully machine-parseable runs that also surface internal events to your CI logs.
+- Interactive login prompts only appear in interactive pretty-mode runs. Automation should still authenticate up front with `agora login`; `--json`, `AGORA_OUTPUT=json`, and detected CI environments never prompt.
+- Output mode precedence is: explicit CLI flag (`--json` or `--output`) first, user-set `AGORA_OUTPUT` second, then user-customized config file value, then **CI auto-detect → JSON** (see below), then pretty.
 - Set `AGORA_AGENT=<tool-name>` in automated environments so support and analytics can distinguish agent traffic in the API `User-Agent`.
+
+### CI auto-detect
+
+When the CLI detects it is running inside a CI environment, it automatically:
+
+- Switches the default output mode to `--output json` (so build logs stay machine-parseable).
+- Suppresses the first-run "Config initialized" banner on stderr.
+- Skips interactive prompts (login confirmation, project reuse confirmation, template picker).
+
+CI is detected when **any** of the following environment variables is present (and `CI` is not literally `false`/`0`/empty):
+
+| Variable          | Vendor             |
+| ----------------- | ------------------ |
+| `CI`              | de-facto universal |
+| `GITHUB_ACTIONS`  | GitHub Actions     |
+| `GITLAB_CI`       | GitLab CI          |
+| `BUILDKITE`       | Buildkite          |
+| `CIRCLECI`        | CircleCI           |
+| `JENKINS_URL`     | Jenkins            |
+| `TF_BUILD`        | Azure Pipelines    |
+
+You can always override:
+
+- `--output pretty` — force pretty output even in CI.
+- `AGORA_OUTPUT=pretty` — same, via env (user-set values always win over auto-detect).
+- `AGORA_DISABLE_CI_DETECT=1` — disable CI detection entirely (useful when iterating on a CI script locally).
 
 Primary command groups:
 - `init`
@@ -102,6 +130,61 @@ Agent guidance:
 - branch on `ok` first for success vs failure
 - treat pretty output as human-only
 - do not parse stderr when `--json` is in use
+
+## Progress Events (NDJSON Stream)
+
+Long-running commands emit one or more **progress events** to stdout ahead of the final envelope when `--json` is set. The wire format is **NDJSON** (newline-delimited JSON): one complete JSON object per line, terminated by `\n`.
+
+Agents must therefore parse stdout line-by-line, not as a single JSON document. The terminal envelope is always the **last** line and is the only object with the top-level `ok` field.
+
+### Event shape
+
+```json
+{"event":"progress","command":"init","stage":"clone:start","message":"Cloning quickstart repository","timestamp":"2026-04-29T22:30:00.123Z","repoUrl":"https://github.com/AgoraIO/...","targetPath":"/abs/path","ref":""}
+```
+
+Stable top-level fields on every progress event:
+
+- `event` — always the literal string `"progress"`. Use this to distinguish progress events from the terminal envelope (which has `"ok"` instead).
+- `command` — the same stable command label used by the terminal envelope.
+- `stage` — a stable enum-like string identifying the milestone. See the table below.
+- `message` — short human-readable description suitable for a log line.
+- `timestamp` — RFC3339Nano UTC timestamp.
+
+Additional stage-specific fields may appear (for example `repoUrl`, `projectId`, `loginUrl`). These are documented per-stage but agents should treat unknown extra fields as opaque metadata.
+
+### Stable stage taxonomy
+
+| Stage | Emitted by | When | Stage-specific fields |
+|-------|------------|------|------------------------|
+| `clone:start` | `quickstart create`, `init` | Before the `git clone` shell-out | `repoUrl`, `targetPath`, `ref` |
+| `clone:complete` | `quickstart create`, `init` | After `git clone` succeeds | `targetPath` |
+| `project:create` | `init` | Before creating a new Agora project | `projectName`, `features` |
+| `project:created` | `init` | After the project is ready | `projectId`, `projectName` |
+| `project:reuse` | `init` | When binding to an existing project | `projectId`, `projectName` |
+| `oauth:waiting` | `login`, `auth login` | After the localhost callback server is listening and the URL is printed | `loginUrl`, `redirectUri`, `timeoutMs` |
+| `oauth:received` | `login`, `auth login` | When the browser callback delivers an authorization code | (none) |
+| `oauth:complete` | `login`, `auth login` | After the access token is stored locally | (none) |
+
+### Sample stream (init)
+
+```text
+{"event":"progress","command":"init","stage":"project:reuse","message":"Reusing existing Agora project","timestamp":"...","projectId":"prj_abc","projectName":"Default Project"}
+{"event":"progress","command":"init","stage":"clone:start","message":"Cloning quickstart repository","timestamp":"...","repoUrl":"...","targetPath":"...","ref":""}
+{"event":"progress","command":"init","stage":"clone:complete","message":"Quickstart repository cloned","timestamp":"...","targetPath":"..."}
+{"ok":true,"command":"init","data":{},"meta":{"exitCode":0,"outputMode":"json"}}
+```
+
+### Parsing rules for agents
+
+1. Read stdout line by line until EOF.
+2. JSON-decode each line independently.
+3. Discard or log lines that do not parse as JSON (defensive).
+4. The line where `event === "progress"` is a progress event; `stage` and `message` are the most useful fields.
+5. The first (and only) line where `ok` is set is the terminal envelope.
+6. Process exit code is also reported in `meta.exitCode` of the terminal envelope; treat the OS exit code as the source of truth.
+
+Stages are stable identifiers; new stages may be added over time. Agents should treat unknown stages as benign progress information rather than failing on them.
 
 Failure example:
 
@@ -188,13 +271,8 @@ Safe branch fields:
 ### `project create`
 
 Automation notes:
-- `--dry-run` returns the planned envelope without creating remote resources.
+- `--dry-run` returns the planned envelope (`status: "planned"`, `dryRun: true`) without creating remote resources.
 - `--idempotency-key <key>` is forwarded to the API body for retry-safe project creation where supported.
-
-### `quickstart create`
-
-Automation notes:
-- `--ref <branch|tag|ref>` pins the cloned quickstart source for workshops and reproducible demos.
 
 Example:
 
@@ -202,7 +280,7 @@ Example:
 ./agora project create my-agent-demo --feature rtc --feature convoai --json
 ```
 
-Required `data` fields:
+Required `data` fields (success):
 - `action`
   Always `create`.
 - `projectId`
@@ -210,12 +288,30 @@ Required `data` fields:
 - `appId`
 - `region`
 - `enabledFeatures`
+  Array of features that were enabled on the new project (e.g. `["rtc", "convoai"]`).
 
-Safe branch fields:
-- `projectId`
+Required `data` fields (`--dry-run`):
+- `action`
+  Always `create`.
+- `dryRun`
+  Always `true`.
+- `status`
+  Always `planned`.
 - `projectName`
 - `region`
 - `enabledFeatures`
+- `template`
+  Project preset that would be applied (empty when not requested).
+- `idempotencyKey`
+  Echoes the caller-provided `--idempotency-key` value (empty when not provided).
+
+Safe branch fields:
+- `projectId` (success only)
+- `projectName`
+- `region`
+- `enabledFeatures`
+- `status` (`--dry-run` only)
+- `dryRun` (`--dry-run` only)
 
 ### `project use`
 
@@ -366,6 +462,9 @@ Display-oriented fields:
 - `envDocs`
 
 ### `quickstart create`
+
+Automation notes:
+- `--ref <branch|tag|ref>` pins the cloned quickstart source for workshops and reproducible demos.
 
 Example:
 

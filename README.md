@@ -14,12 +14,22 @@ Run the CLI:
 agora --help
 ```
 
+Alternative install paths:
+
+```bash
+# npm (Node 18+, signed with npm provenance)
+npm install -g agoraio-cli
+
+# Windows PowerShell
+irm https://raw.githubusercontent.com/AgoraIO/cli/main/install.ps1 | iex
+```
+
 Notes:
 
 - The shell installer supports macOS, Linux, and Windows POSIX shells such as Git Bash. Use `install.ps1` for native PowerShell installs on Windows.
 - If the installer says `agora` is not on your PATH, re-run with `--add-to-path` or add the printed install directory to your shell profile.
 - Installer help is always available with `curl -fsSL https://raw.githubusercontent.com/AgoraIO/cli/main/install.sh | sh -s -- --help`.
-- Pinned versions, dry runs, custom install directories, and source builds are documented in [docs/install.md](docs/install.md).
+- Pinned versions, dry runs, custom install directories, npm details, and source builds are documented in [docs/install.md](docs/install.md).
 
 ## First Run
 
@@ -32,6 +42,7 @@ agora init my-nextjs-demo --template nextjs
 
 - Release notes: [CHANGELOG.md](CHANGELOG.md)
 - Install options (direct installer, Windows, source): [docs/install.md](docs/install.md)
+- Full command reference (auto-generated): [docs/commands.md](docs/commands.md)
 - Automation and JSON contract: [docs/automation.md](docs/automation.md)
 - Stable error codes: [docs/error-codes.md](docs/error-codes.md)
 - Telemetry controls: [docs/telemetry.md](docs/telemetry.md)
