@@ -1,3 +1,7 @@
+---
+title: Automation Contract
+---
+
 # Automation Contract
 
 This document defines the machine-consumption contract for Agora CLI.

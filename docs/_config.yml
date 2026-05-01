@@ -1,0 +1,16 @@
+title: Agora CLI Docs
+description: Human and agent documentation for Agora CLI.
+url: "https://agoraio.github.io"
+baseurl: "/cli"
+
+markdown: kramdown
+highlighter: rouge
+
+defaults:
+  - scope:
+      path: ""
+    values:
+      layout: default
+
+exclude:
+  - site.env

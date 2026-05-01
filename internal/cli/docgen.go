@@ -31,6 +31,9 @@ func RenderCommandReference(out io.Writer, root *cobra.Command) error {
 	stamp := time.Now().UTC().Format("2006-01-02")
 
 	var b strings.Builder
+	b.WriteString("---\n")
+	b.WriteString("title: Command Reference\n")
+	b.WriteString("---\n\n")
 	b.WriteString("# Agora CLI — Command Reference\n\n")
 	b.WriteString("> Generated from `agora introspect --json` on ")
 	b.WriteString(stamp)

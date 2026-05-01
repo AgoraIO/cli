@@ -21,6 +21,8 @@ Earlier entries pre-date this convention and only carry their version's compare 
 
 - Add GitHub Pages publishing for generated CLI docs and route `agora open --target docs` to the human CLI docs site, `agora open --target docs-md` to the agent-facing raw Markdown docs under `/md/`, and `product-docs` to Agora product docs.
 - Add `docs/site.env` and Pages build-time URL injection so staging docs can publish with different `CLI_DOCS_BASE_URL` / `CLI_DOCS_MD_BASE_URL` values while keeping predictable human and Markdown paths.
+- Add a custom GitHub Pages theme for the human docs with responsive layout, system light/dark mode via `prefers-color-scheme`, and no manual theme toggle.
+- Add `make docs-preview` for a Ruby/Jekyll local docs preview that builds with localhost-friendly paths, injects localhost docs URLs, and serves both the human site and `/md/` Markdown tree.
 - Add global `--yes` / `-y` and `AGORA_NO_INPUT=1` support to accept defaults and suppress prompts.
 - Add pretty-mode progress status lines for long-running clone, OAuth, and project creation work.
 - Add dynamic shell completions for project names, quickstart templates, and project features, with an on-disk completion cache under `<AGORA_HOME>/cache/projects.json` so `agora project use <TAB>` is instant on warm caches. Configurable via `AGORA_PROJECT_CACHE_TTL_SECONDS` and disable-able via `AGORA_DISABLE_CACHE=1`.

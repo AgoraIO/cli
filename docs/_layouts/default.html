@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light dark">
+    <title>{% if page.title %}{{ page.title | escape }} · {% endif %}{{ site.title | escape }}</title>
+    <meta name="description" content="{{ site.description | escape }}">
+    <link rel="stylesheet" href="{{ '/assets/css/site.css' | relative_url }}">
+  </head>
+  <body>
+    <div class="page-shell">
+      <header class="site-header" aria-label="Site header">
+        <a class="brand" href="{{ '/' | relative_url }}" aria-label="Agora CLI Docs home">
+          <span class="brand-mark" aria-hidden="true">ag</span>
+          <span>
+            <span class="brand-title">Agora CLI</span>
+            <span class="brand-subtitle">Developer docs</span>
+          </span>
+        </a>
+        <nav class="site-nav" aria-label="Primary navigation">
+          <a href="{{ '/install.html' | relative_url }}">Install</a>
+          <a href="{{ '/commands.html' | relative_url }}">Commands</a>
+          <a href="{{ '/automation.html' | relative_url }}">Automation</a>
+          <a href="{{ '/error-codes.html' | relative_url }}">Errors</a>
+          <a href="{{ '/md/index.md' | relative_url }}">Agent MD</a>
+        </nav>
+      </header>
+
+      <main class="content-card" id="main-content">
+        <article class="doc-content">
+          {{ content }}
+        </article>
+      </main>
+    </div>
+  </body>
+</html>

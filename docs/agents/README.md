@@ -1,3 +1,7 @@
+---
+title: Agent Rules
+---
+
 # Agent Rules For Agora Projects
 
 These snippets help AI coding agents use Agora CLI safely and consistently in app repositories.

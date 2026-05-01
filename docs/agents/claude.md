@@ -1,3 +1,7 @@
+---
+title: Claude Agent Rules
+---
+
 # Agora CLI Agent Rules
 
 - Use `agora --help --all --json` or `agora introspect --json` for command discovery.

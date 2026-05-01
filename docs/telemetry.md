@@ -1,3 +1,7 @@
+---
+title: Telemetry
+---
+
 # Telemetry
 
 Agora CLI telemetry is limited to operational diagnostics such as command failures and local log metadata. It must never include OAuth tokens, app certificates, dotenv secrets, or project env values.

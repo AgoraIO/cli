@@ -1,3 +1,7 @@
+---
+title: Command Reference
+---
+
 # Agora CLI — Command Reference
 
 > Generated from `agora introspect --json` on 2026-05-01. Do not edit by hand — run `make docs-commands` or rely on the release workflow to regenerate.

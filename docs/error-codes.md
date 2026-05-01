@@ -1,3 +1,7 @@
+---
+title: Error Codes
+---
+
 # Agora CLI Error Codes
 
 Structured JSON failures include `error.code` when the CLI can classify the recovery path. Agents and scripts should branch on `error.code` first, then `error.message`.
