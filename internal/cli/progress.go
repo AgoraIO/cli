@@ -76,6 +76,25 @@ func makeJSONProgressEmitter(out io.Writer, command string) progressEmitter {
 	}
 }
 
+// makePrettyProgressEmitter returns the pretty-mode progress writer.
+//
+// Design choice: each event becomes a single newline-terminated bullet
+// line ("- message"). This is intentionally NOT an animated ANSI
+// spinner because:
+//
+//   - Pretty progress lines must remain useful when stderr is being
+//     captured into a CI build log, redirected to a file, or scraped
+//     by an editor's terminal pane (none of which honor cursor moves).
+//   - Spinners produce noisy artifacts on dumb terminals and inside
+//     `tee` / `script` capture, where each redraw lands as garbage.
+//   - JSON mode already emits stable NDJSON progress events for
+//     real-time observability; pretty mode just needs a readable trace.
+//
+// If a future revision wants a real spinner, gate it on
+// term.IsTerminal(stderr) and a TERM != "dumb" check, and keep this
+// path as the fallback. The CHANGELOG entry is intentionally worded
+// "progress status lines" (not "spinner support") to match this
+// implementation.
 func makePrettyProgressEmitter(out io.Writer) progressEmitter {
 	if out == nil {
 		return nil

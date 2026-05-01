@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
 )
 
 // renderResult is the single dispatch point for command output. In JSON
@@ -232,9 +233,31 @@ func printBlock(out io.Writer, title string, rows [][2]string) {
 	}
 }
 
+// terminalValueWidth returns the maximum number of value-column
+// characters that fit on one terminal line, given the label-column
+// width plus the " : " separator.
+//
+// Resolution order:
+//
+//  1. COLUMNS env var when set and parseable. Lets users and tests
+//     override the detected width without a real TTY (and lets
+//     containers/CI runners that *do* export COLUMNS opt in).
+//  2. golang.org/x/term.GetSize against stderr, then stdout. Both
+//     are tried because pretty output goes to stdout but stderr is
+//     more often a TTY when stdout is being piped (the common case
+//     for `agora ... | jq`).
+//  3. 0, meaning "do not truncate". Honoring "no terminal detected
+//     => never truncate" is the safest default for log scrapers and
+//     CI build logs.
+//
+// A returned 0 (no width info) means the caller MUST NOT truncate.
+// A nonzero value is the byte width available for the value column;
+// callers should treat values longer than this as truncation
+// candidates. Values below 20 characters of available room are
+// suppressed because narrower truncation produces unreadable output.
 func terminalValueWidth(labelWidth int) int {
-	columns, err := strconv.Atoi(strings.TrimSpace(os.Getenv("COLUMNS")))
-	if err != nil || columns <= 0 {
+	columns := detectTerminalColumns()
+	if columns <= 0 {
 		return 0
 	}
 	available := columns - labelWidth - len(" : ")
@@ -242,6 +265,22 @@ func terminalValueWidth(labelWidth int) int {
 		return 0
 	}
 	return available
+}
+
+// detectTerminalColumns is the resolution helper for
+// terminalValueWidth. Split out so tests can drive it directly.
+func detectTerminalColumns() int {
+	if raw := strings.TrimSpace(os.Getenv("COLUMNS")); raw != "" {
+		if columns, err := strconv.Atoi(raw); err == nil && columns > 0 {
+			return columns
+		}
+	}
+	for _, fd := range []uintptr{os.Stderr.Fd(), os.Stdout.Fd()} {
+		if width, _, err := term.GetSize(int(fd)); err == nil && width > 0 {
+			return width
+		}
+	}
+	return 0
 }
 
 // printDoctor prints a structured diagnostic report including per-category
