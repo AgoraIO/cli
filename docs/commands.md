@@ -12,13 +12,13 @@ This page lists every enumerable command and its local flags. For long descripti
 
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
+| `--debug` | `bool` | — | echo structured logs to stderr (equivalent to AGORA_DEBUG=1); does not change exit codes or JSON envelopes |
 | `--json` | `bool` | — | shortcut for --output json |
 | `--no-color` | `bool` | — | disable ANSI color in pretty output |
 | `--output` | `string` | — | output mode for command results: pretty or json |
 | `--pretty` | `bool` | — | pretty-print JSON output when used with --json |
 | `--quiet` | `bool` | — | suppress success output (both pretty and JSON envelopes); rely on exit code. Errors still print on stderr. |
 | `--upgrade-check` | `bool` | — | print non-interactive upgrade guidance and exit |
-| `--verbose` | `bool` | — | echo structured logs to stderr (equivalent to AGORA_VERBOSE=1); does not change exit codes or JSON envelopes |
 | `--yes` | `bool` | — | assume the default answer to confirmation prompts (equivalent to AGORA_NO_INPUT=1); never starts new interactive flows in JSON/CI/non-TTY contexts |
 
 ## Pseudo Commands
@@ -84,13 +84,25 @@ Update persisted CLI defaults
 |------|------|---------|-------------|
 | `--api-base-url` | `string` | `https://agora-cli.agora.io` | default CLI API base URL |
 | `--browser-auto-open` | `bool` | — | persist browser auto-open preference; use --browser-auto-open=false to disable |
+| `--debug` | `bool` | — | persist the --debug preference (echo structured logs to stderr); use --debug=false to disable |
 | `--log-level` | `string` | `info` | persist default log level |
 | `--oauth-base-url` | `string` | `https://sso2.agora.io` | default OAuth base URL |
 | `--oauth-client-id` | `string` | `agora_web_cli` | default OAuth client ID |
 | `--oauth-scope` | `string` | `basic_info,console` | default OAuth scope |
 | `--output` | `output` | `pretty` | persist default output mode (pretty or json) |
 | `--telemetry-enabled` | `bool` | — | persist telemetry preference; use --telemetry-enabled=false to disable |
-| `--verbose` | `bool` | — | persist verbose logging preference; use --verbose=false to disable |
+
+### `agora doctor`
+
+Diagnose the local Agora CLI install (PATH, version, network, auth, MCP host)
+
+_No local flags. Inherited global flags still apply (see [Global Flags](#global-flags))._
+
+### `agora env-help`
+
+List every AGORA_* environment variable the CLI honors
+
+_No local flags. Inherited global flags still apply (see [Global Flags](#global-flags))._
 
 ### `agora init`
 
@@ -185,7 +197,7 @@ Export project environment variables
 
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
-| `--format` | `string` | — | output format: dotenv or shell; use --json for JSON output |
+| `--format` | `string` | — | output format: dotenv \| shell \| envelope \| json (default dotenv; envelope/json emit the unified JSON envelope) |
 | `--project` | `string` | — | project ID or exact project name; defaults to the current project context |
 | `--shell` | `bool` | — | render shell export statements instead of dotenv lines |
 | `--with-secrets` | `bool` | — | include sensitive values such as the app certificate |
@@ -285,8 +297,35 @@ List available official quickstarts
 
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
+| `--details` | `bool` | — | show repository, runtime, and env details in pretty output |
 | `--show-all` | `bool` | — | include upcoming or unavailable templates in the list |
-| `--verbose` | `bool` | — | show repository, runtime, and env details in pretty output |
+
+### `agora skills`
+
+Browse curated Agora workflows for humans and AI agents
+
+_No local flags. Inherited global flags still apply (see [Global Flags](#global-flags))._
+
+### `agora skills list`
+
+List available skills
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--category` | `string` | — | filter by category (scaffold, ops, agent) |
+| `--tag` | `string` | — | filter by tag (e.g. nextjs, rtc, mcp) |
+
+### `agora skills search`
+
+Search skills by id, title, description, or tag
+
+_No local flags. Inherited global flags still apply (see [Global Flags](#global-flags))._
+
+### `agora skills show`
+
+Show one skill in detail
+
+_No local flags. Inherited global flags still apply (see [Global Flags](#global-flags))._
 
 ### `agora telemetry`
 

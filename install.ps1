@@ -19,10 +19,16 @@ param(
     [string]$Version = $env:VERSION,
     [string]$InstallDir = $(if ($env:INSTALL_DIR) { $env:INSTALL_DIR } else { Join-Path $env:LOCALAPPDATA 'Programs\Agora\bin' }),
     [string]$GitHubRepo = $(if ($env:GITHUB_REPO) { $env:GITHUB_REPO } else { 'AgoraIO/cli' }),
-    [switch]$AddToPath,
     [switch]$Force,
     [switch]$NoColor,
-    [switch]$Uninstall
+    [switch]$Uninstall,
+    # Shell-integration opt-outs. Default behavior matches modern
+    # installers (bun, fnm, deno, uv): auto-wire user PATH and
+    # PowerShell completion. Granular switches let callers decouple
+    # each piece; -SkipShell is the umbrella that disables both.
+    [switch]$NoPath,
+    [switch]$NoCompletion,
+    [switch]$SkipShell
 )
 
 Set-StrictMode -Version Latest
@@ -43,6 +49,7 @@ $InstallReceiptFileName = 'agora.install.json'
 $GitHubApiUrl            = if ($env:GITHUB_API_URL) { $env:GITHUB_API_URL } else { 'https://api.github.com' }
 $ReleasesDownloadBaseUrl = if ($env:RELEASES_DOWNLOAD_BASE_URL) { $env:RELEASES_DOWNLOAD_BASE_URL } else { "https://github.com/$GitHubRepo/releases/download" }
 $ReleasesPageUrl         = if ($env:RELEASES_PAGE_URL) { $env:RELEASES_PAGE_URL } else { "https://github.com/$GitHubRepo/releases" }
+$DocsUrl                 = if ($env:DOCS_URL) { $env:DOCS_URL } else { "https://github.com/$GitHubRepo#readme" }
 $AuthToken               = if ($env:GITHUB_TOKEN) { $env:GITHUB_TOKEN } elseif ($env:GH_TOKEN) { $env:GH_TOKEN } else { $null }
 
 # Color is suppressed when NO_COLOR env is set, -NoColor switch is passed,
@@ -169,19 +176,112 @@ function Ensure-InstallDirectory {
     }
 }
 
+# Show-ManualPathBlock prints the copy-pasteable manual PATH-setup
+# block. Callers (Add-InstallDirToUserPath on failure, Show-PathInstructions
+# on explicit opt-out) emit a single warn line, then call this helper
+# so wording, indentation, and the example command stay identical
+# across both paths. Mirrors install.sh's print_manual_path_block.
+function Show-ManualPathBlock {
+    param([string]$BinaryPath)
+    Write-Host "  agora is installed at $BinaryPath and is ready to run."
+    Write-Host "  To add it to your user PATH, run one of:"
+    Write-Host ""
+    Write-Host "    setx PATH `"$InstallDir;%PATH%`""
+    Write-Host "    [Environment]::SetEnvironmentVariable('Path', `"$InstallDir;`" + [Environment]::GetEnvironmentVariable('Path','User'), 'User')"
+    Write-Host ""
+    Write-Host "  Then open a new terminal so the change takes effect."
+    Write-Host "  For other options (custom INSTALL_DIR, containers), see $DocsUrl"
+}
+
+# Add-InstallDirToUserPath appends $InstallDir to the user's persistent
+# PATH. Best-effort: returns $true on success (added or already present),
+# $false on any write failure. On failure it emits a plain-language
+# branch message followed by the copy-pasteable manual block — the
+# caller does NOT need to print any additional fallback hints.
 function Add-InstallDirToUserPath {
-    $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
-    $segments = @()
-    if ($userPath) {
-        $segments = $userPath.Split(';', [System.StringSplitOptions]::RemoveEmptyEntries)
+    param([string]$BinaryPath = (Join-Path $InstallDir 'agora.exe'))
+    try {
+        $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
+        $segments = @()
+        if ($userPath) {
+            $segments = $userPath.Split(';', [System.StringSplitOptions]::RemoveEmptyEntries)
+        }
+        if ($segments -contains $InstallDir) {
+            Write-Info "$InstallDir is already on your user PATH."
+            return $true
+        }
+        $newPath = if ($userPath) { "$userPath;$InstallDir" } else { $InstallDir }
+        [Environment]::SetEnvironmentVariable('Path', $newPath, 'User')
+        Write-Info "Added $InstallDir to your user PATH."
+        Write-Host "To use agora in this PowerShell session now, run:"
+        Write-Host "    `$env:Path += ';$InstallDir'"
+        Write-Host "(Or open a new terminal - the change takes effect either way.)"
+        return $true
+    } catch {
+        Write-Host "Could not auto-update your user PATH (likely a permissions / UAC restriction)."
+        Show-ManualPathBlock -BinaryPath $BinaryPath
+        return $false
     }
-    if ($segments -contains $InstallDir) {
-        Write-Info "$InstallDir is already on your user PATH."
+}
+
+# Show-PathInstructions is the manual-fallback hint shown when the user
+# opted out of auto-PATH (-NoPath / -SkipShell) and the binary is not
+# yet resolvable on PATH. Reuses Show-ManualPathBlock so the wording
+# matches what the auto-failed path emits.
+function Show-PathInstructions {
+    param([string]$BinaryPath)
+    Write-Warn "agora is not on your PATH yet."
+    Show-ManualPathBlock -BinaryPath $BinaryPath
+    Write-Host "  (Tip: re-run the installer without -NoPath / -SkipShell to do this automatically.)"
+}
+
+# Install-AgoraCompletion writes a small loader to the user's
+# PowerShell profile so a fresh PowerShell session has tab-completion.
+# Best-effort: failures never abort the install. Idempotent: subsequent
+# runs detect the loader and skip. Caller is responsible for honoring
+# -NoCompletion / -SkipShell before invoking.
+function Install-AgoraCompletion {
+    param(
+        [string]$BinaryPath
+    )
+    if (-not (Test-Path -LiteralPath $BinaryPath)) {
         return
     }
-    $newPath = if ($userPath) { "$userPath;$InstallDir" } else { $InstallDir }
-    [Environment]::SetEnvironmentVariable('Path', $newPath, 'User')
-    Write-Info "Added $InstallDir to your user PATH."
+    if (-not $PROFILE) {
+        Write-Host "No PowerShell profile path detected. Skipping completion install."
+        return
+    }
+    $profileDir = Split-Path -Parent $PROFILE
+    try {
+        if (-not (Test-Path -LiteralPath $profileDir)) {
+            New-Item -ItemType Directory -Path $profileDir -Force | Out-Null
+        }
+    } catch {
+        Write-Warn "Could not create profile directory: $profileDir"
+        return
+    }
+    $marker = '# agora-cli completion (managed by install.ps1)'
+    if (Test-Path -LiteralPath $PROFILE) {
+        $existing = Get-Content -LiteralPath $PROFILE -Raw -ErrorAction SilentlyContinue
+        if ($existing -and $existing.Contains($marker)) {
+            Write-Info "Agora completion already wired in $PROFILE."
+            return
+        }
+    }
+    $loader = @"
+
+$marker
+if (Get-Command agora -ErrorAction SilentlyContinue) {
+    agora completion powershell | Out-String | Invoke-Expression
+}
+"@
+    try {
+        Add-Content -LiteralPath $PROFILE -Value $loader -ErrorAction Stop
+        Write-Info "Wired Agora CLI completion into $PROFILE."
+        Write-Host "  Open a new PowerShell window or run: . `$PROFILE"
+    } catch {
+        Write-Warn "Could not append completion loader to $PROFILE. Run 'agora completion powershell | Out-String | Invoke-Expression' manually."
+    }
 }
 
 function Verify-Binary {
@@ -401,18 +501,43 @@ try {
     Write-InstallReceipt -BinaryPath $destinationBinary
     Write-Info "Installed agora to $destinationBinary"
 
+    # ---- Shell setup (auto-by-default) -----------------------------------
+    # PATH and completion are wired automatically by default. -NoPath,
+    # -NoCompletion, and -SkipShell are granular opt-outs (the umbrella
+    # -SkipShell implies both). Order matters: PATH first so completion
+    # can use the binary we just installed.
     $resolved = Get-Command agora -ErrorAction SilentlyContinue
-    if ($resolved) {
-        Write-Info "Current PATH resolves agora to $($resolved.Source)"
+
+    if ($SkipShell -or $NoPath) {
+        if (-not $resolved) {
+            Show-PathInstructions -BinaryPath $destinationBinary
+        } elseif ($resolved.Source -ne $destinationBinary) {
+            Write-Warn "Another agora is earlier on PATH: $($resolved.Source)"
+            Write-Warn "Reorder PATH so $InstallDir comes first, or remove the other binary."
+        } else {
+            Write-Info "Resolved on PATH: $($resolved.Source)"
+        }
     } else {
-        Write-Warn "agora is not on your PATH yet."
-        Write-Host "Current session: `$env:Path = `"$InstallDir;`$env:Path`""
-        Write-Host "Persistent user PATH: add $InstallDir in Windows Environment Variables, or rerun with -AddToPath."
+        if (-not $resolved) {
+            if (Add-InstallDirToUserPath -BinaryPath $destinationBinary) {
+            }
+            # On failure Add-InstallDirToUserPath already emitted a
+            # complete warn + manual block (rustup / uv / Stripe CLI
+            # convention). Do not double-print a fallback hint here.
+        } elseif ($resolved.Source -ne $destinationBinary) {
+            Write-Warn "Another agora is earlier on PATH: $($resolved.Source)"
+            Write-Warn "Reorder PATH so $InstallDir comes first, or remove the other binary."
+        } else {
+            Write-Info "Resolved on PATH: $($resolved.Source)"
+        }
     }
 
-    if ($AddToPath) {
-        Add-InstallDirToUserPath
-        Write-Host "Open a new terminal after updating PATH."
+    if ($SkipShell -or $NoCompletion) {
+        Write-Info "Shell completion skipped. Enable later with:"
+        Write-Host "  agora completion powershell | Out-String | Invoke-Expression"
+        Write-Host "  (or add the line above to your PowerShell `$PROFILE)"
+    } else {
+        Install-AgoraCompletion -BinaryPath $destinationBinary
     }
 
     Write-Color 'Done. Run: agora --help' -Color Green

@@ -440,17 +440,39 @@ const (
 	envJSON   envFormat = "json"
 )
 
+// projectEnvFormatChoices is the documented enum for `--format`. Kept as
+// a single source of truth so help text, error messages, introspect, and
+// validation stay in lockstep. "envelope" is accepted as an explicit
+// alias of "json" so callers can opt into the unified envelope shape
+// without remembering that --json is the cross-cutting flag.
+var projectEnvFormatChoices = []string{"dotenv", "shell", "envelope", "json"}
+
+// resolveProjectEnvOutputFormat is the single source of truth for the
+// project env output format. It enforces the contract documented in
+// docs/automation.md: `project env` is the one command whose default
+// (non-JSON) output is raw stdout for `eval $(...)` ergonomics, and
+// `--format` lets callers be explicit.
+//
+// Precedence:
+//  1. Conflicting flags → typed error.
+//  2. `--json` (and `--format=envelope|json`) → envelope shape.
+//  3. `--format=shell` or `--shell` → shell exports.
+//  4. `--format=dotenv` (default) → dotenv lines.
 func resolveProjectEnvOutputFormat(format string, shell bool, mode outputMode) (envFormat, error) {
+	format = strings.TrimSpace(strings.ToLower(format))
 	if format != "" && shell {
 		return "", errors.New("`--format` and `--shell` cannot be used together.")
-	}
-	if format != "" && mode == outputJSON {
-		return "", errors.New("`--format` and `--json` cannot be used together.")
 	}
 	if shell && mode == outputJSON {
 		return "", errors.New("`--shell` and `--json` cannot be used together.")
 	}
-	if mode == outputJSON {
+	// --format=envelope/json is a no-op alongside --json: both ask for
+	// the unified envelope shape. Only reject conflicting requests
+	// (e.g. --format=dotenv --json).
+	if format != "" && mode == outputJSON && !isProjectEnvJSONFormat(format) {
+		return "", fmt.Errorf("`--format=%s` and `--json` cannot be used together (use --format=envelope or --format=json for the JSON envelope, or drop --json)", format)
+	}
+	if mode == outputJSON || isProjectEnvJSONFormat(format) {
 		return envJSON, nil
 	}
 	if shell {
@@ -459,7 +481,17 @@ func resolveProjectEnvOutputFormat(format string, shell bool, mode outputMode) (
 	if format == "" {
 		return envDotenv, nil
 	}
-	return envFormat(format), nil
+	switch format {
+	case "dotenv":
+		return envDotenv, nil
+	case "shell":
+		return envShell, nil
+	}
+	return "", fmt.Errorf("`--format` must be one of: %s (got %q)", strings.Join(projectEnvFormatChoices, ", "), format)
+}
+
+func isProjectEnvJSONFormat(format string) bool {
+	return format == "envelope" || format == "json"
 }
 
 func (a *App) projectEnvValues(projectArg string, withSecrets bool) (map[string]any, error) {

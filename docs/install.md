@@ -13,23 +13,31 @@ This page lists the supported installation paths for Agora CLI and the direct in
 Install the latest release:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/AgoraIO/cli/main/install.sh | sh -s -- --add-to-path
+curl -fsSL https://raw.githubusercontent.com/AgoraIO/cli/main/install.sh | sh
 agora --help
 ```
+
+> **Shell setup is auto-on.** The default install adds the install directory to your shell rc when `agora` isn't already on `PATH`, and writes a tab-completion script for the detected shell (bash, zsh, fish). Pass `--no-path`, `--no-completion`, or the umbrella `--skip-shell` to opt out granularly.
 
 Install a pinned version:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/AgoraIO/cli/main/install.sh | sh -s -- --version 0.2.0 --add-to-path
+curl -fsSL https://raw.githubusercontent.com/AgoraIO/cli/main/install.sh | sh -s -- --version 0.2.0
 agora --help
 ```
 
-Install to a user-writable directory and let the installer add it to your shell rc:
+Install to a user-writable directory:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/AgoraIO/cli/main/install.sh \
-  | INSTALL_DIR="$HOME/.local/bin" sh -s -- --add-to-path
+  | INSTALL_DIR="$HOME/.local/bin" sh
 agora --help
+```
+
+Install only the binary (no shell modifications):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/AgoraIO/cli/main/install.sh | sh -s -- --skip-shell
 ```
 
 Run a dry run before installing:
@@ -51,12 +59,20 @@ irm https://raw.githubusercontent.com/AgoraIO/cli/main/install.ps1 | iex
 agora --help
 ```
 
-Install a pinned version and add the default install directory to your user PATH:
+> The PowerShell installer wires the install directory onto your user PATH and writes a completion loader into your `$PROFILE` automatically. Pass `-NoPath`, `-NoCompletion`, or the umbrella `-SkipShell` to opt out granularly.
+
+Install a pinned version:
 
 ```powershell
 $env:VERSION = "0.2.0"
-& ([scriptblock]::Create((irm https://raw.githubusercontent.com/AgoraIO/cli/main/install.ps1))) -AddToPath
+irm https://raw.githubusercontent.com/AgoraIO/cli/main/install.ps1 | iex
 agora --help
+```
+
+Install only the binary (no shell modifications):
+
+```powershell
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/AgoraIO/cli/main/install.ps1))) -SkipShell
 ```
 
 The Windows installer installs `agora.exe` into `%LOCALAPPDATA%\Programs\Agora\bin` by default.
@@ -73,15 +89,36 @@ If your PowerShell execution policy blocks inline scripts, download `install.ps1
 --list-versions         Print recent published versions and exit.
 --force                 Reinstall even if the requested version is present, or
                         proceed past an existing managed install warning.
---add-to-path           Append INSTALL_DIR to your shell rc file (bash, zsh,
-                        fish, or .profile).
+
+# Shell integration (auto-on; pass an opt-out flag to disable)
+--no-path               Don't append the install directory to your shell rc file.
+--no-completion         Don't install shell completion.
+--skip-shell            Umbrella for --no-path --no-completion.
+
 --dry-run               Show what would happen without writing any files.
 --uninstall             Remove the installer-managed binary and receipt.
 --no-color              Disable colored output.
 -q, --quiet             Suppress non-error output.
--v, --verbose           Verbose debug output.
+-v, --verbose           Verbose debug output (installer-internal; unrelated to
+                        the agora CLI's --debug flag).
 --installer-version     Print this installer's revision and exit.
 -h, --help              Show full help.
+```
+
+## PowerShell Installer Parameters
+
+```text
+-Version <string>       Install a specific version.
+-InstallDir <string>    Install directory (default: %LOCALAPPDATA%\Programs\Agora\bin).
+-GitHubRepo <string>    Install from a fork or alternate repository.
+-Force                  Reinstall even if the requested version is present.
+-NoColor                Disable colored output.
+-Uninstall              Remove the installer-managed binary and receipt.
+
+# Shell integration (auto-on; pass an opt-out switch to disable)
+-NoPath                 Don't add the install directory to your user PATH.
+-NoCompletion           Don't wire completion into your PowerShell $PROFILE.
+-SkipShell              Umbrella for -NoPath -NoCompletion.
 ```
 
 If another managed `agora` install is detected, the installer refuses by default to avoid creating two installs that shadow each other on PATH. Pass `--force` to install alongside it.
@@ -185,7 +222,7 @@ go build -o agora .
 
 | Channel                                  | Status                                              | Command                                                                                              |
 | ---------------------------------------- | --------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| Shell installer                          | Available                                           | `curl -fsSL https://raw.githubusercontent.com/AgoraIO/cli/main/install.sh \| sh -s -- --add-to-path` |
+| Shell installer                          | Available                                           | `curl -fsSL https://raw.githubusercontent.com/AgoraIO/cli/main/install.sh \| sh`                     |
 | Windows PowerShell                       | Available                                           | `irm https://raw.githubusercontent.com/AgoraIO/cli/main/install.ps1 \| iex`                          |
 | Linux `.deb` / `.rpm` / `.apk` artifacts | Available on GitHub releases                        | Download the package for your distro from the release page.                                          |
 | apt repository                           | Available when `apt-repo.yml` publishes the release | Use the signed repository documented by the release.                                                 |
@@ -257,10 +294,10 @@ The shell installer refuses to install over an existing managed `agora` to avoid
 
 ### PATH issues
 
-If `agora` installs successfully but is not found:
+If `agora` installs successfully but is not found, you most likely ran the installer with `--no-path` / `--skip-shell` (or `-NoPath` / `-SkipShell` on Windows). The default install wires PATH automatically.
 
-- macOS, Linux, and Windows POSIX shells: re-run with `--add-to-path` to update your shell rc automatically, or add `INSTALL_DIR` to your shell profile manually, for example `export PATH="$HOME/.local/bin:$PATH"`.
-- Windows: rerun `install.ps1 -AddToPath` or add `%LOCALAPPDATA%\Programs\Agora\bin` to your user PATH manually, then open a new terminal.
+- macOS, Linux, and Windows POSIX shells: re-run the installer **without** the `--no-path` / `--skip-shell` flag, or add `INSTALL_DIR` to your shell profile manually, for example `export PATH="$HOME/.local/bin:$PATH"`.
+- Windows: re-run `install.ps1` without `-NoPath` / `-SkipShell`, or add `%LOCALAPPDATA%\Programs\Agora\bin` to your user PATH manually, then open a new terminal.
 
 ### Checksum failures
 

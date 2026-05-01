@@ -83,6 +83,11 @@ jobs:
         shell: bash
         run: sh -n install.sh
 
+      - name: Smoke test installer messages
+        if: runner.os != 'Windows'
+        shell: bash
+        run: sh scripts/test-installer-messages.sh
+
       - name: Check PowerShell installer syntax
         if: runner.os == 'Windows'
         shell: pwsh

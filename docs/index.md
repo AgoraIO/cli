@@ -17,7 +17,7 @@ title: Agora CLI Docs
       </svg>
       <span class="copy-text">Copy</span>
     </button>
-    <pre><code id="install-command">curl -fsSL https://raw.githubusercontent.com/AgoraIO/cli/main/install.sh | sh -s -- --add-to-path</code></pre>
+    <pre><code id="install-command">curl -fsSL https://raw.githubusercontent.com/AgoraIO/cli/main/install.sh | sh</code></pre>
   </div>
 </div>
 

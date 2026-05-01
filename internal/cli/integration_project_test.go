@@ -35,7 +35,7 @@ func TestCLIProjectAndEnvAndDoctorParity(t *testing.T) {
 		"AGORA_API_BASE_URL": api.baseURL,
 		"AGORA_AGENT":        "cursor-test",
 		"AGORA_LOG_LEVEL":    "error",
-		"AGORA_VERBOSE":      "0",
+		"AGORA_DEBUG":        "0",
 	}})
 	if envResult.exitCode != 0 || !strings.Contains(envResult.stdout, "AGORA_PROJECT_ID=prj_123456") {
 		t.Fatalf("unexpected project env result: exit=%d stdout=%s stderr=%s", envResult.exitCode, envResult.stdout, envResult.stderr)
@@ -62,7 +62,7 @@ func TestCLIProjectAndEnvAndDoctorParity(t *testing.T) {
 		"XDG_CONFIG_HOME":    configHome,
 		"AGORA_API_BASE_URL": api.baseURL,
 		"AGORA_LOG_LEVEL":    "error",
-		"AGORA_VERBOSE":      "0",
+		"AGORA_DEBUG":        "0",
 	}, workdir: projectDir})
 	if writeResult.exitCode != 0 {
 		t.Fatalf("unexpected env write result: exit=%d stderr=%s", writeResult.exitCode, writeResult.stderr)
@@ -75,7 +75,7 @@ func TestCLIProjectAndEnvAndDoctorParity(t *testing.T) {
 		"XDG_CONFIG_HOME":    configHome,
 		"AGORA_API_BASE_URL": api.baseURL,
 		"AGORA_LOG_LEVEL":    "error",
-		"AGORA_VERBOSE":      "0",
+		"AGORA_DEBUG":        "0",
 	}})
 	if doctorResult.exitCode != 1 {
 		t.Fatalf("expected doctor exit 1, got %d stdout=%s stderr=%s", doctorResult.exitCode, doctorResult.stdout, doctorResult.stderr)

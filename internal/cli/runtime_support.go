@@ -15,7 +15,13 @@ import (
 )
 
 const (
-	currentAppConfigVersion = 2
+	// currentAppConfigVersion is the schema version stamped on every
+	// config write. Bumping it forces ensureAppConfigState to mark
+	// the load as "migrated" so the migration banner runs once. v3
+	// renamed the persisted "verbose" key to "debug" (see
+	// mergeConfig); v2 was the API/OAuth base-URL flip from staging
+	// to production.
+	currentAppConfigVersion = 3
 	previousAPIBaseURL      = "https://agora-cli-bff.staging.la3.agoralab.co"
 	previousOAuthBaseURL    = "https://staging-sso.agora.io"
 	previousOAuthClientID   = "cli_demo"
@@ -278,7 +284,7 @@ func appendAppLog(level, event string, env map[string]string, fields map[string]
 	if _, err := f.Write(append(payload, '\n')); err != nil {
 		return err
 	}
-	if env["AGORA_VERBOSE"] == "1" {
+	if env["AGORA_DEBUG"] == "1" {
 		_, _ = fmt.Fprintf(os.Stderr, "[agora-cli] %s\n", string(payload))
 	}
 	return nil

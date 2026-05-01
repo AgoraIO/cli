@@ -128,12 +128,32 @@ change; prefer adding a new code and deprecating the old one over a rename.
   that is part of the public contract (JSON shape, exit code, stderr text).
   Use `app_test.go` for isolated helper logic.
 
+## Branching model
+
+- `main` is always releasable. CI must be green before merge.
+- Feature work happens on short-lived topic branches off `main` named
+  `feat/<scope>`, `fix/<scope>`, `docs/<scope>`, or `chore/<scope>`
+  (matches the conventional-commits prefixes). Avoid long-running
+  branches; rebase on `main` instead of merging it back into your
+  topic branch.
+- Releases are cut from `main` by tagging `vX.Y.Z`. The release
+  workflow handles building, signing, publishing, and Homebrew /
+  Scoop / npm bumps. See [docs/install.md](docs/install.md) for the
+  release matrix.
+
 ## Commit hygiene
 
 - Keep commits focused. One logical change per commit is preferred.
 - Write present-tense imperative subjects ("Add CI auto-detect", not
-  "Added CI auto-detect").
+  "Added CI auto-detect"). We prefer (but do not strictly require)
+  the [Conventional Commits](https://www.conventionalcommits.org/)
+  prefixes (`feat:`, `fix:`, `docs:`, `chore:`, `refactor:`,
+  `test:`, `build:`).
 - Reference issues with `Fixes #123` / `Refs #456` in the body when relevant.
+- We do not require [DCO](https://developercertificate.org/) sign-off
+  today, but contributors are welcome to sign their commits with
+  `git commit -s`. If we adopt mandatory sign-off in the future, we
+  will announce it here and add a CI check.
 
 ## Pull requests
 
@@ -146,6 +166,10 @@ change; prefer adding a new code and deprecating the old one over a rename.
   the top of `CHANGELOG.md` (for example, v0.2.0 shipped as `## [0.2.0] - 2026-05-01`).
 - For UI/UX-affecting changes (pretty output, prompts, progress events,
   errors), include before/after copy-paste samples in the PR description.
+- New commands MUST include a per-command example block in the Cobra
+  `Example:` field. See "Adding a new command" above and the existing
+  `agora skills`, `agora doctor`, and `agora env-help` builders for the
+  current style.
 
 ## Reporting bugs and requesting features
 
@@ -154,9 +178,11 @@ Use the GitHub issue templates:
 - [Bug report](https://github.com/AgoraIO/cli/issues/new?template=bug_report.yml)
 - [Feature request](https://github.com/AgoraIO/cli/issues/new?template=feature_request.yml)
 
-For security issues, please email <security@agora.io> rather than filing a
-public issue. Do not include credentials or App Certificates in any public
-report.
+For **support** (questions, "how do I", install help) see [SUPPORT.md](SUPPORT.md).
+
+For **security** issues, see [SECURITY.md](SECURITY.md). Email
+<security@agora.io> rather than filing a public issue. Do not include
+credentials or App Certificates in any public report.
 
 ## License
 

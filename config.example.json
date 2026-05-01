@@ -1,5 +1,5 @@
 {
-  "version": 2,
+  "version": 3,
   "apiBaseUrl": "https://agora-cli.agora.io",
   "browserAutoOpen": true,
   "logLevel": "info",
@@ -8,5 +8,5 @@
   "oauthScope": "basic_info,console",
   "output": "pretty",
   "telemetryEnabled": true,
-  "verbose": false
+  "debug": false
 }

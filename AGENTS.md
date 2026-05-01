@@ -42,6 +42,10 @@ internal/cli/
   quickstart.go             quickstart create / env write / list
   init.go                   init — one-step: project + quickstart + env
   doctor.go                 project doctor — readiness checks, workspace mode
+  install_doctor.go         Top-level agora doctor — install self-test (PATH, network, auth, MCP host)
+  env_help.go               agora env-help — authoritative env-var catalog
+  skills.go                 agora skills — curated workflow recipes (in-binary catalog)
+  telemetry.go              telemetryClient interface + noop sink + Sentry placeholder (wire-up scheduled for next release)
   local_project.go          .agora/project.json read/write; repo-local project binding
   runtime_support.go        Template/runtime detection (nextjs, python, go), CI auto-detect, banner rules
   app_test.go               Unit tests for app init and config
@@ -70,10 +74,13 @@ agora
 ├── init <name>                    Recommended path: reuses existing project (or creates if none); add --new-project to force creation
 ├── version                        Build version, commit, and date
 ├── introspect                     Machine-readable command metadata for agents
+├── doctor                         Install self-test (PATH, version, network, auth, MCP host); use project doctor for project readiness
+├── env-help                       Catalog of every AGORA_* env var the CLI honors
+├── skills                         Curated workflow recipes for humans and AI agents (list / show / search)
 ├── open                           Open Console, CLI docs (human or /md/), or product docs
 ├── mcp                            MCP stdio server for agent tool integrations
 ├── telemetry                      Telemetry status/enable/disable
-├── upgrade (alias: update)        Print package-manager-specific upgrade guidance
+├── upgrade (alias: update, self-update)  In-place self-update on installer-managed installs; otherwise prints upgrade guidance
 ├── project
 │   ├── create <name>              Create a remote Agora project (control-plane only)
 │   ├── use <name>                 Set global project context

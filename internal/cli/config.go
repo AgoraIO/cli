@@ -16,7 +16,12 @@ type appConfig struct {
 	OAuthScope       string     `json:"oauthScope"`
 	Output           outputMode `json:"output"`
 	TelemetryEnabled bool       `json:"telemetryEnabled"`
-	Verbose          bool       `json:"verbose"`
+	// Debug controls whether `appendAppLog` mirrors structured log
+	// records to stderr. v0.2.0 renamed this field from "verbose" to
+	// match the canonical --debug flag and AGORA_DEBUG env var.
+	// mergeConfig still reads the legacy "verbose" key so existing
+	// 0.1.x configs migrate transparently on first load.
+	Debug bool `json:"debug"`
 }
 
 // defaultConfig returns a fresh appConfig populated with the production
@@ -24,7 +29,7 @@ type appConfig struct {
 // back to these values.
 func defaultConfig() appConfig {
 	return appConfig{
-		Version:          2,
+		Version:          3,
 		APIBaseURL:       "https://agora-cli.agora.io",
 		BrowserAutoOpen:  true,
 		LogLevel:         "info",
@@ -33,7 +38,7 @@ func defaultConfig() appConfig {
 		OAuthScope:       "basic_info,console",
 		Output:           outputPretty,
 		TelemetryEnabled: true,
-		Verbose:          false,
+		Debug:            false,
 	}
 }
 
@@ -65,8 +70,14 @@ func mergeConfig(cfg *appConfig, raw map[string]any) {
 	if v, ok := raw["telemetryEnabled"].(bool); ok {
 		cfg.TelemetryEnabled = v
 	}
-	if v, ok := raw["verbose"].(bool); ok {
-		cfg.Verbose = v
+	// v0.2.0 renamed "verbose" -> "debug". Read the canonical key
+	// first; fall back to the legacy key so existing 0.1.x configs
+	// migrate on first load. The next config write drops "verbose"
+	// because the appConfig struct only emits "debug".
+	if v, ok := raw["debug"].(bool); ok {
+		cfg.Debug = v
+	} else if v, ok := raw["verbose"].(bool); ok {
+		cfg.Debug = v
 	}
 }
 
@@ -84,7 +95,7 @@ func (a *App) applyConfigToEnv() {
 	a.setEnvIfMissing("AGORA_SENTRY_ENABLED", boolString(a.cfg.TelemetryEnabled))
 	a.setEnvIfMissing("AGORA_BROWSER_AUTO_OPEN", boolString(a.cfg.BrowserAutoOpen))
 	a.setEnvIfMissing("AGORA_LOG_LEVEL", a.cfg.LogLevel)
-	a.setEnvIfMissing("AGORA_VERBOSE", boolString(a.cfg.Verbose))
+	a.setEnvIfMissing("AGORA_DEBUG", boolString(a.cfg.Debug))
 	if strings.TrimSpace(a.env["DO_NOT_TRACK"]) != "" {
 		a.env["AGORA_SENTRY_ENABLED"] = "0"
 	}

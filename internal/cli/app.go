@@ -150,9 +150,10 @@ type App struct {
 	rootQuiet               bool
 	rootNoColor             bool
 	rootUpgradeCheck        bool
-	rootVerbose             bool
+	rootDebug               bool
 	rootYes                 bool
 	httpClient              *http.Client
+	telemetry               telemetryClient
 	projectEnvProject       string
 	projectEnvFormat        string
 	projectEnvShell         bool
@@ -182,6 +183,11 @@ func NewApp() (*App, error) {
 	}
 	a.applyConfigToEnv()
 	a.root = a.buildRoot()
+	// Best-effort initialize the telemetry sink. Returns a no-op when
+	// telemetry is disabled, when DO_NOT_TRACK is set, or when the
+	// Sentry DSN is empty (build without telemetry compiled in). Telemetry
+	// must never block the CLI from starting.
+	a.telemetry = initTelemetry(a.cfg.TelemetryEnabled, a.env, versionInfo())
 	return a, nil
 }
 
@@ -193,6 +199,13 @@ func NewApp() (*App, error) {
 func (a *App) Execute() error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+	// Best-effort telemetry flush at exit. Bounded by a short timeout so
+	// telemetry can never delay the CLI returning control to the shell.
+	defer func() {
+		if a.telemetry != nil {
+			a.telemetry.Flush(2 * time.Second)
+		}
+	}()
 	a.root.SetContext(ctx)
 	// Best-effort cache hygiene on every startup. Anything older than
 	// projectListCacheMaxAge (24h) is removed so we never accumulate
@@ -224,6 +237,14 @@ func (a *App) Execute() error {
 			"error":       err.Error(),
 			"logFilePath": logPath,
 		})
+		// Forward the failure to telemetry. The sink is responsible for
+		// honoring opt-out, redacting sensitive fields, and never blocking.
+		if a.telemetry != nil {
+			a.telemetry.CaptureException(err, map[string]any{
+				"command":  a.guessCommandLabel(os.Args[1:]),
+				"exitCode": exitCode,
+			})
+		}
 		if mode == outputJSON {
 			_ = emitErrorEnvelope(os.Stdout, a.guessCommandLabel(os.Args[1:]), err, exitCode, logPath)
 			if exitCode != 1 {

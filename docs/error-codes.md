@@ -77,6 +77,12 @@ These codes appear inside `data.checks[].issues[].code` and (for blocking issues
 | `APP_CREDENTIALS_MISSING` | 1 | The selected project has no app ID / app certificate yet. | Run the command from `suggestedCommand` (`agora project show --project <id>`) to re-fetch credentials; if still missing, enable the app certificate in Console (`agora open --target console`). |
 | `TOKEN_CAPABILITY_DISABLED` | (warning) | The project has token issuance disabled. | Enable token issuance in Console. |
 
+### Skills (curated workflows)
+
+| Code | Exit | Meaning | Recovery |
+|------|------|---------|----------|
+| `SKILL_NOT_FOUND` | 1 | `agora skills show <id>` was given an unknown skill ID. | Run `agora skills list` to see available IDs. |
+
 ## Dynamic code families
 
 Some doctor codes are generated from the feature name at runtime. Agents should match by prefix.
@@ -85,6 +91,7 @@ Some doctor codes are generated from the feature name at runtime. Agents should 
 |---------|---------|---------|----------|
 | `FEATURE_<NAME>_PROVISIONING` | `FEATURE_RTC_PROVISIONING` | The named feature is being provisioned (warning). | Wait and re-run `project doctor`. |
 | `FEATURE_<NAME>_DISABLED` | `FEATURE_CONVOAI_DISABLED` | The named feature is disabled for this project. | Run the command from `suggestedCommand` or enable the feature in Console. |
+| `INSTALL_DOCTOR_<STATUS>` | `INSTALL_DOCTOR_NOT_READY` | `agora doctor` (top-level) summary code, where `<STATUS>` is `WARNING`, `NOT_READY`, or `AUTH_ERROR`. The detailed per-check items live in `data.blockingIssues[].code` / `data.warnings[].code` and follow the same dotted naming as `project doctor` codes (e.g. `INSTALL_PATH_RESOLUTION`, `NETWORK_API_DNS`). | Read `data.summary` and the per-check `suggestedCommand`. |
 
 `<NAME>` is uppercased and matches the feature ID set returned by `agora introspect --json` under `data.enums.features` (currently `RTC`, `RTM`, `CONVOAI`).
 

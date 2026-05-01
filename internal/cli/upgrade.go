@@ -369,12 +369,12 @@ func upgradeCommandForInstallMethod(method string) string {
 		if runtime.GOOS == "windows" {
 			return "irm https://raw.githubusercontent.com/AgoraIO/cli/main/install.ps1 | iex"
 		}
-		return "curl -fsSL https://raw.githubusercontent.com/AgoraIO/cli/main/install.sh | sh -s -- --add-to-path"
+		return "curl -fsSL https://raw.githubusercontent.com/AgoraIO/cli/main/install.sh | sh"
 	default:
 		if runtime.GOOS == "windows" {
 			return "irm https://raw.githubusercontent.com/AgoraIO/cli/main/install.ps1 | iex"
 		}
-		return "curl -fsSL https://raw.githubusercontent.com/AgoraIO/cli/main/install.sh | sh -s -- --add-to-path"
+		return "curl -fsSL https://raw.githubusercontent.com/AgoraIO/cli/main/install.sh | sh"
 	}
 }
 

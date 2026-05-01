@@ -120,7 +120,7 @@ Use this group when you want a standalone demo or onboarding project.`,
 
 func (a *App) buildQuickstartList() *cobra.Command {
 	var showAll bool
-	var verbose bool
+	var details bool
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List available official quickstarts",
@@ -128,6 +128,7 @@ func (a *App) buildQuickstartList() *cobra.Command {
 		Example: example(`
   agora quickstart list
   agora quickstart list --show-all
+  agora quickstart list --details
   agora quickstart list --json
 `),
 		RunE: func(cmd *cobra.Command, _ []string) error {
@@ -151,12 +152,12 @@ func (a *App) buildQuickstartList() *cobra.Command {
 			return renderResult(cmd, "quickstart list", map[string]any{
 				"action":  "list",
 				"items":   items,
-				"verbose": verbose,
+				"details": details,
 			})
 		},
 	}
 	cmd.Flags().BoolVar(&showAll, "show-all", false, "include upcoming or unavailable templates in the list")
-	cmd.Flags().BoolVar(&verbose, "verbose", false, "show repository, runtime, and env details in pretty output")
+	cmd.Flags().BoolVar(&details, "details", false, "show repository, runtime, and env details in pretty output")
 	return cmd
 }
 

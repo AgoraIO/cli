@@ -36,7 +36,7 @@ Use this guide for:
 - In JSON mode, both success and failure return the same top-level envelope shape.
 - Use `--json --pretty` when a human needs to inspect JSON directly. Scripts should keep the default single-line JSON.
 - Use `--quiet` to suppress the success envelope in **both** pretty and JSON modes; the exit code becomes the only result. Errors are still printed on stderr (and as a JSON envelope on stdout when `--json` is set without `--quiet`). NDJSON progress events are still emitted because they are observability, not results.
-- Use `--verbose` (equivalent to `AGORA_VERBOSE=1`) to echo structured log records to stderr. The flag does not change exit codes, JSON envelope shape, or NDJSON progress events; it only mirrors the entries that would normally be written to the log file. Pair with `--json` for fully machine-parseable runs that also surface internal events to your CI logs.
+- Use `--debug` (equivalent to `AGORA_DEBUG=1`) to echo structured log records to stderr. The flag does not change exit codes, JSON envelope shape, or NDJSON progress events; it only mirrors the entries that would normally be written to the log file. Pair with `--json` for fully machine-parseable runs that also surface internal events to your CI logs. v0.2.0 dropped the legacy `--verbose` / `-v` alias and the `AGORA_VERBOSE` env var; persisted configs that contain a `verbose` key are auto-promoted to `debug` on first load.
 - Use `--yes` (or `-y`) / `AGORA_NO_INPUT=1` to assume the default answer to confirmation prompts. Following industry convention for `-y` (apt-style), the flag never starts brand-new interactive flows: in JSON, CI, or non-TTY contexts the CLI still fails fast with the same `AUTH_UNAUTHENTICATED` error you would have seen without `--yes`, instead of silently launching an OAuth browser flow.
 - Interactive login prompts only appear in interactive pretty-mode TTY runs. Automation should authenticate up front with `agora login`; `--json`, `AGORA_OUTPUT=json`, detected CI environments, and non-TTY stdin all skip the prompt and fail with `AUTH_UNAUTHENTICATED`.
 - Output mode precedence is: explicit CLI flag (`--json` or `--output`) first, user-set `AGORA_OUTPUT` second, then user-customized config file value, then **CI auto-detect → JSON** (see below), then pretty.
@@ -139,6 +139,40 @@ Agent guidance:
 - branch on `ok` first for success vs failure
 - treat pretty output as human-only
 - do not parse stderr when `--json` is in use
+
+A **JSON Schema** for this envelope is published at
+[`docs/schema/envelope.v1.json`](schema/envelope.v1.json) (also available
+at the live URL `https://agoraio.github.io/cli/schema/envelope.v1.json`).
+Wrappers that want compile-time type safety can generate types from the
+schema with `quicktype`, `datamodel-code-generator`, or any
+JSON-Schema-aware tool.
+
+### One documented exception: `agora project env`
+
+`agora project env` is the only command whose **default** (non-JSON)
+output is raw stdout — without the unified envelope — so it can be used
+with shell substitution:
+
+```bash
+source <(agora project env --shell)
+eval "$(agora project env --format shell)"
+```
+
+To explicitly request a specific format, pass `--format`:
+
+| Flag                  | Output                                    |
+|-----------------------|-------------------------------------------|
+| `--format dotenv`     | `KEY=value` lines (default; `>> .env`)    |
+| `--format shell`      | shell `export KEY=value` statements       |
+| `--format envelope`   | unified JSON envelope (alias of `--json`) |
+| `--format json`       | same as `--format envelope`               |
+| `--shell`             | back-compat alias of `--format shell`     |
+| `--json`              | unified JSON envelope                     |
+
+For automation, prefer `--json` (or `--format envelope`) so the result
+has the same shape as every other command. `agora project env write`
+already emits the unified envelope under all output modes — only the
+read path has the raw-stdout exception above.
 
 ## Progress Events (NDJSON Stream)
 
@@ -864,7 +898,7 @@ Returns the current resolved config object. Safe branch fields:
 - `logLevel`
 - `browserAutoOpen`
 - `telemetryEnabled`
-- `verbose`
+- `debug` (renamed from legacy `verbose` in v0.2.0; legacy key is migrated on first load)
 
 ### `config update`
 

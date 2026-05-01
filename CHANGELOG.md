@@ -33,6 +33,23 @@ Earlier entries pre-date this convention and only carry their version's compare 
 - Add `PROJECT_NAME_REQUIRED` error code for `project create` and the equivalent MCP tool.
 - Add `agora project list --refresh-cache` to explicitly refresh the unfiltered first page used by project-name shell completion.
 - Infer coarse agent labels for API `User-Agent` when `AGORA_AGENT` is unset; explicit `AGORA_AGENT` still takes precedence.
+- Add top-level `agora doctor` command for an install self-test (binary path, PATH resolution, version, AGORA_HOME writability, API/OAuth network reachability, auth state, MCP host detection). Distinct from `agora project doctor` which validates a remote project.
+- Add `agora env-help` command listing every `AGORA_*` (and `DO_NOT_TRACK`, `NO_COLOR`) environment variable the CLI honors, grouped by category, with defaults and accepted values. JSON envelope returns the catalog plus a category index.
+- Add `agora skills` (list / show / search) curated workflow recipes for humans and AI agents. Read-only catalog shipped in the binary today; future releases can move to fetched skills with the same JSON shape.
+- Add `--debug` global flag as the canonical name for runtime log echo (mirrors `AGORA_DEBUG=1`). Matches `gh`, `vercel`, `stripe`, and `supabase` conventions. See **Removed** below for the legacy `--verbose` / `AGORA_VERBOSE` cleanup that landed alongside it.
+- Add `agora self-update` as an alias for `agora upgrade` / `agora update`.
+- Add `--format envelope|json` to `agora project env` so callers can be explicit about the unified JSON envelope shape; `--format dotenv|shell` continue to render raw stdout for shell sourcing. Unknown formats now produce a typed error listing the valid choices.
+- Add Cobra typo suggestions (`SuggestionsMinimumDistance: 2`) so `agora projct doctor` prints "Did you mean this? project". Matches `gh`, `kubectl`, `git` UX.
+- Add `SECURITY.md` (private disclosure process, supported versions, safe harbor) and `SUPPORT.md` (channel routing for questions, bugs, security, install issues).
+- Add `docs/troubleshooting.md` and link it from the README; add `Troubleshooting` and `Telemetry` to the GitHub Pages nav and sitemap.
+- Add `docs/schema/envelope.v1.json` — JSON Schema for the unified envelope so wrappers can generate types or validate at runtime.
+- Add curated agent rule snippets for the new `doctor`, `env-help`, and `skills` surfaces in the existing `docs/agents/` rule files via the next sync.
+- Make installer shell setup auto-on by default and add granular opt-out flags. `install.sh` now adds the install directory to your shell rc when `agora` isn't already on `PATH` and writes a tab-completion script for the detected shell (bash, zsh, fish); `install.ps1` mirrors the behavior for user PATH and a PowerShell `$PROFILE` completion loader. New flags: `--no-path` / `-NoPath` (skip PATH only), `--no-completion` / `-NoCompletion` (skip completion only), and the umbrella `--skip-shell` / `-SkipShell` (binary only, no shell modifications). Matches modern installer DX (bun, fnm, deno, uv, volta). Auto-PATH wiring is **best-effort**: when the user's shell rc is unwritable (root-owned `~/.zshrc`, read-only mount, UAC denial, etc.) the installer never aborts — it uses bun-style branch wording (`<file> is not writable, so the installer can't add agora to your PATH automatically.`) followed by an indented action block that names the installed binary path and the exact `export PATH=...` (POSIX) or `setx PATH ...` (Windows) line to paste. The same block is reused when the user explicitly opts out via `--no-path`, so the message is identical across both paths.
+- Polish installer DX to match bun / uv conventions: softer wording when the shell rc is unwritable (no implicit-failure tone), an `exec $SHELL` (POSIX) / `$env:Path += ';...'` (PowerShell) follow-up so the user can use `agora` in the current shell after install, a bash candidate-list walk that chooses the first writable rc among `~/.bashrc`, `~/.bash_profile`, and `~/.profile`, and a docs URL footer in the manual fallback block. Backed by a new shell-based smoke test (`scripts/test-installer-messages.sh`) wired into CI to prevent regression.
+- `agora doctor` now suggests the exact shell-aware command for fixing a missing PATH entry. The `path_resolution` failure suggestion now reads `echo 'export PATH="<dir>:$PATH"' >> ~/.zshrc && source ~/.zshrc` for zsh, the equivalent for bash and `fish_add_path` for fish, the `setx PATH ...` form on Windows, and a generic `~/.profile` fallback for unknown shells. The doctor derives `<dir>` from the running binary's location, so the command is always copy-pasteable.
+- Add a curated `Requirements` and `Verifying release artifacts` section to the README, plus links to `SECURITY.md`, `SUPPORT.md`, the new troubleshooting doc, and `docs/schema/envelope.v1.json` from the Docs index.
+- Add a telemetry stub (`internal/cli/telemetry.go`) with the `telemetryClient` interface, default no-op sink, redaction helper, and `sentryClient` placeholder so the next release wires Sentry by adding the SDK + replacing one constant. The on/off contract (`agora telemetry`, `AGORA_SENTRY_ENABLED`, `DO_NOT_TRACK`) is fully wired; transport is a no-op until Sentry is connected.
+- Add the proposal documents `docs/proposals/supply-chain-hardening.md`, `docs/proposals/ci-matrix-expansion.md`, and `docs/proposals/telemetry-sentry-wireup.md` for the next release.
 
 ### Changed
 
@@ -45,6 +62,18 @@ Earlier entries pre-date this convention and only carry their version's compare 
 - `agora project env write` detects Next.js workspaces and writes `NEXT_PUBLIC_AGORA_APP_ID` / `NEXT_AGORA_APP_CERTIFICATE`, with `--template nextjs|standard` to override auto-detection.
 - `project env write` now creates or updates repo-local `.agora/project.json` for the selected project, recording `projectType` (framework/language detection such as `nextjs`, `go`, `python`, `node`, `standard`) and `envPath`, while quickstart-bound repos continue using a single `template` field for template lineage.
 - Build and release metadata now target Go 1.26.2, matching the current stable Go toolchain for distributed CLI builds.
+- Standardize per-command `Example:` blocks across the entire command tree. Every Cobra command now ships at least one example, including the previously empty telemetry subcommands and the `mcp` parent.
+- `agora project env` `--format` is now a typed enum (`dotenv | shell | envelope | json`) with a precedence-aware error message when combined with `--json` / `--shell`.
+- Harden the published Docker image: pin Alpine 3.20, run as a non-root `agora` user (uid 10001) with `AGORA_HOME=/home/agora/.agora`, add `tini` as PID 1 for proper signal handling, set OCI labels (`org.opencontainers.image.*`), and default `CMD` to `--help` so `docker run ghcr.io/agoraio/agora-cli:latest` is self-explanatory.
+- Rewrite `docs/llms.txt` to fix the outdated command list (`agora init`, `agora project doctor` instead of obsolete labels), document the new `--format envelope` exception for `agora project env`, link the Markdown-mirror docs, and expand the catalog of stable exit codes.
+- Rename `agora quickstart list --verbose` to `--details`. The previous flag overloaded the `--verbose` name with a meaning ("show repository, runtime, and env details") completely different from the global `--debug` semantic, so we removed it as part of the broader `--verbose` cleanup. The JSON envelope key emitted under `data` was renamed from `verbose` to `details` to match.
+- Rename the `agora config update --verbose` flag to `--debug` and rename the persisted config field from `verbose` to `debug`. Bump the on-disk config schema from version `2` to version `3`. **0.1.x configs auto-migrate**: any existing `verbose` key is silently promoted to `debug` on the first 0.2.0 launch, and the rewritten file no longer contains the legacy key. Users do not need to take any action.
+
+### Removed
+
+- **BREAKING**: Drop the legacy `--verbose` / `-v` global flag and the `AGORA_VERBOSE` environment variable. v0.2.0 ships only `--debug` / `AGORA_DEBUG` for the runtime log-echo control. Rationale: maintaining two names for the same flag indefinitely creates exactly the confusing DX the rename was meant to fix; the 0.1.9 → 0.2.0 boundary is the right place to make the break instead of carrying an alias forward as permanent technical debt. Migration: replace `--verbose` / `-v` with `--debug`, and `AGORA_VERBOSE=1` with `AGORA_DEBUG=1`. Persisted configs are auto-migrated (see Changed above).
+- **BREAKING (installer)**: Drop the opt-in `--add-to-path` (`install.sh`) and `-AddToPath` (`install.ps1`) flags. Shell setup is now auto-on by default; opt out with the new `--no-path` / `--no-completion` / `--skip-shell` flags (or `-NoPath` / `-NoCompletion` / `-SkipShell` on Windows). Migration: drop `--add-to-path` from any pinned install command — the bare `curl ... | sh` (and `irm ... | iex`) now does the right thing. CI environments that explicitly want only the binary should switch to `--skip-shell`.
+- **BREAKING (installer)**: Drop the `--completion auto|skip|bash|zsh|fish|powershell` flag in favor of `--no-completion` (and the umbrella `--skip-shell`). Auto-detect from `$SHELL` is the only supported wiring path; users who want a completion script for a shell different from `$SHELL` should run `agora completion <shell>` directly.
 
 ### Fixed
 
@@ -61,6 +90,10 @@ Earlier entries pre-date this convention and only carry their version's compare 
 ### Documentation
 
 - Document the MCP transport caveat that `agora init`, `agora quickstart create`, `agora project create`, and `agora login` collapse their NDJSON progress event stream into the final `tools/call` result over MCP, since stdout is the JSON-RPC transport.
+- README updates land in logical sections (Install requirements, Verifying releases, Docs index, Command Model additions, Troubleshooting redirect) without disturbing the marketing-first opening.
+- `CONTRIBUTING.md` documents the branching model (`main` is releasable, topic branches off `main`), the commit-message convention, the optional DCO sign-off path, and the per-command example requirement for new commands.
+- `docs/automation.md` adds a section documenting the `agora project env` raw-stdout exception and links the new envelope JSON Schema.
+- `docs/proposals/` introduces a new directory for deferred-implementation proposals (supply-chain hardening, CI matrix expansion, Sentry wire-up). Each proposal carries a `status: proposed`, `target-release: next` front-matter so contributors can see what's planned without bisecting branches.
 
 ## [0.1.9] - 2026-04-30
 

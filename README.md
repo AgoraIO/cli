@@ -22,8 +22,17 @@ agora init my-nextjs-demo --template nextjs
 
 ## Install
 
+### Requirements
+
+- macOS 12+, Linux (glibc 2.31+ or musl), or Windows 10+ for the prebuilt binaries.
+- `git` on `PATH` for `agora init` and `agora quickstart create` (they shell out to `git clone`).
+- For the npm install path, Node.js 18 or newer.
+- For the source build, the Go toolchain pinned in [`go.mod`](go.mod).
+
+### Install the CLI
+
 ```bash
-curl -fsSL https://raw.githubusercontent.com/AgoraIO/cli/main/install.sh | sh -s -- --add-to-path
+curl -fsSL https://raw.githubusercontent.com/AgoraIO/cli/main/install.sh | sh
 ```
 
 Run the CLI:
@@ -45,9 +54,21 @@ irm https://raw.githubusercontent.com/AgoraIO/cli/main/install.ps1 | iex
 Notes:
 
 - The shell installer supports macOS, Linux, and Windows POSIX shells such as Git Bash. Use `install.ps1` for native PowerShell installs on Windows.
-- If the installer says `agora` is not on your PATH, re-run with `--add-to-path` or add the printed install directory to your shell profile.
+- **Shell setup is auto-on**: the installer wires the install directory onto your `PATH` (when needed) and writes a shell completion script for the detected shell (bash, zsh, fish, or PowerShell). Pass `--no-path`, `--no-completion`, or the umbrella `--skip-shell` (PowerShell: `-NoPath` / `-NoCompletion` / `-SkipShell`) to opt out granularly.
 - Installer help is always available with `curl -fsSL https://raw.githubusercontent.com/AgoraIO/cli/main/install.sh | sh -s -- --help`.
 - Pinned versions, dry runs, custom install directories, npm details, and source builds are documented in [docs/install.md](docs/install.md).
+
+### Verifying release artifacts
+
+Every release ships with a SHA-256 `checksums.txt` and a Cosign keyless signature. The official installers verify the SHA-256 automatically. You can also verify manually:
+
+```bash
+# Verify SHA-256 against the published checksums.txt
+curl -fsSLO https://github.com/AgoraIO/cli/releases/download/vX.Y.Z/checksums.txt
+sha256sum -c checksums.txt --ignore-missing
+```
+
+For Cosign signature verification and the SBOM workflow, see the **Security** section of [docs/install.md](docs/install.md). Vulnerability disclosures: see [SECURITY.md](SECURITY.md).
 
 ## First Run
 
@@ -59,13 +80,18 @@ agora init my-nextjs-demo --template nextjs
 ## Docs
 
 - Human docs (GitHub Pages): [https://agoraio.github.io/cli/](https://agoraio.github.io/cli/)
+- Agent-friendly Markdown mirror: [https://agoraio.github.io/cli/md/](https://agoraio.github.io/cli/md/)
 - Release notes: [CHANGELOG.md](CHANGELOG.md)
 - Install options (direct installer, Windows, source): [docs/install.md](docs/install.md)
 - Full command reference (auto-generated): [docs/commands.md](docs/commands.md)
 - Automation and JSON contract: [docs/automation.md](docs/automation.md)
+- JSON envelope schema (machine-readable): [docs/schema/envelope.v1.json](docs/schema/envelope.v1.json)
 - Stable error codes: [docs/error-codes.md](docs/error-codes.md)
 - Telemetry controls: [docs/telemetry.md](docs/telemetry.md)
-- Contributor and agent guide: [AGENTS.md](AGENTS.md)
+- Troubleshooting: [docs/troubleshooting.md](docs/troubleshooting.md)
+- Security policy: [SECURITY.md](SECURITY.md)
+- Support and contact channels: [SUPPORT.md](SUPPORT.md)
+- Contributor and agent guide: [AGENTS.md](AGENTS.md), plus [CONTRIBUTING.md](CONTRIBUTING.md)
 
 Command examples use `agora` for the installed CLI. Local source builds are covered in [Build From Source](#build-from-source).
 
@@ -79,10 +105,13 @@ The command model is intentionally layered:
 - `auth` for login and session inspection
 - `config` for local CLI defaults
 - `telemetry` for telemetry preferences
-- `upgrade` / `update` for package-manager-specific upgrade guidance
+- `upgrade` / `update` / `self-update` for in-place upgrade or package-manager-specific guidance
 - `open` to open the Console, published CLI docs (human or `/md/` Markdown), or product docs in a browser
+- `doctor` for an install self-test (PATH, version, network, auth, MCP host)
+- `env-help` to list every `AGORA_*` environment variable the CLI honors
+- `skills` to browse curated workflow recipes for humans and AI agents
 - `mcp` to run the CLI as a local MCP server (`agora mcp serve`) for agent integrations
-- `completion` for shell completion scripts (standard Cobra completion)
+- `completion` for shell completion scripts (auto-installed by the installer; see `agora completion --help` for manual setup)
 
 Discover the full command tree:
 
@@ -298,46 +327,22 @@ Built-in default config values are documented in [config.example.json](config.ex
 
 ## Troubleshooting
 
-### Login or browser issues
-
-Try:
+For a full troubleshooting guide with diagnostic commands, see [docs/troubleshooting.md](docs/troubleshooting.md). The fastest first step is always:
 
 ```bash
-agora login --no-browser
+agora doctor --json
+agora project doctor --json
 ```
 
-You can also inspect the current auth state:
+The most common issues:
 
-```bash
-agora whoami
-```
+- **`agora` not found after install**: the installer wires PATH automatically by default; if you ran with `--no-path` or `--skip-shell`, re-run without it (or add the install directory to your shell profile manually).
+- **OAuth browser does not open**: `agora login --no-browser` prints the URL so you can open it elsewhere; or `agora config update --browser-auto-open=false`.
+- **`git` is missing**: `agora init` and `agora quickstart create` shell out to `git clone`. Install `git` and retry.
+- **Project has no app certificate**: `quickstart env write`, `init`, and `project env --with-secrets` need a project with an App Certificate. Pick another project or enable one in [Agora Console](https://console.agora.io).
+- **No project selected**: pass `--project <name>`, run `agora project use <name>`, or run from a repo that already has `.agora/project.json`.
 
-### `git` is missing
-
-`quickstart create` and `init` shell out to `git clone`. Install `git` and retry.
-
-### Quickstart clone failures
-
-Check:
-
-- network access to GitHub
-- that the target directory does not already exist
-- that the quickstart repo URL is reachable
-
-### Missing app certificate for env injection
-
-Quickstart env injection requires a project with an app certificate. If the selected project has no certificate, `quickstart create --project`, `quickstart env write`, and `init` cannot seed the env file.
-
-### No project selected
-
-If a command needs a project and none is currently selected, either:
-
-```bash
-agora quickstart env write my-go-demo --project my-project
-agora project use my-project
-```
-
-or run it inside a repo that already has `.agora/project.json`.
+Full guide with debug logging, CI tips, completion troubleshooting, and the `--debug` flag: [docs/troubleshooting.md](docs/troubleshooting.md).
 
 ## Build From Source
 

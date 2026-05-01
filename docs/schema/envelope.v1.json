@@ -1,0 +1,122 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agoraio.github.io/cli/schema/envelope.v1.json",
+  "title": "Agora CLI JSON envelope (v1)",
+  "description": "Stable JSON envelope shape returned by every JSON-mode `agora` command. Both success and failure responses use the same top-level shape so wrappers can branch on `ok`. Documented in /cli/md/automation.md and produced by internal/cli/envelope.go in the source repo.",
+  "type": "object",
+  "required": ["ok", "command", "data", "meta"],
+  "additionalProperties": false,
+  "properties": {
+    "ok": {
+      "type": "boolean",
+      "description": "true on success, false on failure. Wrappers branch on this field; do not infer success from `error` absence alone."
+    },
+    "command": {
+      "type": "string",
+      "description": "Stable command label, e.g. \"project create\", \"auth status\", \"init\". Matches the `command` field of `agora introspect --json`."
+    },
+    "data": {
+      "description": "Command-specific payload. Present on success. May be `null` for failure envelopes that have no partial payload, or a structured object when the command emits partial data alongside an error (e.g. `project doctor`).",
+      "oneOf": [
+        { "type": "null" },
+        { "type": "object" },
+        { "type": "array" }
+      ]
+    },
+    "error": {
+      "$ref": "#/$defs/error",
+      "description": "Present only when `ok` is false."
+    },
+    "meta": {
+      "$ref": "#/$defs/meta",
+      "description": "Always present. Contains transport-level metadata (output mode, exit code)."
+    }
+  },
+  "if": {
+    "properties": { "ok": { "const": false } }
+  },
+  "then": {
+    "required": ["error"]
+  },
+  "$defs": {
+    "error": {
+      "type": "object",
+      "required": ["message"],
+      "additionalProperties": false,
+      "properties": {
+        "message": {
+          "type": "string",
+          "description": "Human-readable error message."
+        },
+        "code": {
+          "type": "string",
+          "description": "Stable error code from docs/error-codes.md, e.g. \"AUTH_UNAUTHENTICATED\", \"PROJECT_NO_CERTIFICATE\". Absent for unclassified errors."
+        },
+        "httpStatus": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 599,
+          "description": "Upstream HTTP status when the error originated from an Agora API call."
+        },
+        "requestId": {
+          "type": "string",
+          "description": "Upstream request ID for support escalations when available."
+        },
+        "logFilePath": {
+          "type": "string",
+          "description": "Absolute path to the rotating log file containing detailed context for this error."
+        }
+      }
+    },
+    "meta": {
+      "type": "object",
+      "required": ["outputMode", "exitCode"],
+      "additionalProperties": true,
+      "properties": {
+        "outputMode": {
+          "type": "string",
+          "enum": ["json"],
+          "description": "Always \"json\" for envelope responses (pretty mode does not emit envelopes)."
+        },
+        "exitCode": {
+          "type": "integer",
+          "description": "Process exit code the CLI will use after this envelope is written. 0 success; 1 generic error; 2 doctor warnings; 3 auth error; 130 user interrupt."
+        }
+      }
+    }
+  },
+  "examples": [
+    {
+      "ok": true,
+      "command": "auth status",
+      "data": {
+        "authenticated": true,
+        "scope": "basic_info,console",
+        "expiresAt": "2026-05-08T12:00:00Z"
+      },
+      "meta": { "outputMode": "json", "exitCode": 0 }
+    },
+    {
+      "ok": false,
+      "command": "auth status",
+      "data": null,
+      "error": {
+        "message": "No local Agora session found. Run agora login first.",
+        "code": "AUTH_UNAUTHENTICATED",
+        "logFilePath": "/Users/me/.agora/logs/agora-cli.log"
+      },
+      "meta": { "outputMode": "json", "exitCode": 3 }
+    },
+    {
+      "ok": false,
+      "command": "project doctor",
+      "data": {
+        "status": "warning",
+        "feature": "rtc",
+        "warnings": [{ "code": "ENV_FILE_MISSING", "message": "no .env.local found" }]
+      },
+      "error": { "message": "project has non-blocking readiness warnings", "code": "PROJECT_DOCTOR_WARNING" },
+      "meta": { "outputMode": "json", "exitCode": 2 }
+    }
+  ]
+}

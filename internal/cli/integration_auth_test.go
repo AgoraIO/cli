@@ -25,7 +25,7 @@ func TestCLILoginAndWhoAmIParity(t *testing.T) {
 		"AGORA_BROWSER_AUTO_OPEN": "0",
 		"AGORA_LOGIN_TIMEOUT_MS":  "2000",
 		"AGORA_LOG_LEVEL":         "error",
-		"AGORA_VERBOSE":           "0",
+		"AGORA_DEBUG":             "0",
 	}, onStderr: func(stderr string) bool {
 		u := parseAuthURL(stderr)
 		if u == "" {
@@ -47,7 +47,7 @@ func TestCLILoginAndWhoAmIParity(t *testing.T) {
 	status := runCLI(t, []string{"whoami", "--json"}, cliRunOptions{env: map[string]string{
 		"XDG_CONFIG_HOME": configHome,
 		"AGORA_LOG_LEVEL": "error",
-		"AGORA_VERBOSE":   "0",
+		"AGORA_DEBUG":     "0",
 	}})
 	if status.exitCode != 0 {
 		t.Fatalf("expected exit 0, got %d stderr=%s", status.exitCode, status.stderr)
@@ -75,7 +75,7 @@ func TestCLIAuthStatusExitCodeParity(t *testing.T) {
 	result := runCLI(t, []string{"auth", "status", "--json"}, cliRunOptions{env: map[string]string{
 		"XDG_CONFIG_HOME": t.TempDir(),
 		"AGORA_LOG_LEVEL": "error",
-		"AGORA_VERBOSE":   "0",
+		"AGORA_DEBUG":     "0",
 	}})
 	if result.exitCode != 3 || !strings.Contains(result.stdout, `"ok":false`) || !strings.Contains(result.stdout, `"code":"AUTH_UNAUTHENTICATED"`) || !strings.Contains(result.stdout, `"exitCode":3`) || result.stderr != "" {
 		t.Fatalf("expected structured unauthenticated status error, got exit=%d stdout=%s stderr=%s", result.exitCode, result.stdout, result.stderr)

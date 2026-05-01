@@ -56,11 +56,14 @@ Use "agora --help --all --json" for a machine-readable command tree (agent tooli
 		SilenceErrors: true,
 		PersistentPreRunE: func(cmd *cobra.Command, _ []string) error {
 			mode := a.resolveOutputMode(cmd)
-			// --verbose mirrors AGORA_VERBOSE=1: echoes structured logs to
-			// stderr in addition to writing them to the log file. Setting
-			// it on a.env is enough because appendAppLog reads from there.
-			if a.rootVerbose {
-				a.env["AGORA_VERBOSE"] = "1"
+			// --debug mirrors AGORA_DEBUG=1: echoes structured log
+			// records to stderr in addition to writing them to the
+			// log file. v0.2.0 dropped the legacy --verbose / -v
+			// alias and the AGORA_VERBOSE env var; --debug /
+			// AGORA_DEBUG are the only supported names. See
+			// CHANGELOG.md for migration notes.
+			if a.rootDebug {
+				a.env["AGORA_DEBUG"] = "1"
 			}
 			ctx := context.WithValue(cmd.Context(), contextKeyOutputMode{}, mode)
 			ctx = context.WithValue(ctx, contextKeyJSONPretty{}, a.rootPrettyJSON)
@@ -69,6 +72,11 @@ Use "agora --help --all --json" for a machine-readable command tree (agent tooli
 			cmd.SetContext(ctx)
 			return nil
 		},
+		// Cobra's built-in suggestions: when a user mistypes a
+		// subcommand we print the closest matches alongside the
+		// "unknown command" error. Distance 2 matches gh/kubectl/git
+		// behavior (e.g. `agora projct doctor` suggests `project`).
+		SuggestionsMinimumDistance: 2,
 	}
 	root.Version = formattedVersion()
 	root.PersistentFlags().StringVar(&a.rootOutput, "output", "", "output mode for command results: pretty or json")
@@ -76,7 +84,12 @@ Use "agora --help --all --json" for a machine-readable command tree (agent tooli
 	root.PersistentFlags().BoolVar(&a.rootPrettyJSON, "pretty", false, "pretty-print JSON output when used with --json")
 	root.PersistentFlags().BoolVar(&a.rootQuiet, "quiet", false, "suppress success output (both pretty and JSON envelopes); rely on exit code. Errors still print on stderr.")
 	root.PersistentFlags().BoolVar(&a.rootNoColor, "no-color", false, "disable ANSI color in pretty output")
-	root.PersistentFlags().BoolVarP(&a.rootVerbose, "verbose", "v", false, "echo structured logs to stderr (equivalent to AGORA_VERBOSE=1); does not change exit codes or JSON envelopes")
+	// --debug is the canonical name for runtime log echo (industry
+	// convention; matches gh, vercel, stripe, supabase). v0.2.0
+	// dropped the legacy --verbose / -v alias and AGORA_VERBOSE env
+	// var; persisted configs containing "verbose" are auto-migrated
+	// to "debug" on first load.
+	root.PersistentFlags().BoolVar(&a.rootDebug, "debug", false, "echo structured logs to stderr (equivalent to AGORA_DEBUG=1); does not change exit codes or JSON envelopes")
 	root.PersistentFlags().BoolVarP(&a.rootYes, "yes", "y", false, "assume the default answer to confirmation prompts (equivalent to AGORA_NO_INPUT=1); never starts new interactive flows in JSON/CI/non-TTY contexts")
 	root.PersistentFlags().Bool("all", false, "show the full command tree in help output")
 	root.PersistentFlags().BoolVar(&a.rootUpgradeCheck, "upgrade-check", false, "print non-interactive upgrade guidance and exit")
@@ -94,8 +107,16 @@ Use "agora --help --all --json" for a machine-readable command tree (agent tooli
 	root.AddCommand(a.buildUpgradeCommand())
 	root.AddCommand(a.buildOpenCommand())
 	root.AddCommand(a.buildMCPCommand())
-	// Keep "add" unregistered until it has a real implementation. Calls to
-	// `agora add` should behave as unknown command for now.
+	root.AddCommand(a.buildDoctorCommand())
+	root.AddCommand(a.buildEnvHelpCommand())
+	root.AddCommand(a.buildSkillsCommand())
+	// `agora add` is intentionally unregistered. Plugin/extension
+	// scaffolding is a deliberate non-goal until we have a concrete
+	// extension API; until then `agora add ...` returns the standard
+	// Cobra "unknown command" error (which now includes a "did you
+	// mean" suggestion thanks to SuggestionsMinimumDistance=2). When
+	// reintroducing this surface, document the contract in AGENTS.md
+	// before wiring a builder here.
 	defaultHelp := root.HelpFunc()
 	root.SetHelpFunc(func(cmd *cobra.Command, args []string) {
 		if showAllHelp(cmd) && a.resolveOutputMode(cmd) == outputJSON {
@@ -164,6 +185,10 @@ func (a *App) buildTelemetryCommand() *cobra.Command {
 	cmd.AddCommand(&cobra.Command{
 		Use:   "status",
 		Short: "Show telemetry status",
+		Example: example(`
+  agora telemetry status
+  agora telemetry status --json
+`),
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return a.renderTelemetry(cmd)
 		},
@@ -171,6 +196,10 @@ func (a *App) buildTelemetryCommand() *cobra.Command {
 	cmd.AddCommand(&cobra.Command{
 		Use:   "enable",
 		Short: "Enable telemetry",
+		Example: example(`
+  agora telemetry enable
+  agora telemetry enable --json
+`),
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return a.setTelemetry(cmd, true)
 		},
@@ -178,6 +207,11 @@ func (a *App) buildTelemetryCommand() *cobra.Command {
 	cmd.AddCommand(&cobra.Command{
 		Use:   "disable",
 		Short: "Disable telemetry",
+		Example: example(`
+  agora telemetry disable
+  agora telemetry disable --json
+  DO_NOT_TRACK=1 agora <any-command>   # one-shot disable via env
+`),
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return a.setTelemetry(cmd, false)
 		},
@@ -222,7 +256,7 @@ func (a *App) buildUpgradeCommand() *cobra.Command {
 	var check bool
 	cmd := &cobra.Command{
 		Use:     "upgrade",
-		Aliases: []string{"update"},
+		Aliases: []string{"update", "self-update"},
 		Short:   "Upgrade Agora CLI in place when installer-managed; otherwise print upgrade guidance",
 		Long: `Upgrade Agora CLI to the latest release.
 
@@ -235,6 +269,7 @@ Use --check to resolve the latest version and report what would happen without w
   agora upgrade
   agora upgrade --check --json
   agora update --json
+  agora self-update --check
 `),
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			data, err := a.performSelfUpdate(check)
@@ -452,7 +487,7 @@ func (a *App) buildConfigCommand() *cobra.Command {
 	})
 	var cfg appConfig
 	cfg = a.cfg
-	var telemetryEnabled, browserAutoOpen, verbose bool
+	var telemetryEnabled, browserAutoOpen, debug bool
 	update := &cobra.Command{
 		Use:   "update",
 		Short: "Update persisted CLI defaults",
@@ -461,6 +496,7 @@ func (a *App) buildConfigCommand() *cobra.Command {
   agora config update --output json
   agora config update --browser-auto-open=false
   agora config update --api-base-url https://agora-cli.agora.io
+  agora config update --debug=true
 `),
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			next := a.cfg
@@ -485,8 +521,8 @@ func (a *App) buildConfigCommand() *cobra.Command {
 			if cmd.Flags().Changed("log-level") {
 				next.LogLevel = cfg.LogLevel
 			}
-			if cmd.Flags().Changed("verbose") {
-				next.Verbose = verbose
+			if cmd.Flags().Changed("debug") {
+				next.Debug = debug
 			}
 			if cmd.Flags().Changed("output") {
 				next.Output = cfg.Output
@@ -510,7 +546,7 @@ func (a *App) buildConfigCommand() *cobra.Command {
 	update.Flags().BoolVar(&telemetryEnabled, "telemetry-enabled", false, "persist telemetry preference; use --telemetry-enabled=false to disable")
 	update.Flags().BoolVar(&browserAutoOpen, "browser-auto-open", false, "persist browser auto-open preference; use --browser-auto-open=false to disable")
 	update.Flags().StringVar(&cfg.LogLevel, "log-level", cfg.LogLevel, "persist default log level")
-	update.Flags().BoolVar(&verbose, "verbose", false, "persist verbose logging preference; use --verbose=false to disable")
+	update.Flags().BoolVar(&debug, "debug", false, "persist the --debug preference (echo structured logs to stderr); use --debug=false to disable")
 	update.Flags().Var(newOutputModeValue((*string)(&cfg.Output)), "output", "persist default output mode (pretty or json)")
 	cmd.AddCommand(update)
 	return cmd
@@ -697,14 +733,23 @@ func (a *App) buildProjectEnv() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "env",
 		Short: "Export project environment variables",
-		Long: `Render environment variables for a project in dotenv, shell, or JSON form.
+		Long: `Render environment variables for a project in dotenv, shell, or JSON envelope form.
 
-Use "project env write" when you want to persist the values into a managed dotenv file.`,
+This is the one command whose default (non-JSON) output is raw stdout — without the unified JSON envelope — so it can be used with shell substitution: ` + "`source <(agora project env --shell)`" + `. Use --format to be explicit:
+
+  --format dotenv     KEY=value lines (default; ready for ` + "`>> .env`" + `)
+  --format shell      shell export statements (ready for ` + "`source <(...)`" + `)
+  --format envelope   unified JSON envelope (alias of --json)
+  --format json       same as --format envelope
+
+For automation, prefer --json (or --format envelope) so the result has the same shape as every other command. Use "project env write" when you want to persist the values into a managed dotenv file on disk.`,
 		Example: example(`
   agora project env
   agora project env --shell
+  agora project env --format envelope
   agora project env --with-secrets --json
   agora project env --project my-agent-demo
+  source <(agora project env --format shell)
 `),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) > 0 {
@@ -737,7 +782,7 @@ Use "project env write" when you want to persist the values into a managed doten
 		},
 	}
 	cmd.Flags().StringVar(&a.projectEnvProject, "project", "", "project ID or exact project name; defaults to the current project context")
-	cmd.Flags().StringVar(&a.projectEnvFormat, "format", "", "output format: dotenv or shell; use --json for JSON output")
+	cmd.Flags().StringVar(&a.projectEnvFormat, "format", "", "output format: dotenv | shell | envelope | json (default dotenv; envelope/json emit the unified JSON envelope)")
 	cmd.Flags().BoolVar(&a.projectEnvShell, "shell", false, "render shell export statements instead of dotenv lines")
 	cmd.Flags().BoolVar(&a.projectEnvSecrets, "with-secrets", false, "include sensitive values such as the app certificate")
 	write := &cobra.Command{
