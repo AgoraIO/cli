@@ -6,7 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 When tagging a new release, rename the `[Unreleased]` section to the new version
-(e.g. `[0.1.10] - 2026-04-30`), add a fresh empty `[Unreleased]` heading at the top,
+(e.g. `[0.2.0] - 2026-04-30`), add a fresh empty `[Unreleased]` heading at the top,
 and update the link references at the bottom of this file.
 
 When adding a new entry, link the change to the PR or commit that introduced it
@@ -15,16 +15,20 @@ Earlier entries pre-date this convention and only carry their version's compare 
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-04-30
+
 ### Added
 
-- Add GitHub Pages publishing for generated CLI docs and route `agora open --target docs` to the CLI docs site, with `product-docs` available for Agora product docs.
+- Add GitHub Pages publishing for generated CLI docs and route `agora open --target docs` to the human CLI docs site, `agora open --target docs-md` to the agent-facing raw Markdown docs under `/md/`, and `product-docs` to Agora product docs.
 - Add global `--yes` / `-y` and `AGORA_NO_INPUT=1` support to accept defaults and suppress prompts.
 - Add pretty-mode progress status lines for long-running clone, OAuth, and project creation work.
-- Add dynamic shell completions for project names, quickstart templates, and project features.
-- Add `agora mcp serve --transport stdio` so MCP-capable agents can use local Agora CLI tools.
-- Add drop-in agent rule snippets under `docs/agents/` and `agora init --add-agent-rules`.
+- Add dynamic shell completions for project names, quickstart templates, and project features, with an on-disk completion cache under `<AGORA_HOME>/cache/projects.json` so `agora project use <TAB>` is instant on warm caches. Configurable via `AGORA_PROJECT_CACHE_TTL_SECONDS` and disable-able via `AGORA_DISABLE_CACHE=1`.
+- Add `agora mcp serve --transport stdio` so MCP-capable agents can use local Agora CLI tools, exposing the full surface (`agora.version`, `agora.introspect`, `agora.auth.*`, `agora.config.*`, `agora.telemetry.status`, `agora.upgrade.check`, `agora.project.*` including `create`/`env`/`feature.{list,status,enable}`, `agora.quickstart.*`, and `agora.init`).
+- Add drop-in agent rule snippets under `docs/agents/` and `agora init --add-agent-rules` with safe append-when-exists semantics: subsequent runs update only the Agora-managed block between sentinel markers and never destroy pre-existing user content.
 - Add `install.sh --uninstall` and `install.ps1 -Uninstall`.
 - Add CODEOWNERS, Dependabot, and a scheduled `govulncheck` workflow.
+- Add `PROJECT_NAME_REQUIRED` error code for `project create` and the equivalent MCP tool.
+- Add `agora project list --refresh-cache` to explicitly refresh the unfiltered first page used by project-name shell completion.
 - Infer coarse agent labels for API `User-Agent` when `AGORA_AGENT` is unset; explicit `AGORA_AGENT` still takes precedence.
 
 ### Changed
@@ -32,20 +36,28 @@ Earlier entries pre-date this convention and only carry their version's compare 
 - Switch npm platform package wiring from scoped `@agoraio/cli-*` packages to unscoped `agoraio-cli-*` packages.
 - Standardize README command examples on the installed `agora` command.
 - Standardize contributor contact email on `devrel@agora.io`.
-
-### Fixed
-
-- Fix bug report template references to use `agora project doctor --json`.
-- Return structured `INIT_NAME_REQUIRED`, `AUTH_OAUTH_EXCHANGE_FAILED`, and `AUTH_OAUTH_RESPONSE_INVALID` errors for previously unclassified paths.
-
-## [0.1.10] - 2026-04-30
-
-### Changed
-
+- Consolidate the `rtc` / `rtm` / `convoai` feature list into a single source of truth (`internal/cli/features.go`); `init`, `project create`, `project doctor`, `project feature {list,status,enable}`, MCP tools, shell completion, and `--help` text all read from the same catalog so future feature additions only need one entry.
 - Default newly created projects to enable `rtc`, `rtm`, and `convoai`, make `convoai` imply `rtm` during project creation, and add `--rtm-data-center` for `init` / `project create` when RTM should be configured for a specific data center.
 - Refine `agora init` project selection so `--project` binds explicitly, `--new-project` creates explicitly, `"Default Project"` auto-selects by exact name, and interactive sessions without a default show existing projects plus a create-new option.
 - `agora project env write` detects Next.js workspaces and writes `NEXT_PUBLIC_AGORA_APP_ID` / `NEXT_AGORA_APP_CERTIFICATE`, with `--template nextjs|standard` to override auto-detection.
 - `project env write` now creates or updates repo-local `.agora/project.json` for the selected project, recording `projectType` (framework/language detection such as `nextjs`, `go`, `python`, `node`, `standard`) and `envPath`, while quickstart-bound repos continue using a single `template` field for template lineage.
+- Build and release metadata now target Go 1.26.2, matching the current stable Go toolchain for distributed CLI builds.
+
+### Fixed
+
+- Fix `--yes` / `-y` / `AGORA_NO_INPUT=1` so it never silently launches an OAuth browser flow in JSON, CI, or non-TTY contexts. Industry convention for `-y` is "accept the default for confirmation prompts", not "spawn a brand-new interactive flow"; those contexts now consistently fail fast with `AUTH_UNAUTHENTICATED`.
+- Fix the MCP server's stdio scanner to allow JSON-RPC frames up to 4 MiB (was 64 KiB) so large `tools/call` payloads no longer truncate the loop.
+- Fix the MCP `agora.init` tool to never read from `os.Stdin` (the JSON-RPC transport stream) or write to `os.Stderr`; `initProject` is now invoked with an empty in-memory reader and a discarded prompt writer.
+- Fix the MCP server's notification handling to match JSON-RPC 2.0: any frame without an `id` is treated as a notification and produces no response (previously notifications without the `notifications/` method prefix received an `id: null` reply).
+- Fix `printBlock` value-column truncation, which used to silently no-op because `COLUMNS` is a shell-internal variable and is rarely exported to child processes. The CLI now consults `COLUMNS` first (so users and tests can override) and falls back to `golang.org/x/term.GetSize` against stderr / stdout, with a "no terminal detected → don't truncate" safe default for log scrapers and CI build logs.
+- Fix `agora open --target docs` URL resolution to be configurable: each target now reads from `AGORA_CONSOLE_URL` / `AGORA_DOCS_URL` / `AGORA_PRODUCT_DOCS_URL` (when set), falling back to the compiled-in canonical URLs. A new smoke test asserts every compiled-in URL parses, uses HTTPS, and has a host, and that `cliDocsURL` and `.github/workflows/pages.yml` stay in sync.
+- Fix project-name shell completion so the on-disk cache is ignored when the local session is missing, empty, or locally expired.
+- Fix bug report template references to use `agora project doctor --json`.
+- Return structured `INIT_NAME_REQUIRED`, `AUTH_OAUTH_EXCHANGE_FAILED`, and `AUTH_OAUTH_RESPONSE_INVALID` errors for previously unclassified paths.
+
+### Documentation
+
+- Document the MCP transport caveat that `agora init`, `agora quickstart create`, `agora project create`, and `agora login` collapse their NDJSON progress event stream into the final `tools/call` result over MCP, since stdout is the JSON-RPC transport.
 
 ## [0.1.9] - 2026-04-30
 
@@ -151,8 +163,8 @@ Earlier entries pre-date this convention and only carry their version's compare 
 - Support machine-readable JSON output for automation and agent workflows.
 - Ship automated release packaging through GoReleaser, including cross-platform archives, Linux packages, Homebrew, Scoop, npm wrapper packages, Docker images, and install scripts.
 
-[Unreleased]: https://github.com/AgoraIO/cli/compare/v0.1.10...HEAD
-[0.1.10]: https://github.com/AgoraIO/cli/compare/v0.1.9...v0.1.10
+[Unreleased]: https://github.com/AgoraIO/cli/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/AgoraIO/cli/compare/v0.1.9...v0.2.0
 [0.1.9]: https://github.com/AgoraIO/cli/compare/v0.1.8...v0.1.9
 [0.1.8]: https://github.com/AgoraIO/cli/compare/v0.1.7...v0.1.8
 [0.1.7]: https://github.com/AgoraIO/cli/compare/v0.1.6...v0.1.7

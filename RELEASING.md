@@ -5,8 +5,8 @@ Releases are fully automated via GoReleaser. Pushing a `v*` tag is the only manu
 ## Release
 
 ```bash
-git tag v0.1.10
-git push origin v0.1.10
+git tag v0.2.0
+git push origin v0.2.0
 ```
 
 The release workflow (`.github/workflows/release.yml`) then:

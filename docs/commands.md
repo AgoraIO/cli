@@ -1,6 +1,6 @@
 # Agora CLI — Command Reference
 
-> Generated from `agora introspect --json` on 2026-04-30. Do not edit by hand — run `make docs-commands` or rely on the release workflow to regenerate.
+> Generated from `agora introspect --json` on 2026-05-01. Do not edit by hand — run `make docs-commands` or rely on the release workflow to regenerate.
 
 This page lists every enumerable command and its local flags. For long descriptions, examples, and inherited flags, run `agora <command> --help` or read the source in `internal/cli/`.
 
@@ -15,7 +15,7 @@ This page lists every enumerable command and its local flags. For long descripti
 | `--quiet` | `bool` | — | suppress success output (both pretty and JSON envelopes); rely on exit code. Errors still print on stderr. |
 | `--upgrade-check` | `bool` | — | print non-interactive upgrade guidance and exit |
 | `--verbose` | `bool` | — | echo structured logs to stderr (equivalent to AGORA_VERBOSE=1); does not change exit codes or JSON envelopes |
-| `--yes` | `bool` | — | accept default answers and suppress interactive prompts (equivalent to AGORA_NO_INPUT=1) |
+| `--yes` | `bool` | — | assume the default answer to confirmation prompts (equivalent to AGORA_NO_INPUT=1); never starts new interactive flows in JSON/CI/non-TTY contexts |
 
 ## Pseudo Commands
 
@@ -96,7 +96,7 @@ Create a project, clone a quickstart, and write env in one flow
 |------|------|---------|-------------|
 | `--add-agent-rules` | `stringArray` | `[]` | write AI agent rules into the quickstart (repeatable: cursor, claude, windsurf) |
 | `--dir` | `string` | — | target directory for the cloned quickstart; defaults to <name> |
-| `--feature` | `stringArray` | `[]` | enable a feature on the newly created project (repeatable); defaults to rtc, rtm, and convoai; convoai also enables rtm |
+| `--feature` | `stringArray` | `[]` | enable a feature on the newly created project (repeatable); defaults to rtc, rtm, convoai; convoai also enables rtm |
 | `--new-project` | `bool` | — | always create a new Agora project instead of reusing an existing one |
 | `--project` | `string` | — | existing project ID or exact project name to bind to |
 | `--region` | `string` | — | control plane region for newly created projects (global or cn) |
@@ -145,7 +145,7 @@ Open Agora Console or CLI docs
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
 | `--no-browser` | `bool` | — | print the URL without opening a browser |
-| `--target` | `string` | `console` | target to open: console, docs, or product-docs |
+| `--target` | `string` | `console` | target to open: console, docs, docs-md, or product-docs |
 
 ### `agora project`
 
@@ -160,7 +160,7 @@ Create a new remote Agora project
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
 | `--dry-run` | `bool` | — | return the planned project create result without creating remote resources |
-| `--feature` | `stringArray` | `[]` | enable one or more features after creation; defaults to rtc, rtm, and convoai; convoai also enables rtm |
+| `--feature` | `stringArray` | `[]` | enable one or more features after creation; defaults to rtc, rtm, convoai; convoai also enables rtm |
 | `--idempotency-key` | `string` | — | caller-provided key for safe retries when supported by the API |
 | `--region` | `string` | — | control plane region for the project context (global or cn) |
 | `--rtm-data-center` | `string` | — | RTM data center to configure when rtm is enabled (CN, NA, EU, or AP); defaults to NA |
@@ -173,7 +173,7 @@ Diagnose whether a project is ready for selected feature development
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
 | `--deep` | `bool` | — | run deeper repo-local checks for .agora metadata and quickstart env consistency |
-| `--feature` | `string` | `convoai` | target feature readiness to evaluate: rtc, rtm, or convoai |
+| `--feature` | `string` | `convoai` | target feature readiness to evaluate: rtc, rtm, convoai |
 
 ### `agora project env`
 
@@ -229,6 +229,7 @@ List projects available to the current account
 | `--keyword` | `string` | — | filter by exact or partial project name or project ID |
 | `--page` | `int` | `1` | page number to request |
 | `--page-size` | `int` | `20` | number of projects per page |
+| `--refresh-cache` | `bool` | — | force-refresh the unfiltered first-page project completion cache after listing |
 
 ### `agora project show`
 

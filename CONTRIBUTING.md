@@ -8,7 +8,7 @@ detailed guidance, and what we expect from contributions.
 
 This project adheres to the [Contributor Covenant](CODE_OF_CONDUCT.md). By
 participating, you agree to uphold its standards. Please report unacceptable
-behavior to <devex@agora.io>.
+behavior to <devrel@agora.io>.
 
 ## Where to read first
 
@@ -36,7 +36,7 @@ For end-user behavior and machine-readable contracts, see:
 
 Requirements:
 
-- **Go** 1.24+ (see `go.mod`).
+- **Go** 1.26.2+ (see `go.mod`). Release builds intentionally track the current stable Go toolchain; this distributed CLI does not target older Go compiler support.
 - **Git**.
 - (Optional) `golangci-lint` v1.64.8 — install matches CI; instructions in
   the next section.

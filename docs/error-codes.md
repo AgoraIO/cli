@@ -37,6 +37,7 @@ This catalog is the source of truth for stable codes. CI runs `make snapshot-err
 | `QUICKSTART_TARGET_EXISTS` | 1 | The clone target already exists. | Choose a new directory. |
 | `INIT_NAME_REQUIRED` | 1 | `agora init` was run without the required target directory name. | Pass a directory name, for example `agora init my-nextjs-demo --template nextjs`. |
 | `INIT_ABORTED` | 1 | The interactive `agora init` reuse prompt was answered "no". | Re-run with `--project <id>`, `--new-project`, or accept the prompt. |
+| `PROJECT_NAME_REQUIRED` | 1 | `agora project create` (or the equivalent MCP tool) was called without `name`. | Pass a project name, for example `agora project create my-app`. |
 
 ### Self-update (`agora upgrade`)
 

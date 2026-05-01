@@ -16,7 +16,7 @@ agora --help
 Install a pinned version:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/AgoraIO/cli/main/install.sh | sh -s -- --version 0.1.10 --add-to-path
+curl -fsSL https://raw.githubusercontent.com/AgoraIO/cli/main/install.sh | sh -s -- --version 0.2.0 --add-to-path
 agora --help
 ```
 
@@ -50,7 +50,7 @@ agora --help
 Install a pinned version and add the default install directory to your user PATH:
 
 ```powershell
-$env:VERSION = "0.1.10"
+$env:VERSION = "0.2.0"
 & ([scriptblock]::Create((irm https://raw.githubusercontent.com/AgoraIO/cli/main/install.ps1))) -AddToPath
 agora --help
 ```
@@ -103,7 +103,7 @@ Uninstall removes the binary and `agora.install.json` receipt from the install d
 Both direct installers support these core overrides:
 
 - `GITHUB_REPO`: install from a fork or alternate repository.
-- `VERSION`: install a specific version. Both `0.1.10` and `v0.1.10` are accepted.
+- `VERSION`: install a specific version. Both `0.2.0` and `v0.2.0` are accepted.
 - `INSTALL_DIR`: install to a custom directory.
 - `GITHUB_TOKEN` or `GH_TOKEN`: optional GitHub token to avoid API rate limits when resolving the latest release.
 
@@ -202,7 +202,7 @@ agora --help
 npx agoraio-cli --help
 
 # Pin a specific version
-npm install -g agoraio-cli@0.1.10
+npm install -g agoraio-cli@0.2.0
 
 # Update to the latest published version
 npm update -g agoraio-cli
@@ -230,12 +230,12 @@ For one-off shell sessions, source the generated script according to your shell'
 If latest-version resolution fails, retry with a pinned version or provide `GITHUB_TOKEN` / `GH_TOKEN`:
 
 ```bash
-GITHUB_TOKEN=your-token-here VERSION=0.1.10 sh install.sh
+GITHUB_TOKEN=your-token-here VERSION=0.2.0 sh install.sh
 ```
 
 ```powershell
 $env:GITHUB_TOKEN = "your-token-here"
-$env:VERSION = "0.1.10"
+$env:VERSION = "0.2.0"
 & ([scriptblock]::Create((irm https://raw.githubusercontent.com/AgoraIO/cli/main/install.ps1)))
 ```
 
@@ -281,7 +281,7 @@ For CI, automation, and reproducible environments, pin `VERSION` explicitly inst
 Every release is signed with [Cosign](https://docs.sigstore.dev/cosign/overview/) using GitHub Actions OIDC (keyless mode) and ships an [SPDX 2.3](https://spdx.dev/) SBOM per archive and per Linux package. To verify the `checksums.txt` file before trusting any artifact:
 
 ```bash
-TAG=v0.1.10
+TAG=v0.2.0
 ASSET_BASE="https://github.com/AgoraIO/cli/releases/download/${TAG}"
 curl -fsSLO "${ASSET_BASE}/checksums.txt"
 curl -fsSLO "${ASSET_BASE}/checksums.txt.sig"
@@ -305,8 +305,8 @@ cosign verify "ghcr.io/agoraio/agora-cli:${TAG#v}" \
   --certificate-oidc-issuer 'https://token.actions.githubusercontent.com'
 ```
 
-To audit dependencies, download the `*.spdx.json` SBOM that ships next to each archive (e.g. `agora-cli-go_v0.1.10_linux_amd64.tar.gz.spdx.json`) and feed it to a scanner such as [Grype](https://github.com/anchore/grype):
+To audit dependencies, download the `*.spdx.json` SBOM that ships next to each archive (e.g. `agora-cli-go_v0.2.0_linux_amd64.tar.gz.spdx.json`) and feed it to a scanner such as [Grype](https://github.com/anchore/grype):
 
 ```bash
-grype sbom:agora-cli-go_v0.1.10_linux_amd64.tar.gz.spdx.json
+grype sbom:agora-cli-go_v0.2.0_linux_amd64.tar.gz.spdx.json
 ```

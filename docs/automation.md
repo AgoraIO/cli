@@ -37,7 +37,9 @@ Use this guide for:
 - Interactive login prompts only appear in interactive pretty-mode TTY runs. Automation should authenticate up front with `agora login`; `--json`, `AGORA_OUTPUT=json`, detected CI environments, and non-TTY stdin all skip the prompt and fail with `AUTH_UNAUTHENTICATED`.
 - Output mode precedence is: explicit CLI flag (`--json` or `--output`) first, user-set `AGORA_OUTPUT` second, then user-customized config file value, then **CI auto-detect → JSON** (see below), then pretty.
 - Set `AGORA_AGENT=<tool-name>` in automated environments to explicitly label agent traffic in the API `User-Agent`. When unset, the CLI may infer a coarse label such as `cursor`, `claude-code`, `cline`, `windsurf`, `codex`, or `aider` from known agent environment markers. Set `AGORA_AGENT_DISABLE_INFER=1` to disable inference.
-- Use `agora mcp serve --transport stdio` to expose local Agora CLI tools to MCP-capable agents.
+- Use `agora mcp serve --transport stdio` to expose local Agora CLI tools to MCP-capable agents. The full surface is exposed: `agora.version`, `agora.introspect`, `agora.auth.{status,logout}`, `agora.config.{path,get}`, `agora.telemetry.status`, `agora.upgrade.check`, `agora.project.{list,show,use,create,doctor,env,env_write}`, `agora.project.feature.{list,status,enable}`, `agora.quickstart.{list,create,env_write}`, and `agora.init`. Authentication is intentionally **not** exposed via MCP because OAuth requires an interactive browser; run `agora login` once on the host first.
+- Use `agora open --target docs` for the human GitHub Pages docs and `agora open --target docs-md` for the agent-facing raw Markdown index. The Markdown tree is published under predictable `/md/` URLs, for example `/md/commands.md`, `/md/automation.md`, and `/md/error-codes.md`.
+- The CLI maintains a short-lived on-disk completion cache for `agora project use <TAB>` under `<AGORA_HOME>/cache/projects.json`. The cache is only used for completions when a **local unexpired session exists** (`session.json` with a non-empty access token and a future `expiresAt`, when present), so Tab does not suggest stale project names after logout or local session expiry. The cache TTL is 5 minutes by default; override with `AGORA_PROJECT_CACHE_TTL_SECONDS=<seconds>` (set to `0` to disable). Cache files older than 24 h are pruned at every CLI startup. Set `AGORA_DISABLE_CACHE=1` to drop the cache on the next startup. The cache is invalidated automatically by `agora logout` and `agora project create` (the latter clears the file; it does not embed the new project until the next successful list fetch). To **force-refresh** the cached completion page, run `agora project list --refresh-cache` while authenticated; that command fetches the unfiltered first page used by completion and rewrites `projects.json` when it succeeds.
 
 ### CI auto-detect
 
@@ -187,6 +189,20 @@ Additional stage-specific fields may appear (for example `repoUrl`, `projectId`,
 6. Process exit code is also reported in `meta.exitCode` of the terminal envelope; treat the OS exit code as the source of truth.
 
 Stages are stable identifiers; new stages may be added over time. Agents should treat unknown stages as benign progress information rather than failing on them.
+
+### MCP transport caveat: progress events collapse into the tool result
+
+When the same long-running commands (`agora init`, `agora quickstart create`, `agora project create`, `agora login`) are invoked **through the MCP server** (`agora mcp serve`), the NDJSON progress event stream is **not** surfaced to the MCP client. MCP clients receive the final result payload only — JSON-stringified into the standard `content[0].text` slot of the `tools/call` response.
+
+Why: MCP's stdio transport uses stdout for JSON-RPC framing, so any extra newline-delimited objects emitted before the final response would corrupt the transport. The progress events are still produced internally but are intentionally swallowed before they reach the client.
+
+Implications for agent authors:
+
+- Do not rely on `stage`-based hooks (e.g. progress UIs, mid-flight cancellation prompts) when calling these tools over MCP. Use them only when shelling out to `agora ... --json` directly.
+- Plan for higher tail latency on MCP `tools/call` for the affected tools; the user-visible "nothing is happening" gap may be tens of seconds for git clones or project creation. Consider surfacing your own "running tool: agora.init…" UI in the host agent.
+- The terminal payload shape returned in `content[0].text` is identical to the CLI's terminal `data` envelope, so existing JSON-shape handlers continue to work unchanged.
+
+When future MCP transports support server-initiated `notifications/progress` (an open spec area), the CLI can add native MCP progress forwarding without changing the existing tool result shape.
 
 Failure example:
 
@@ -719,6 +735,7 @@ Example:
 ```bash
 ./agora project list --json
 ./agora project list --keyword demo --page 2 --json
+./agora project list --refresh-cache --json
 ```
 
 Required `data` fields:
@@ -730,6 +747,8 @@ Required `data` fields:
   Number of items per page.
 - `total`
   Total number of matching projects across all pages.
+- `cacheRefreshed`
+  Boolean. `true` only when `--refresh-cache` successfully refreshed the unfiltered first-page project completion cache.
 
 Each item includes: `projectId`, `name`, `appId`, `projectType`, `status`, `region`, `createdAt`, `updatedAt`.
 
