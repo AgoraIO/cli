@@ -12,7 +12,7 @@ import (
 	"testing"
 )
 
-func TestCLIProjectAndEnvAndDoctorParity(t *testing.T) {
+func TestCLIProjectEnvAndDoctor(t *testing.T) {
 	configHome := t.TempDir()
 	projectDir := t.TempDir()
 	api := newFakeCLIBFF()

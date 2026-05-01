@@ -883,7 +883,7 @@ func TestAPIRequestReturnsStructuredErrors(t *testing.T) {
 	}
 }
 
-func TestPathsLogsAndArtifactsParity(t *testing.T) {
+func TestPathsLogsAndArtifacts(t *testing.T) {
 	dir := t.TempDir()
 	env := map[string]string{"XDG_CONFIG_HOME": dir}
 	agoraDir, err := resolveAgoraDirectory(env)

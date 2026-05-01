@@ -45,13 +45,12 @@ type telemetryClient interface {
 
 // agoraSentryDSN is the Sentry project DSN that the CLI ships with.
 // Empty string disables Sentry transport entirely (the default until the
-// Sentry SDK is wired in for the next release). Mirrors the value in
-// agora-cli-ts apps/agora-cli/src/telemetry.ts so the two surfaces report
-// to the same project once enabled.
+// Sentry SDK is wired in for the next release). When set, events go to the
+// Agora CLI Sentry project (see docs/proposals/telemetry-sentry-wireup.md).
 const agoraSentryDSN = ""
 
 // initTelemetry returns the telemetry client appropriate for the current
-// runtime. The decision tree mirrors the TS predecessor for parity:
+// runtime. Decision order:
 //
 //  1. DO_NOT_TRACK is set → noop (Console-style hard opt-out).
 //  2. config.telemetryEnabled is false → noop.
@@ -142,10 +141,9 @@ func (c *sentryClient) Flush(_ time.Duration) bool {
 	return true
 }
 
-// telemetrySensitiveFieldPattern is shared with sanitizeFields and
-// matches the TS implementation in agora-cli-ts. Any field whose key
-// matches this pattern is replaced with the literal "[REDACTED]" before
-// it leaves the process.
+// telemetrySensitiveFieldPattern is shared with sanitizeFields. Any field
+// whose key matches this pattern is replaced with the literal "[REDACTED]"
+// before it leaves the process.
 var telemetrySensitiveFieldPattern = regexp.MustCompile(`(?i)token|secret|password|api[_-]?key|authorization`)
 
 // redactTelemetryFields returns a copy of fields with any sensitive key

@@ -9,16 +9,12 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// skill is the curated, in-binary catalog entry. It mirrors the
-// `SkillManifest` shape from `agora-cli-ts/packages/cli-contracts/src/index.ts`
-// so a future port to dynamic, fetched skills can keep the same field
-// names.
+// skill is the curated, in-binary catalog entry. Field names are stable so
+// future dynamic or fetched skills can use the same JSON shape.
 //
 // Today the catalog is read-only and lives in Go code (no remote fetch,
 // no file load). That keeps the surface trivially testable and avoids
-// any "where did this skill come from" supply-chain question. The
-// future direction (port from agora-cli-ts) is documented in
-// docs/proposals/skills-platform.md.
+// any "where did this skill come from" supply-chain question.
 type skill struct {
 	ID          string   `json:"id"`
 	Title       string   `json:"title"`
@@ -140,9 +136,9 @@ func skillsCatalog() []skill {
 }
 
 // buildSkillsCommand registers `agora skills`. It is intentionally
-// read-only in this release: list, show, search. Future releases will
-// add `skills run`, `skills install`, and `skills eval` per the
-// upstream design in agora-cli-ts.
+// read-only in this release: list, show, search. Future releases may
+// add `skills run`, `skills install`, and `skills eval` while keeping
+// the same JSON shapes documented in docs/automation.md.
 func (a *App) buildSkillsCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "skills",

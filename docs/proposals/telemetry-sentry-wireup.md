@@ -18,28 +18,26 @@ target-release: next
 
 ## Context
 
-The TS predecessor (`agora-cli-ts`) ships Sentry. Concretely:
+Operational error reporting should eventually reach Sentry using the same
+project DSN used across Agora CLI distributions:
 
-- `agora-cli-ts/packages/cli-telemetry/package.json` depends on
-  `@sentry/node ^10.18.0`.
-- `agora-cli-ts/apps/agora-cli/src/telemetry.ts` initializes Sentry
-  with the project DSN
-  `https://07bf9b5275eef5259abebe89fa247cec@o4510955723292672.ingest.us.sentry.io/4511189164687360`,
-  reads the `AGORA_SENTRY_ENABLED` env var, redacts sensitive fields,
-  and skips `command.failed` to avoid double reporting.
-- The Go CLI mirrors the on/off contract in
+- Target DSN:
+  `https://07bf9b5275eef5259abebe89fa247cec@o4510955723292672.ingest.us.sentry.io/4511189164687360`
+  (embed in the Go binary when wiring the SDK; see Step 2).
+- Reads `AGORA_SENTRY_ENABLED`, redacts sensitive keys before transport,
+  and avoids duplicate failure reporting where applicable.
+- The Go CLI already mirrors the on/off contract in
   [`internal/cli/config.go`](../../internal/cli/config.go) (the
   `applyConfigToEnv` map sets `AGORA_SENTRY_ENABLED` from
-  `cfg.TelemetryEnabled`) but had no actual transport. The new
-  `telemetry.go` adds a `telemetryClient` interface and a noop
-  default; callsites in `app.go` already invoke `CaptureException` on
-  error.
+  `cfg.TelemetryEnabled`) but has no live transport until this proposal
+  lands. [`internal/cli/telemetry.go`](../../internal/cli/telemetry.go)
+  defines a `telemetryClient` interface and a noop default; call sites in
+  `app.go` already invoke `CaptureException` on error.
 
 ## Goals
 
-1. The Go CLI reports the same operational diagnostics to the same
-   Sentry project the TS CLI reports to, so the migration does not lose
-   error visibility.
+1. The Go CLI reports operational diagnostics to the configured Sentry
+   project so operators retain error visibility end to end.
 2. The contract surface (`agora telemetry`, env vars, log fields) does
    not change. Existing wrappers and CI configs keep working.
 3. Field redaction is enforced inside the sink (defense in depth) in
@@ -136,7 +134,7 @@ already expects.
 ### Step 4: Document fields
 
 Update [`docs/telemetry.md`](../telemetry.md) with the **exact**
-field schema we send. Suggested initial event vocabulary (mirrors TS):
+field schema we send. Suggested initial event vocabulary:
 
 | Field           | Type   | Example                          | Notes |
 |----------------|--------|----------------------------------|-------|
@@ -164,8 +162,7 @@ not in CI, and not in JSON mode:
 > [Y/n]"
 
 The default is "yes" to match the current `cfg.TelemetryEnabled: true`
-default and the TS predecessor. Persist the answer to config so the
-prompt never re-appears.
+default. Persist the answer to config so the prompt never re-appears.
 
 ### Step 6: Add tests
 
@@ -191,20 +188,20 @@ Under `[Unreleased] / Added`:
 
 | # | Why |
 |---|-----|
-| 1 | TS already shipped Sentry. Migrating without it would silently regress error visibility for the same user base. |
+| 1 | Shipping without Sentry leaves blind spots for production CLI failures that users cannot easily paste into issues. |
 | 2 | `internal/cli/telemetry.go` already exposes the right interface. Wire-up is one constant + one struct change. |
 | 3 | `BeforeSend` redaction in the sink is a belt-and-braces guarantee: even if a future call site forgets to redact, fields never leave the host. |
 | 4 | A documented one-time consent prompt aligns with the industry direction (Homebrew flipped to opt-in in 2024, npm honors `DO_NOT_TRACK`). We keep opt-out as the default but add explicit acknowledgement. |
 
 ## Risks / open questions
 
-- **DSN exposure.** The TS DSN is already in a public npm package, so
-  embedding the same DSN in the Go binary does not change the threat
-  model. (Sentry DSNs are intentionally public; rate-limiting and
-  project-side filtering are the controls.)
+- **DSN exposure.** The Sentry DSN is embedded in shipped CLI binaries;
+  this matches common practice for Sentry client SDKs. (Sentry DSNs are
+  intended for client inclusion; rate-limiting and project-side filtering
+  are the controls.)
 - **Default opt-in vs opt-out.** Industry is shifting; we should
-  explicitly decide for v1 of the Go CLI rather than inheriting the TS
-  default by accident.
+  explicitly decide for telemetry defaults rather than inheriting them by
+  accident.
 - **Sentry SDK size.** `sentry-go` adds ~3 MB to the static binary.
   Acceptable for a CLI; document in the release notes.
 

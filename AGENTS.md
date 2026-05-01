@@ -2,7 +2,7 @@
 
 ## Repo Purpose
 
-This repository contains Agora CLI, the native CLI for Agora developer onboarding. It ships as a single binary with no runtime dependencies and is the primary distribution going forward. It is feature-parity with (and successor to) the TypeScript CLI `agoraio-cli`.
+This repository contains Agora CLI, the native CLI for Agora developer onboarding. It ships as a single binary with no runtime dependencies and is the primary distribution. The same binary is also published via npm as `agoraio-cli` (a thin shim that runs the native executable).
 
 ## Quick Reference
 
@@ -193,7 +193,7 @@ When adding a command:
 3. Accept `--json` via `a.resolveOutputMode(cmd)`; return results through `renderResult(cmd, "command label", data)`
 4. Add the command to the README command model
 5. Add a stable JSON result shape to `docs/automation.md`
-6. If the command overlaps the legacy TypeScript CLI, verify project resolution, JSON field names, error messages, and exit codes against the legacy behavior before changing the Go contract.
+6. Call out breaking JSON or exit-code changes in `CHANGELOG.md` and migration notes in `docs/automation.md` when behavior is intentional.
 
 ## CI and Release
 
@@ -262,7 +262,3 @@ npx agoraio-cli --help       # or via npx without global install
 ```
 
 The shell installer remains the primary install mechanism. npm is a convenience path for developers already in a Node.js ecosystem and benefits from the supply-chain provenance attestations attached at publish time.
-
-## Parity with agora-cli-ts
-
-When implementing or modifying a command that overlaps the TypeScript CLI, verify JSON field names, project resolution precedence, error messages, and exit codes against the legacy behavior. The Go CLI is the reference going forward, so document intentional divergences in `CHANGELOG.md` and `docs/automation.md`.

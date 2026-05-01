@@ -352,7 +352,3 @@ go build -o agora .
 ```
 
 Requires the Go toolchain pinned in [go.mod](go.mod). For direct installer options and source install notes, see [docs/install.md](docs/install.md).
-
-## Migration
-
-This project mirrors the `agora-cli-ts` command surface in a native Go binary so the CLI no longer depends on the Node.js runtime.

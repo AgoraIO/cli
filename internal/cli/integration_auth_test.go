@@ -12,7 +12,7 @@ import (
 	"time"
 )
 
-func TestCLILoginAndWhoAmIParity(t *testing.T) {
+func TestCLILoginAndWhoAmI(t *testing.T) {
 	configHome := t.TempDir()
 	oauth := newFakeOAuthServer()
 	defer oauth.server.Close()
@@ -71,7 +71,7 @@ func TestCLILoginAndWhoAmIParity(t *testing.T) {
 	}
 }
 
-func TestCLIAuthStatusExitCodeParity(t *testing.T) {
+func TestCLIAuthStatusExitCode(t *testing.T) {
 	result := runCLI(t, []string{"auth", "status", "--json"}, cliRunOptions{env: map[string]string{
 		"XDG_CONFIG_HOME": t.TempDir(),
 		"AGORA_LOG_LEVEL": "error",
