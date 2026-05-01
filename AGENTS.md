@@ -172,7 +172,13 @@ make lint            # gofmt + golangci-lint + error-code audit
 golangci-lint run    # standalone (config: .golangci.yml)
 ```
 
-CI uses `golangci-lint v1.64.8`. Install locally with:
+CI uses `golangci-lint v1.64.8`, installed via `go install` so the linter is built with the same Go version as `go.mod`. Install locally to match:
+
+```bash
+go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.64.8
+```
+
+Alternatively, download the release binary (must be built with a Go version ≥ `go.mod`; if config load fails, prefer `go install` above):
 
 ```bash
 curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh \

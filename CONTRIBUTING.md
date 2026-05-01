@@ -75,12 +75,13 @@ Documentation work:
 - Run `make docs-commands` after command-tree changes; CI uses `go run ./cmd/gendocs -check`.
 - For GitHub Pages content, use `make docs-preview` (see `scripts/preview-pages-site.sh`). Published docs resolve `@@CLI_DOCS_*@@` tokens via `scripts/prepare-pages-site.py` and `docs/site.env` as documented in `docs/automation.md`.
 
-Install `golangci-lint` (matches the CI version):
+Install `golangci-lint` **v1.64.8** (matches CI). CI builds it with `go install` against your toolchain; locally prefer:
 
 ```bash
-curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh \
-  | sh -s -- -b "$(go env GOPATH)/bin" v1.64.8
+go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.64.8
 ```
+
+Or use the [install script](https://golangci-lint.run/welcome/install/) if the binary supports your `go.mod` Go version.
 
 When changing release packaging, also run a snapshot release:
 
