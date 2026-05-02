@@ -4,7 +4,7 @@ title: Command Reference
 
 # Agora CLI — Command Reference
 
-> Generated from `agora introspect --json` on 2026-05-01. Do not edit by hand — run `make docs-commands` or rely on the release workflow to regenerate.
+> Generated from `agora introspect --json` on 2026-05-02. Do not edit by hand — run `make docs-commands` or rely on the release workflow to regenerate.
 
 This page lists every enumerable command and its local flags. For long descriptions, examples, and inherited flags, run `agora <command> --help` or read the source in `internal/cli/`.
 

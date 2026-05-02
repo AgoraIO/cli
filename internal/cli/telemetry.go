@@ -88,7 +88,7 @@ type versionInformation = map[string]any
 // telemetry is disabled, opted out, or not compiled in.
 type noopTelemetry struct{}
 
-func (noopTelemetry) Enabled() bool                              { return false }
+func (noopTelemetry) Enabled() bool { return false }
 func (noopTelemetry) CaptureException(_ error, fields map[string]any) {
 	// Contract: redact before any sink transports fields; keep call so
 	// redactTelemetryFields stays covered until Sentry wiring lands.
@@ -97,7 +97,7 @@ func (noopTelemetry) CaptureException(_ error, fields map[string]any) {
 func (noopTelemetry) CaptureEvent(_, _ string, fields map[string]any) {
 	_ = redactTelemetryFields(fields)
 }
-func (noopTelemetry) Flush(_ time.Duration) bool                 { return true }
+func (noopTelemetry) Flush(_ time.Duration) bool { return true }
 
 // sentryClient is the placeholder for the Sentry-backed sink. Until the
 // Sentry SDK is wired in, every method is a no-op so the surface and
