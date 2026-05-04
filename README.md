@@ -164,7 +164,7 @@ Opens curated URLs: Console (`--target console`), human CLI docs on GitHub Pages
 
 ### `mcp`
 
-Runs the CLI as an MCP stdio server so MCP-capable clients can call Agora workflows as tools. Authenticate with `agora login` on the host first; OAuth is not exposed through MCP.
+Runs the CLI as a local MCP server so MCP-capable clients can call Agora workflows as tools. Authenticate with `agora login` on the host first; OAuth is not exposed through MCP.
 
 ### `version`
 

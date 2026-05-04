@@ -50,7 +50,7 @@ func (a *App) buildMCPCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "mcp",
 		Short: "Run Agora CLI as a local MCP server",
-		Long: `Expose Agora CLI tools to MCP-capable agents over stdio.
+		Long: `Expose Agora CLI tools to MCP-capable agents.
 
 Use this when an MCP client (Cursor, Claude Code, Windsurf, custom) wants to drive Agora workflows directly. The full Agora command surface is exposed as MCP tools so agents can authenticate, discover, manage projects, scaffold quickstarts, and run readiness checks without shelling out.
 
@@ -59,8 +59,7 @@ Notes for agents:
 - ` + "`agora.auth.login`" + ` is intentionally not exposed because OAuth requires an interactive browser. Run ` + "`agora login`" + ` once on the host before starting the MCP server.
 - All tools return JSON-stringified payloads in the standard MCP ` + "`content[0].text`" + ` slot.`,
 		Example: example(`
-  agora mcp serve --transport stdio
-  agora mcp                              # alias of 'mcp serve --transport stdio'
+  agora mcp serve
 `),
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return cmd.Help()
@@ -72,7 +71,6 @@ Notes for agents:
 		Short: "Serve Agora CLI tools over MCP",
 		Example: example(`
   agora mcp serve
-  agora mcp serve --transport stdio
 `),
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if transport != "stdio" {
@@ -82,6 +80,7 @@ Notes for agents:
 		},
 	}
 	serve.Flags().StringVar(&transport, "transport", "stdio", "MCP transport: stdio")
+	_ = serve.Flags().MarkHidden("transport")
 	cmd.AddCommand(serve)
 	return cmd
 }

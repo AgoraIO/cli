@@ -110,13 +110,13 @@ func skillsCatalog() []skill {
 		{
 			ID:          "wire-mcp-server",
 			Title:       "Expose Agora CLI to an AI agent via MCP",
-			Description: "Add Agora CLI as a Model Context Protocol stdio server so a coding agent can drive it as a tool.",
+			Description: "Add Agora CLI as a local Model Context Protocol server so a coding agent can drive it as a tool.",
 			Category:    "agent",
 			Tags:        []string{"mcp", "cursor", "claude", "windsurf"},
 			Steps: []string{
 				"agora login  # MCP does not expose OAuth; authenticate on the host first",
-				"agora mcp serve --transport stdio  # smoke test that it speaks MCP",
-				"In your IDE settings, add a server that runs 'agora mcp serve --transport stdio'.",
+				"agora mcp serve  # smoke test that it speaks MCP",
+				"In your IDE settings, add a server that runs 'agora mcp serve'.",
 			},
 			DocsURL: "https://agoraio.github.io/cli/md/agents/README.md",
 		},

@@ -30,7 +30,7 @@ internal/cli/
   config.go                 appConfig type, defaults, env injection
   version.go                Build-time version vars, versionInfo, formattedVersion
   introspect.go             agora introspect + buildIntrospectionData (agent discovery contract)
-  mcp.go                    agora mcp serve — JSON-RPC MCP stdio transport + tool dispatch
+  mcp.go                    agora mcp serve — JSON-RPC MCP tool dispatch
   open_targets.go           Canonical URLs for agora open (docs, Console, product docs)
   features.go               Product feature catalog (rtc/rtm/convoai) shared by doctor, introspect, init defaults
   cache.go                  Short-lived on-disk API caches (project list for shell completion)
@@ -78,7 +78,7 @@ agora
 ├── env-help                       Catalog of every AGORA_* env var the CLI honors
 ├── skills                         Curated workflow recipes for humans and AI agents (list / show / search)
 ├── open                           Open Console, CLI docs (human or /md/), or product docs
-├── mcp                            MCP stdio server for agent tool integrations
+├── mcp                            Local MCP server for agent tool integrations
 ├── telemetry                      Telemetry status/enable/disable
 ├── upgrade (alias: update, self-update)  In-place self-update on installer-managed installs; otherwise prints upgrade guidance
 ├── project

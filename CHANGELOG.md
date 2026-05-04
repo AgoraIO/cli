@@ -26,7 +26,7 @@ Earlier entries pre-date this convention and only carry their version's compare 
 - Add global `--yes` / `-y` and `AGORA_NO_INPUT=1` support to accept defaults and suppress prompts.
 - Add pretty-mode progress status lines for long-running clone, OAuth, and project creation work.
 - Add dynamic shell completions for project names, quickstart templates, and project features, with an on-disk completion cache under `<AGORA_HOME>/cache/projects.json` so `agora project use <TAB>` is instant on warm caches. Configurable via `AGORA_PROJECT_CACHE_TTL_SECONDS` and disable-able via `AGORA_DISABLE_CACHE=1`.
-- Add `agora mcp serve --transport stdio` so MCP-capable agents can use local Agora CLI tools, exposing the full surface (`agora.version`, `agora.introspect`, `agora.auth.*`, `agora.config.*`, `agora.telemetry.status`, `agora.upgrade.check`, `agora.project.*` including `create`/`env`/`feature.{list,status,enable}`, `agora.quickstart.*`, and `agora.init`).
+- Add `agora mcp serve` so MCP-capable agents can use local Agora CLI tools, exposing the full surface (`agora.version`, `agora.introspect`, `agora.auth.*`, `agora.config.*`, `agora.telemetry.status`, `agora.upgrade.check`, `agora.project.*` including `create`/`env`/`feature.{list,status,enable}`, `agora.quickstart.*`, and `agora.init`).
 - Add drop-in agent rule snippets under `docs/agents/` and `agora init --add-agent-rules` with safe append-when-exists semantics: subsequent runs update only the Agora-managed block between sentinel markers and never destroy pre-existing user content.
 - Add `install.sh --uninstall` and `install.ps1 -Uninstall`.
 - Add CODEOWNERS, Dependabot, and a scheduled `govulncheck` workflow.

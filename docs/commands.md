@@ -150,9 +150,7 @@ _No local flags. Inherited global flags still apply (see [Global Flags](#global-
 
 Serve Agora CLI tools over MCP
 
-| Flag | Type | Default | Description |
-|------|------|---------|-------------|
-| `--transport` | `string` | `stdio` | MCP transport: stdio |
+_No local flags. Inherited global flags still apply (see [Global Flags](#global-flags))._
 
 ### `agora open`
 
