@@ -48,6 +48,9 @@ jobs:
           source: ./docs
           destination: ./_site
 
+      - name: Normalize Pages artifact permissions
+        run: sudo chown -R "$(id -u):$(id -g)" _site
+
       - name: Prepare human and agent docs
         run: python3 scripts/prepare-pages-site.py --source docs --site _site --env-file docs/site.env
 
