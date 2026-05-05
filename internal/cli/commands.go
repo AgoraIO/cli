@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -54,11 +56,14 @@ Use "agora --help --all --json" for a machine-readable command tree (agent tooli
 		SilenceErrors: true,
 		PersistentPreRunE: func(cmd *cobra.Command, _ []string) error {
 			mode := a.resolveOutputMode(cmd)
-			// --verbose mirrors AGORA_VERBOSE=1: echoes structured logs to
-			// stderr in addition to writing them to the log file. Setting
-			// it on a.env is enough because appendAppLog reads from there.
-			if a.rootVerbose {
-				a.env["AGORA_VERBOSE"] = "1"
+			// --debug mirrors AGORA_DEBUG=1: echoes structured log
+			// records to stderr in addition to writing them to the
+			// log file. v0.2.0 dropped the legacy --verbose / -v
+			// alias and the AGORA_VERBOSE env var; --debug /
+			// AGORA_DEBUG are the only supported names. See
+			// CHANGELOG.md for migration notes.
+			if a.rootDebug {
+				a.env["AGORA_DEBUG"] = "1"
 			}
 			ctx := context.WithValue(cmd.Context(), contextKeyOutputMode{}, mode)
 			ctx = context.WithValue(ctx, contextKeyJSONPretty{}, a.rootPrettyJSON)
@@ -67,6 +72,11 @@ Use "agora --help --all --json" for a machine-readable command tree (agent tooli
 			cmd.SetContext(ctx)
 			return nil
 		},
+		// Cobra's built-in suggestions: when a user mistypes a
+		// subcommand we print the closest matches alongside the
+		// "unknown command" error. Distance 2 matches gh/kubectl/git
+		// behavior (e.g. `agora projct doctor` suggests `project`).
+		SuggestionsMinimumDistance: 2,
 	}
 	root.Version = formattedVersion()
 	root.PersistentFlags().StringVar(&a.rootOutput, "output", "", "output mode for command results: pretty or json")
@@ -74,7 +84,13 @@ Use "agora --help --all --json" for a machine-readable command tree (agent tooli
 	root.PersistentFlags().BoolVar(&a.rootPrettyJSON, "pretty", false, "pretty-print JSON output when used with --json")
 	root.PersistentFlags().BoolVar(&a.rootQuiet, "quiet", false, "suppress success output (both pretty and JSON envelopes); rely on exit code. Errors still print on stderr.")
 	root.PersistentFlags().BoolVar(&a.rootNoColor, "no-color", false, "disable ANSI color in pretty output")
-	root.PersistentFlags().BoolVar(&a.rootVerbose, "verbose", false, "echo structured logs to stderr (equivalent to AGORA_VERBOSE=1); does not change exit codes or JSON envelopes")
+	// --debug is the canonical name for runtime log echo (industry
+	// convention; matches gh, vercel, stripe, supabase). v0.2.0
+	// dropped the legacy --verbose / -v alias and AGORA_VERBOSE env
+	// var; persisted configs containing "verbose" are auto-migrated
+	// to "debug" on first load.
+	root.PersistentFlags().BoolVar(&a.rootDebug, "debug", false, "echo structured logs to stderr (equivalent to AGORA_DEBUG=1); does not change exit codes or JSON envelopes")
+	root.PersistentFlags().BoolVarP(&a.rootYes, "yes", "y", false, "assume the default answer to confirmation prompts (equivalent to AGORA_NO_INPUT=1); never starts new interactive flows in JSON/CI/non-TTY contexts")
 	root.PersistentFlags().Bool("all", false, "show the full command tree in help output")
 	root.PersistentFlags().BoolVar(&a.rootUpgradeCheck, "upgrade-check", false, "print non-interactive upgrade guidance and exit")
 	root.AddCommand(a.buildLoginCommand("login"))
@@ -90,8 +106,17 @@ Use "agora --help --all --json" for a machine-readable command tree (agent tooli
 	root.AddCommand(a.buildTelemetryCommand())
 	root.AddCommand(a.buildUpgradeCommand())
 	root.AddCommand(a.buildOpenCommand())
-	// Keep "add" unregistered until it has a real implementation. Calls to
-	// `agora add` should behave as unknown command for now.
+	root.AddCommand(a.buildMCPCommand())
+	root.AddCommand(a.buildDoctorCommand())
+	root.AddCommand(a.buildEnvHelpCommand())
+	root.AddCommand(a.buildSkillsCommand())
+	// `agora add` is intentionally unregistered. Plugin/extension
+	// scaffolding is a deliberate non-goal until we have a concrete
+	// extension API; until then `agora add ...` returns the standard
+	// Cobra "unknown command" error (which now includes a "did you
+	// mean" suggestion thanks to SuggestionsMinimumDistance=2). When
+	// reintroducing this surface, document the contract in AGENTS.md
+	// before wiring a builder here.
 	defaultHelp := root.HelpFunc()
 	root.SetHelpFunc(func(cmd *cobra.Command, args []string) {
 		if showAllHelp(cmd) && a.resolveOutputMode(cmd) == outputJSON {
@@ -160,6 +185,10 @@ func (a *App) buildTelemetryCommand() *cobra.Command {
 	cmd.AddCommand(&cobra.Command{
 		Use:   "status",
 		Short: "Show telemetry status",
+		Example: example(`
+  agora telemetry status
+  agora telemetry status --json
+`),
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return a.renderTelemetry(cmd)
 		},
@@ -167,6 +196,10 @@ func (a *App) buildTelemetryCommand() *cobra.Command {
 	cmd.AddCommand(&cobra.Command{
 		Use:   "enable",
 		Short: "Enable telemetry",
+		Example: example(`
+  agora telemetry enable
+  agora telemetry enable --json
+`),
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return a.setTelemetry(cmd, true)
 		},
@@ -174,6 +207,11 @@ func (a *App) buildTelemetryCommand() *cobra.Command {
 	cmd.AddCommand(&cobra.Command{
 		Use:   "disable",
 		Short: "Disable telemetry",
+		Example: example(`
+  agora telemetry disable
+  agora telemetry disable --json
+  DO_NOT_TRACK=1 agora <any-command>   # one-shot disable via env
+`),
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return a.setTelemetry(cmd, false)
 		},
@@ -218,7 +256,7 @@ func (a *App) buildUpgradeCommand() *cobra.Command {
 	var check bool
 	cmd := &cobra.Command{
 		Use:     "upgrade",
-		Aliases: []string{"update"},
+		Aliases: []string{"update", "self-update"},
 		Short:   "Upgrade Agora CLI in place when installer-managed; otherwise print upgrade guidance",
 		Long: `Upgrade Agora CLI to the latest release.
 
@@ -231,6 +269,7 @@ Use --check to resolve the latest version and report what would happen without w
   agora upgrade
   agora upgrade --check --json
   agora update --json
+  agora self-update --check
 `),
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			data, err := a.performSelfUpdate(check)
@@ -253,11 +292,13 @@ func (a *App) buildOpenCommand() *cobra.Command {
 		Example: example(`
   agora open --target console
   agora open --target docs
+  agora open --target docs-md
+  agora open --target product-docs
 `),
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			url := "https://console.agora.io"
-			if target == "docs" {
-				url = "https://docs.agora.io"
+			url, err := resolveOpenTarget(target, a.osEnv)
+			if err != nil {
+				return err
 			}
 			status := "printed"
 			if !noBrowser && a.resolveOutputMode(cmd) != outputJSON && openBrowser(url) {
@@ -266,7 +307,7 @@ func (a *App) buildOpenCommand() *cobra.Command {
 			return renderResult(cmd, "open", map[string]any{"action": "open", "status": status, "target": target, "url": url})
 		},
 	}
-	cmd.Flags().StringVar(&target, "target", "console", "target to open: console or docs")
+	cmd.Flags().StringVar(&target, "target", "console", "target to open: console, docs, docs-md, or product-docs")
 	cmd.Flags().BoolVar(&noBrowser, "no-browser", false, "print the URL without opening a browser")
 	return cmd
 }
@@ -446,7 +487,7 @@ func (a *App) buildConfigCommand() *cobra.Command {
 	})
 	var cfg appConfig
 	cfg = a.cfg
-	var telemetryEnabled, browserAutoOpen, verbose bool
+	var telemetryEnabled, browserAutoOpen, debug bool
 	update := &cobra.Command{
 		Use:   "update",
 		Short: "Update persisted CLI defaults",
@@ -455,6 +496,7 @@ func (a *App) buildConfigCommand() *cobra.Command {
   agora config update --output json
   agora config update --browser-auto-open=false
   agora config update --api-base-url https://agora-cli.agora.io
+  agora config update --debug=true
 `),
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			next := a.cfg
@@ -479,8 +521,8 @@ func (a *App) buildConfigCommand() *cobra.Command {
 			if cmd.Flags().Changed("log-level") {
 				next.LogLevel = cfg.LogLevel
 			}
-			if cmd.Flags().Changed("verbose") {
-				next.Verbose = verbose
+			if cmd.Flags().Changed("debug") {
+				next.Debug = debug
 			}
 			if cmd.Flags().Changed("output") {
 				next.Output = cfg.Output
@@ -504,7 +546,7 @@ func (a *App) buildConfigCommand() *cobra.Command {
 	update.Flags().BoolVar(&telemetryEnabled, "telemetry-enabled", false, "persist telemetry preference; use --telemetry-enabled=false to disable")
 	update.Flags().BoolVar(&browserAutoOpen, "browser-auto-open", false, "persist browser auto-open preference; use --browser-auto-open=false to disable")
 	update.Flags().StringVar(&cfg.LogLevel, "log-level", cfg.LogLevel, "persist default log level")
-	update.Flags().BoolVar(&verbose, "verbose", false, "persist verbose logging preference; use --verbose=false to disable")
+	update.Flags().BoolVar(&debug, "debug", false, "persist the --debug preference (echo structured logs to stderr); use --debug=false to disable")
 	update.Flags().Var(newOutputModeValue((*string)(&cfg.Output)), "output", "persist default output mode (pretty or json)")
 	cmd.AddCommand(update)
 	return cmd
@@ -544,7 +586,7 @@ These commands do not clone local application code. Use "agora quickstart" for s
 }
 
 func (a *App) buildProjectCreate() *cobra.Command {
-	var region, template string
+	var region, rtmDataCenter, template string
 	var features []string
 	var dryRun bool
 	var idempotencyKey string
@@ -555,25 +597,39 @@ func (a *App) buildProjectCreate() *cobra.Command {
 		Example: example(`
   agora project create my-app
   agora project create my-agent-demo --region global --feature rtc --feature convoai
+  agora project create my-rtm-demo --rtm-data-center EU
   agora project create my-voice-agent --template voice-agent
 `),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) == 0 || strings.TrimSpace(args[0]) == "" {
 				return errors.New("project name is required")
 			}
+			normalizedRTMDataCenter, err := normalizeRTMDataCenter(rtmDataCenter)
+			if err != nil {
+				return err
+			}
 			if dryRun {
-				return renderResult(cmd, "project create", map[string]any{
+				plannedFeatures := projectCreateFeatures(template, features)
+				plannedRTMDataCenter, err := rtmDataCenterForFeatures(plannedFeatures, normalizedRTMDataCenter)
+				if err != nil {
+					return err
+				}
+				result := map[string]any{
 					"action":          "create",
 					"dryRun":          true,
-					"enabledFeatures": features,
+					"enabledFeatures": plannedFeatures,
 					"idempotencyKey":  idempotencyKey,
 					"projectName":     args[0],
 					"region":          region,
 					"status":          "planned",
 					"template":        template,
-				})
+				}
+				if plannedRTMDataCenter != "" {
+					result["rtmDataCenter"] = plannedRTMDataCenter
+				}
+				return renderResult(cmd, "project create", result)
 			}
-			data, err := a.projectCreate(args[0], region, template, features, idempotencyKey)
+			data, err := a.projectCreate(args[0], region, template, features, normalizedRTMDataCenter, idempotencyKey)
 			if err != nil {
 				return err
 			}
@@ -581,8 +637,9 @@ func (a *App) buildProjectCreate() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&region, "region", "", "control plane region for the project context (global or cn)")
+	cmd.Flags().StringVar(&rtmDataCenter, "rtm-data-center", "", "RTM data center to configure when rtm is enabled (CN, NA, EU, or AP); defaults to NA")
 	cmd.Flags().StringVar(&template, "template", "", "apply a higher-level project preset such as voice-agent")
-	cmd.Flags().StringArrayVar(&features, "feature", nil, "enable one or more features after creation")
+	cmd.Flags().StringArrayVar(&features, "feature", nil, fmt.Sprintf("enable one or more features after creation; defaults to %s; convoai also enables rtm", featureListString()))
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "return the planned project create result without creating remote resources")
 	cmd.Flags().StringVar(&idempotencyKey, "idempotency-key", "", "caller-provided key for safe retries when supported by the API")
 	return cmd
@@ -591,6 +648,7 @@ func (a *App) buildProjectCreate() *cobra.Command {
 func (a *App) buildProjectList() *cobra.Command {
 	var page, pageSize int
 	var keyword string
+	var refreshCache bool
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List projects available to the current account",
@@ -599,18 +657,27 @@ func (a *App) buildProjectList() *cobra.Command {
   agora project list
   agora project list --keyword demo
   agora project list --page 2 --page-size 50
+  agora project list --refresh-cache
 `),
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			res, err := a.listProjects(keyword, page, pageSize)
 			if err != nil {
 				return err
 			}
-			return renderResult(cmd, "project list", map[string]any{"items": res.Items, "page": res.Page, "pageSize": res.PageSize, "total": res.Total})
+			cacheRefreshed := false
+			if refreshCache {
+				if err := a.refreshProjectListCache(); err != nil {
+					return err
+				}
+				cacheRefreshed = true
+			}
+			return renderResult(cmd, "project list", map[string]any{"cacheRefreshed": cacheRefreshed, "items": res.Items, "page": res.Page, "pageSize": res.PageSize, "total": res.Total})
 		},
 	}
 	cmd.Flags().IntVar(&page, "page", 1, "page number to request")
 	cmd.Flags().IntVar(&pageSize, "page-size", 20, "number of projects per page")
 	cmd.Flags().StringVar(&keyword, "keyword", "", "filter by exact or partial project name or project ID")
+	cmd.Flags().BoolVar(&refreshCache, "refresh-cache", false, "force-refresh the unfiltered first-page project completion cache after listing")
 	return cmd
 }
 
@@ -633,6 +700,7 @@ func (a *App) buildProjectUse() *cobra.Command {
 			}
 			return renderResult(cmd, "project use", data)
 		},
+		ValidArgsFunction: a.completeProjectNames,
 	}
 }
 
@@ -657,6 +725,7 @@ func (a *App) buildProjectShow() *cobra.Command {
 			}
 			return renderResult(cmd, "project show", data)
 		},
+		ValidArgsFunction: a.completeProjectNames,
 	}
 }
 
@@ -664,14 +733,23 @@ func (a *App) buildProjectEnv() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "env",
 		Short: "Export project environment variables",
-		Long: `Render environment variables for a project in dotenv, shell, or JSON form.
+		Long: `Render environment variables for a project in dotenv, shell, or JSON envelope form.
 
-Use "project env write" when you want to persist the values into a managed dotenv file.`,
+This is the one command whose default (non-JSON) output is raw stdout — without the unified JSON envelope — so it can be used with shell substitution: ` + "`source <(agora project env --shell)`" + `. Use --format to be explicit:
+
+  --format dotenv     KEY=value lines (default; ready for ` + "`>> .env`" + `)
+  --format shell      shell export statements (ready for ` + "`source <(...)`" + `)
+  --format envelope   unified JSON envelope (alias of --json)
+  --format json       same as --format envelope
+
+For automation, prefer --json (or --format envelope) so the result has the same shape as every other command. Use "project env write" when you want to persist the values into a managed dotenv file on disk.`,
 		Example: example(`
   agora project env
   agora project env --shell
+  agora project env --format envelope
   agora project env --with-secrets --json
   agora project env --project my-agent-demo
+  source <(agora project env --format shell)
 `),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) > 0 {
@@ -704,7 +782,7 @@ Use "project env write" when you want to persist the values into a managed doten
 		},
 	}
 	cmd.Flags().StringVar(&a.projectEnvProject, "project", "", "project ID or exact project name; defaults to the current project context")
-	cmd.Flags().StringVar(&a.projectEnvFormat, "format", "", "output format: dotenv or shell; use --json for JSON output")
+	cmd.Flags().StringVar(&a.projectEnvFormat, "format", "", "output format: dotenv | shell | envelope | json (default dotenv; envelope/json emit the unified JSON envelope)")
 	cmd.Flags().BoolVar(&a.projectEnvShell, "shell", false, "render shell export statements instead of dotenv lines")
 	cmd.Flags().BoolVar(&a.projectEnvSecrets, "with-secrets", false, "include sensitive values such as the app certificate")
 	write := &cobra.Command{
@@ -712,7 +790,11 @@ Use "project env write" when you want to persist the values into a managed doten
 		Short: "Write project environment variables to a dotenv file",
 		Long: `Write Agora App ID and App Certificate values to a dotenv file.
 
-If no path is provided, the CLI chooses the default target using the existing env files in the working directory.`,
+If no path is provided, the CLI chooses the default target using the existing env files in the working directory.
+
+Next.js apps are detected from package.json (a next dependency), a next.config file, env.local.example, or repo .agora project.json fields template (quickstart) or projectType; those workspaces receive NEXT_PUBLIC_AGORA_APP_ID and NEXT_AGORA_APP_CERTIFICATE. Use --template nextjs or --template standard to override detection.
+
+When .agora/project.json exists, this command updates it for the selected project and records projectType/envPath when missing. If no repo-local binding exists yet, it creates .agora/project.json in the current working directory.`,
 		Example: example(`
   agora project env write
   agora project env write .env.local
@@ -737,19 +819,57 @@ If no path is provided, the CLI chooses the default target using the existing en
 			if err != nil {
 				return err
 			}
-			values, err := projectCredentialEnvValues(target.project)
+			cwd, err := os.Getwd()
 			if err != nil {
 				return err
 			}
-			file, err := writeProjectEnvFile(path, values, appendFlag, overwriteFlag)
+			pathFromUser := strings.TrimSpace(path)
+			absPath, err := resolveProjectEnvWriteAbsolutePath(cwd, pathFromUser)
 			if err != nil {
 				return err
 			}
-			return renderResult(cmd, "project env write", map[string]any{"action": "env-write", "keysWritten": projectEnvKeys(values), "path": file.Path, "projectId": target.project.ProjectID, "projectName": target.project.Name, "status": file.Status})
+			workspaceDir := filepath.Dir(absPath)
+			projectType, err := detectProjectType(workspaceDir, a.projectEnvWriteTemplate)
+			if err != nil {
+				return err
+			}
+			layout, err := detectProjectEnvCredentialLayout(workspaceDir, a.projectEnvWriteTemplate)
+			if err != nil {
+				return err
+			}
+			values, err := projectCredentialEnvValuesForLayout(target.project, layout)
+			if err != nil {
+				return err
+			}
+			conflicting := conflictingKeysForProjectEnvLayout(layout)
+			file, err := writeProjectEnvFile(absPath, values, appendFlag, overwriteFlag, conflicting, pathFromUser == "")
+			if err != nil {
+				return err
+			}
+			metaUpdated, metadataPath, err := syncLocalProjectBindingAfterEnvWrite(workspaceDir, cwd, absPath, target, projectType)
+			if err != nil {
+				return err
+			}
+			payload := map[string]any{
+				"action":           "env-write",
+				"credentialLayout": credentialLayoutLabel(layout),
+				"keysWritten":      projectEnvKeys(values),
+				"projectType":      projectType,
+				"path":             file.Path,
+				"projectId":        target.project.ProjectID,
+				"projectName":      target.project.Name,
+				"status":           file.Status,
+			}
+			if metaUpdated {
+				payload["metadataUpdated"] = true
+				payload["metadataPath"] = metadataPath
+			}
+			return renderResult(cmd, "project env write", payload)
 		},
 	}
 	write.Flags().Bool("overwrite", false, "replace the target file with only Agora App ID and App Certificate values")
 	write.Flags().Bool("append", false, "append Agora App ID and App Certificate values when no existing values are present")
+	write.Flags().StringVar(&a.projectEnvWriteTemplate, "template", "", "credential key layout: nextjs or standard; if omitted, detect Next.js from the workspace")
 	cmd.AddCommand(write)
 	return cmd
 }
@@ -758,7 +878,7 @@ func (a *App) buildProjectFeature() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "feature",
 		Short: "Manage project feature state",
-		Long:  "Inspect and enable product features such as rtc, rtm, and convoai for a remote Agora project.",
+		Long:  fmt.Sprintf("Inspect and enable product features such as %s for a remote Agora project.", featureListString()),
 		Example: example(`
   agora project feature list
   agora project feature status convoai
@@ -793,6 +913,7 @@ func (a *App) buildProjectFeature() *cobra.Command {
 			}
 			return renderResult(cmd, "project feature list", map[string]any{"action": "feature-list", "items": items, "projectId": target.project.ProjectID, "projectName": target.project.Name})
 		},
+		ValidArgsFunction: a.completeProjectNames,
 	})
 	cmd.AddCommand(&cobra.Command{
 		Use:   "status <feature> [project]",
@@ -815,6 +936,7 @@ func (a *App) buildProjectFeature() *cobra.Command {
 			}
 			return renderResult(cmd, "project feature status", data)
 		},
+		ValidArgsFunction: a.completeFeatureThenProject,
 	})
 	cmd.AddCommand(&cobra.Command{
 		Use:   "enable <feature> [project]",
@@ -837,6 +959,7 @@ func (a *App) buildProjectFeature() *cobra.Command {
 			}
 			return renderResult(cmd, "project feature enable", data)
 		},
+		ValidArgsFunction: a.completeFeatureThenProject,
 	})
 	return cmd
 }
@@ -896,7 +1019,7 @@ Exit codes:
 		},
 	}
 	cmd.Flags().BoolVar(&deep, "deep", false, "run deeper repo-local checks for .agora metadata and quickstart env consistency")
-	cmd.Flags().StringVar(&feature, "feature", "convoai", "target feature readiness to evaluate: rtc, rtm, or convoai")
+	cmd.Flags().StringVar(&feature, "feature", "convoai", fmt.Sprintf("target feature readiness to evaluate: %s", featureListString()))
 	return cmd
 }
 

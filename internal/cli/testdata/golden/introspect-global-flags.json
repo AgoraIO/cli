@@ -1,5 +1,10 @@
 [
   {
+    "name": "debug",
+    "type": "bool",
+    "usage": "echo structured logs to stderr (equivalent to AGORA_DEBUG=1); does not change exit codes or JSON envelopes"
+  },
+  {
     "name": "json",
     "type": "bool",
     "usage": "shortcut for --output json"
@@ -30,8 +35,8 @@
     "usage": "print non-interactive upgrade guidance and exit"
   },
   {
-    "name": "verbose",
+    "name": "yes",
     "type": "bool",
-    "usage": "echo structured logs to stderr (equivalent to AGORA_VERBOSE=1); does not change exit codes or JSON envelopes"
+    "usage": "assume the default answer to confirmation prompts (equivalent to AGORA_NO_INPUT=1); never starts new interactive flows in JSON/CI/non-TTY contexts"
   }
 ]

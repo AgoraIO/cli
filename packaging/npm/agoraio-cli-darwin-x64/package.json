@@ -1,7 +1,7 @@
 {
-  "name": "@agoraio/cli-linux-arm64",
+  "name": "agoraio-cli-darwin-x64",
   "version": "0.0.0-dev",
-  "description": "Agora CLI native binary — Linux arm64",
+  "description": "Agora CLI native binary — macOS x64",
   "homepage": "https://github.com/AgoraIO/cli#readme",
   "bugs": {
     "url": "https://github.com/AgoraIO/cli/issues"
@@ -9,7 +9,7 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/AgoraIO/cli.git",
-    "directory": "agora-cli-go/packaging/npm/@agoraio/cli-linux-arm64"
+    "directory": "agora-cli-go/packaging/npm/agoraio-cli-darwin-x64"
   },
   "license": "MIT",
   "author": "Agora DevRel <devrel@agora.io>",
@@ -17,15 +17,15 @@
     "agora",
     "cli",
     "agora-cli",
-    "linux",
-    "arm64",
+    "darwin",
+    "x64",
     "internal"
   ],
   "os": [
-    "linux"
+    "darwin"
   ],
   "cpu": [
-    "arm64"
+    "x64"
   ],
   "files": [
     "bin/"

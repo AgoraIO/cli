@@ -13,7 +13,19 @@ import (
 func (a *App) listProjects(keyword string, page, pageSize int) (projectListResponse, error) {
 	var out projectListResponse
 	err := a.apiRequest("GET", "/api/cli/v1/projects", map[string]string{"keyword": keyword, "page": fmt.Sprint(page), "pageSize": fmt.Sprint(pageSize)}, nil, &out)
+	if err == nil && strings.TrimSpace(keyword) == "" && page <= 1 {
+		// Best-effort: persist the unfiltered first page so shell tab
+		// completion can serve project names without a network round
+		// trip on every keystroke. Failures here are non-fatal.
+		_ = saveProjectListCache(a.env, out)
+	}
 	return out, err
+}
+
+func (a *App) refreshProjectListCache() error {
+	_ = clearProjectListCache(a.env)
+	_, err := a.listProjects("", 1, projectCompletionPageSize)
+	return err
 }
 
 func (a *App) createProject(name, idempotencyKey string) (projectDetail, error) {
@@ -171,10 +183,12 @@ func (a *App) setRTM2Config(projectID, region string) error {
 		"interval":                "30",
 		"lockEnabled":             false,
 		"occupancy":               "50",
-		"region":                  region,
 		"storageEnabled":          false,
 		"streamChannelEnabled":    false,
 		"userSubscribeEnabled":    false,
+	}
+	if strings.TrimSpace(region) != "" {
+		body["region"] = region
 	}
 	out := map[string]any{}
 	return a.apiRequest("PUT", "/api/cli/v1/projects/"+projectID+"/rtm2-config", nil, body, &out)
@@ -223,13 +237,14 @@ func (a *App) getFeatureItem(feature string, project projectDetail, region strin
 		}
 		return featureItem{Feature: "convoai", Message: "convoai not enabled", Status: "disabled"}, nil
 	default:
-		return featureItem{}, fmt.Errorf("%q must be one of: rtc, rtm, convoai.", feature)
+		return featureItem{}, validateFeatureID(feature)
 	}
 }
 
 func (a *App) listProjectFeatures(project projectDetail, region string) ([]featureItem, error) {
-	items := make([]featureItem, 0, 3)
-	for _, feature := range []string{"rtc", "rtm", "convoai"} {
+	ids := featureIDs()
+	items := make([]featureItem, 0, len(ids))
+	for _, feature := range ids {
 		item, err := a.getFeatureItem(feature, project, region)
 		if err != nil {
 			return nil, err
@@ -239,16 +254,20 @@ func (a *App) listProjectFeatures(project projectDetail, region string) ([]featu
 	return items, nil
 }
 
-func (a *App) enableProjectFeature(feature string, project projectDetail, region string) (map[string]any, error) {
+func (a *App) enableProjectFeature(feature string, project projectDetail, region, rtmDataCenter string) (map[string]any, error) {
 	switch feature {
 	case "rtc":
 		return map[string]any{"action": "feature-enable", "feature": "rtc", "message": "rtc is included with the project", "projectId": project.ProjectID, "projectName": project.Name, "status": "included"}, nil
 	case "rtm":
-		rtmRegion := "NA"
-		if region == "cn" {
-			rtmRegion = "CN"
+		var err error
+		rtmDataCenter, err = normalizeRTMDataCenter(rtmDataCenter)
+		if err != nil {
+			return nil, err
 		}
-		if err := a.setRTM2Config(project.ProjectID, rtmRegion); err != nil {
+		if rtmDataCenter == "" {
+			rtmDataCenter = "NA"
+		}
+		if err := a.setRTM2Config(project.ProjectID, rtmDataCenter); err != nil {
 			return nil, err
 		}
 		return map[string]any{"action": "feature-enable", "feature": "rtm", "message": "rtm enabled", "projectId": project.ProjectID, "projectName": project.Name, "status": "enabled"}, nil
@@ -262,11 +281,11 @@ func (a *App) enableProjectFeature(feature string, project projectDetail, region
 		}
 		return map[string]any{"action": "feature-enable", "feature": "convoai", "message": "convoai enabled", "projectId": project.ProjectID, "projectName": project.Name, "status": "enabled"}, nil
 	default:
-		return nil, fmt.Errorf("%q must be one of: rtc, rtm, convoai.", feature)
+		return nil, validateFeatureID(feature)
 	}
 }
 
-func (a *App) projectCreate(name, region, template string, features []string, idempotencyKey string) (map[string]any, error) {
+func (a *App) projectCreate(name, region, template string, features []string, rtmDataCenter string, idempotencyKey string) (map[string]any, error) {
 	ctx, err := loadContext(a.env)
 	if err != nil {
 		return nil, err
@@ -277,12 +296,14 @@ func (a *App) projectCreate(name, region, template string, features []string, id
 			region = "global"
 		}
 	}
-	project, err := a.createProject(name, idempotencyKey)
+	features = projectCreateFeatures(template, features)
+	rtmDataCenter, err = rtmDataCenterForFeatures(features, rtmDataCenter)
 	if err != nil {
 		return nil, err
 	}
-	if template == "voice-agent" {
-		features = append(features, "rtc", "rtm", "convoai")
+	project, err := a.createProject(name, idempotencyKey)
+	if err != nil {
+		return nil, err
 	}
 	seen := map[string]bool{}
 	enabled := []string{}
@@ -291,7 +312,7 @@ func (a *App) projectCreate(name, region, template string, features []string, id
 			continue
 		}
 		seen[feature] = true
-		if _, err := a.enableProjectFeature(feature, project, region); err != nil {
+		if _, err := a.enableProjectFeature(feature, project, region, rtmDataCenter); err != nil {
 			return nil, err
 		}
 		enabled = append(enabled, feature)
@@ -303,7 +324,73 @@ func (a *App) projectCreate(name, region, template string, features []string, id
 	if err := saveContext(a.env, ctx); err != nil {
 		return nil, err
 	}
-	return map[string]any{"action": "create", "appId": project.AppID, "enabledFeatures": enabled, "projectId": project.ProjectID, "projectName": project.Name, "region": region}, nil
+	// The completion cache just became stale: a brand-new project
+	// won't appear in `agora project use <TAB>` until the user runs a
+	// command that re-fetches the list. Wipe it so the next completion
+	// triggers a refresh.
+	_ = clearProjectListCache(a.env)
+	result := map[string]any{"action": "create", "appId": project.AppID, "enabledFeatures": enabled, "projectId": project.ProjectID, "projectName": project.Name, "region": region}
+	if rtmDataCenter != "" {
+		result["rtmDataCenter"] = rtmDataCenter
+	}
+	return result, nil
+}
+
+func normalizeRTMDataCenter(value string) (string, error) {
+	normalized := strings.ToUpper(strings.TrimSpace(value))
+	switch normalized {
+	case "":
+		return "", nil
+	case "CN", "NA", "EU", "AP":
+		return normalized, nil
+	default:
+		return "", fmt.Errorf("--rtm-data-center must be one of: CN, NA, EU, AP")
+	}
+}
+
+func rtmDataCenterForFeatures(features []string, value string) (string, error) {
+	normalized, err := normalizeRTMDataCenter(value)
+	if err != nil {
+		return "", err
+	}
+	if !featureListIncludes(features, "rtm") {
+		if normalized != "" {
+			return "", fmt.Errorf("--rtm-data-center can only be used when rtm is enabled")
+		}
+		return "", nil
+	}
+	if normalized == "" {
+		return "NA", nil
+	}
+	return normalized, nil
+}
+
+func normalizeProjectCreateFeatures(features []string) []string {
+	if len(features) == 0 {
+		return defaultInitFeatures()
+	}
+	return features
+}
+
+func projectCreateFeatures(template string, features []string) []string {
+	next := append([]string{}, features...)
+	if template == "voice-agent" {
+		next = append(next, featureIDs()...)
+	}
+	next = normalizeProjectCreateFeatures(next)
+	if featureListIncludes(next, "convoai") && !featureListIncludes(next, "rtm") {
+		next = append([]string{"rtm"}, next...)
+	}
+	return next
+}
+
+func featureListIncludes(features []string, target string) bool {
+	for _, feature := range features {
+		if feature == target {
+			return true
+		}
+	}
+	return false
 }
 
 func (a *App) projectUse(projectArg string) (map[string]any, error) {
@@ -353,17 +440,39 @@ const (
 	envJSON   envFormat = "json"
 )
 
+// projectEnvFormatChoices is the documented enum for `--format`. Kept as
+// a single source of truth so help text, error messages, introspect, and
+// validation stay in lockstep. "envelope" is accepted as an explicit
+// alias of "json" so callers can opt into the unified envelope shape
+// without remembering that --json is the cross-cutting flag.
+var projectEnvFormatChoices = []string{"dotenv", "shell", "envelope", "json"}
+
+// resolveProjectEnvOutputFormat is the single source of truth for the
+// project env output format. It enforces the contract documented in
+// docs/automation.md: `project env` is the one command whose default
+// (non-JSON) output is raw stdout for `eval $(...)` ergonomics, and
+// `--format` lets callers be explicit.
+//
+// Precedence:
+//  1. Conflicting flags → typed error.
+//  2. `--json` (and `--format=envelope|json`) → envelope shape.
+//  3. `--format=shell` or `--shell` → shell exports.
+//  4. `--format=dotenv` (default) → dotenv lines.
 func resolveProjectEnvOutputFormat(format string, shell bool, mode outputMode) (envFormat, error) {
+	format = strings.TrimSpace(strings.ToLower(format))
 	if format != "" && shell {
 		return "", errors.New("`--format` and `--shell` cannot be used together.")
-	}
-	if format != "" && mode == outputJSON {
-		return "", errors.New("`--format` and `--json` cannot be used together.")
 	}
 	if shell && mode == outputJSON {
 		return "", errors.New("`--shell` and `--json` cannot be used together.")
 	}
-	if mode == outputJSON {
+	// --format=envelope/json is a no-op alongside --json: both ask for
+	// the unified envelope shape. Only reject conflicting requests
+	// (e.g. --format=dotenv --json).
+	if format != "" && mode == outputJSON && !isProjectEnvJSONFormat(format) {
+		return "", fmt.Errorf("`--format=%s` and `--json` cannot be used together (use --format=envelope or --format=json for the JSON envelope, or drop --json)", format)
+	}
+	if mode == outputJSON || isProjectEnvJSONFormat(format) {
 		return envJSON, nil
 	}
 	if shell {
@@ -372,7 +481,17 @@ func resolveProjectEnvOutputFormat(format string, shell bool, mode outputMode) (
 	if format == "" {
 		return envDotenv, nil
 	}
-	return envFormat(format), nil
+	switch format {
+	case "dotenv":
+		return envDotenv, nil
+	case "shell":
+		return envShell, nil
+	}
+	return "", fmt.Errorf("`--format` must be one of: %s (got %q)", strings.Join(projectEnvFormatChoices, ", "), format)
+}
+
+func isProjectEnvJSONFormat(format string) bool {
+	return format == "envelope" || format == "json"
 }
 
 func (a *App) projectEnvValues(projectArg string, withSecrets bool) (map[string]any, error) {
@@ -407,19 +526,230 @@ func (a *App) projectEnvValues(projectArg string, withSecrets bool) (map[string]
 	return values, nil
 }
 
-func projectCredentialEnvValues(project projectDetail) (map[string]any, error) {
+type projectEnvCredentialLayout int
+
+const (
+	projectEnvLayoutStandard projectEnvCredentialLayout = iota
+	projectEnvLayoutNextjs
+)
+
+func credentialLayoutLabel(layout projectEnvCredentialLayout) string {
+	if layout == projectEnvLayoutNextjs {
+		return "nextjs"
+	}
+	return "standard"
+}
+
+func credentialLayoutFromProjectType(projectType string) projectEnvCredentialLayout {
+	switch strings.ToLower(strings.TrimSpace(projectType)) {
+	case "nextjs":
+		return projectEnvLayoutNextjs
+	default:
+		return projectEnvLayoutStandard
+	}
+}
+
+func projectCredentialEnvValuesForLayout(project projectDetail, layout projectEnvCredentialLayout) (map[string]any, error) {
 	if project.SignKey == nil || *project.SignKey == "" {
 		return nil, &cliError{Message: fmt.Sprintf("project %q does not have an app certificate. Enable one in Agora Console or use a different project with `agora project use`.", project.Name), Code: "PROJECT_NO_CERTIFICATE"}
 	}
-	return map[string]any{
-		"AGORA_APP_ID":          project.AppID,
-		"AGORA_APP_CERTIFICATE": *project.SignKey,
-	}, nil
+	switch layout {
+	case projectEnvLayoutNextjs:
+		return map[string]any{
+			"NEXT_PUBLIC_AGORA_APP_ID":   project.AppID,
+			"NEXT_AGORA_APP_CERTIFICATE": *project.SignKey,
+		}, nil
+	default:
+		return map[string]any{
+			"AGORA_APP_ID":          project.AppID,
+			"AGORA_APP_CERTIFICATE": *project.SignKey,
+		}, nil
+	}
+}
+
+func conflictingKeysForProjectEnvLayout(layout projectEnvCredentialLayout) []string {
+	switch layout {
+	case projectEnvLayoutNextjs:
+		return []string{"AGORA_APP_ID", "AGORA_APP_CERTIFICATE", "APP_ID", "APP_CERTIFICATE"}
+	default:
+		return nil
+	}
+}
+
+func detectProjectType(workspaceDir, explicitTemplate string) (string, error) {
+	if t := strings.TrimSpace(strings.ToLower(explicitTemplate)); t != "" {
+		switch t {
+		case "nextjs":
+			return "nextjs", nil
+		case "standard", "default", "agora":
+			return "standard", nil
+		default:
+			return "", &cliError{
+				Message: fmt.Sprintf("unknown env template %q (use nextjs or standard)", strings.TrimSpace(explicitTemplate)),
+				Code:    "PROJECT_ENV_TEMPLATE_UNKNOWN",
+			}
+		}
+	}
+
+	absWorkspace, err := filepath.Abs(workspaceDir)
+	if err != nil {
+		return "", err
+	}
+	if _, statErr := os.Stat(filepath.Join(absWorkspace, "env.local.example")); statErr == nil {
+		return "nextjs", nil
+	}
+
+	cur := absWorkspace
+	for step := 0; step < 8; step++ {
+		if packageJSONDeclaresNext(filepath.Join(cur, "package.json")) || nextConfigPresent(cur) {
+			return "nextjs", nil
+		}
+		if _, err := os.Stat(filepath.Join(cur, "go.mod")); err == nil {
+			return "go", nil
+		}
+		if _, err := os.Stat(filepath.Join(cur, "pyproject.toml")); err == nil {
+			return "python", nil
+		}
+		if _, err := os.Stat(filepath.Join(cur, "requirements.txt")); err == nil {
+			return "python", nil
+		}
+		if _, err := os.Stat(filepath.Join(cur, "package.json")); err == nil {
+			return "node", nil
+		}
+		parent := filepath.Dir(cur)
+		if parent == cur {
+			break
+		}
+		cur = parent
+	}
+
+	if binding, ok, _, err := detectLocalProjectBindingFrom(absWorkspace); err == nil && ok {
+		if projectType := strings.ToLower(strings.TrimSpace(binding.ProjectType)); projectType != "" {
+			return projectType, nil
+		}
+		if template := strings.ToLower(strings.TrimSpace(binding.Template)); template != "" {
+			return template, nil
+		}
+	}
+	return "standard", nil
+}
+
+// syncLocalProjectBindingAfterEnvWrite updates or creates repo-local .agora/project.json
+// so non-template repos keep a durable projectType signal for later env/framework decisions.
+func syncLocalProjectBindingAfterEnvWrite(workspaceDir, cwd, envFileAbs string, target projectTarget, projectType string) (bool, string, error) {
+	projectType = strings.TrimSpace(projectType)
+	if projectType == "" {
+		projectType = "standard"
+	}
+	resolveEnvPath := func(root string) string {
+		if rel, relErr := filepath.Rel(root, envFileAbs); relErr == nil && rel != "" && !strings.HasPrefix(rel, "..") {
+			return filepath.ToSlash(rel)
+		}
+		return ""
+	}
+
+	root, hasRoot, err := detectLocalProjectRoot(workspaceDir)
+	if err != nil {
+		return false, "", err
+	}
+	if !hasRoot {
+		root = cwd
+		binding := localProjectBinding{
+			ProjectID:   target.project.ProjectID,
+			ProjectName: target.project.Name,
+			Region:      target.region,
+			ProjectType: projectType,
+			EnvPath:     resolveEnvPath(root),
+		}
+		if err := writeLocalProjectBinding(root, binding); err != nil {
+			return false, "", err
+		}
+		return true, filepath.ToSlash(filepath.Join(localAgoraDirName, localProjectFileName)), nil
+	}
+
+	binding, err := loadLocalProjectBinding(root)
+	if err != nil {
+		return false, "", err
+	}
+	changed := false
+	if binding.ProjectID != target.project.ProjectID {
+		binding.ProjectID = target.project.ProjectID
+		changed = true
+	}
+	if binding.ProjectName != target.project.Name {
+		binding.ProjectName = target.project.Name
+		changed = true
+	}
+	if strings.TrimSpace(binding.Region) == "" || !strings.EqualFold(binding.Region, target.region) {
+		binding.Region = target.region
+		changed = true
+	}
+	// Respect quickstart template bindings; only set projectType when template is unset.
+	if strings.TrimSpace(binding.Template) == "" && strings.TrimSpace(binding.ProjectType) == "" {
+		binding.ProjectType = projectType
+		changed = true
+	}
+	if strings.TrimSpace(binding.EnvPath) == "" {
+		if envPath := resolveEnvPath(root); envPath != "" {
+			binding.EnvPath = envPath
+			changed = true
+		}
+	}
+	if !changed {
+		return false, "", nil
+	}
+	if err := writeLocalProjectBinding(root, binding); err != nil {
+		return false, "", err
+	}
+	return true, filepath.ToSlash(filepath.Join(localAgoraDirName, localProjectFileName)), nil
+}
+
+func detectProjectEnvCredentialLayout(workspaceDir, explicitTemplate string) (projectEnvCredentialLayout, error) {
+	projectType, err := detectProjectType(workspaceDir, explicitTemplate)
+	if err != nil {
+		return projectEnvLayoutStandard, err
+	}
+	return credentialLayoutFromProjectType(projectType), nil
+}
+
+func packageJSONDeclaresNext(packageJSONPath string) bool {
+	raw, err := os.ReadFile(packageJSONPath)
+	if err != nil {
+		return false
+	}
+	var meta struct {
+		Dependencies     map[string]any `json:"dependencies"`
+		DevDependencies  map[string]any `json:"devDependencies"`
+		PeerDependencies map[string]any `json:"peerDependencies"`
+	}
+	if err := json.Unmarshal(raw, &meta); err != nil {
+		return false
+	}
+	return depMapHasPackage(meta.Dependencies, "next") ||
+		depMapHasPackage(meta.DevDependencies, "next") ||
+		depMapHasPackage(meta.PeerDependencies, "next")
+}
+
+func depMapHasPackage(section map[string]any, name string) bool {
+	if section == nil {
+		return false
+	}
+	_, ok := section[name]
+	return ok
+}
+
+func nextConfigPresent(dir string) bool {
+	for _, name := range []string{"next.config.js", "next.config.mjs", "next.config.ts", "next.config.mts"} {
+		if _, err := os.Stat(filepath.Join(dir, name)); err == nil {
+			return true
+		}
+	}
+	return false
 }
 
 func enabledFeatures(features map[string]bool) []string {
 	out := []string{}
-	for _, name := range []string{"rtc", "rtm", "convoai"} {
+	for _, name := range featureIDs() {
 		if features[name] {
 			out = append(out, name)
 		}
@@ -510,15 +840,22 @@ type envWriteResult struct {
 	Status string
 }
 
-func writeProjectEnvFile(path string, values map[string]any, appendMode, overwrite bool) (envWriteResult, error) {
-	usedDefaultTarget := path == ""
-	if path == "" {
-		resolved, err := resolveDefaultTargetPath(".")
+func resolveProjectEnvWriteAbsolutePath(cwd, pathArg string) (string, error) {
+	if strings.TrimSpace(pathArg) == "" {
+		rel, err := resolveDefaultTargetPath(cwd)
 		if err != nil {
-			return envWriteResult{}, err
+			return "", err
 		}
-		path = resolved
+		return filepath.Abs(filepath.Join(cwd, rel))
 	}
+	p := pathArg
+	if !filepath.IsAbs(p) {
+		p = filepath.Join(cwd, p)
+	}
+	return filepath.Abs(p)
+}
+
+func writeProjectEnvFile(path string, values map[string]any, appendMode, overwrite bool, conflictingKeys []string, defaultPathChosen bool) (envWriteResult, error) {
 	filePath, err := filepath.Abs(path)
 	if err != nil {
 		return envWriteResult{}, err
@@ -540,8 +877,8 @@ func writeProjectEnvFile(path string, values map[string]any, appendMode, overwri
 		existing = []byte(assignments + "\n")
 		status = "overwritten"
 	default:
-		merged, mergeStatus := mergeEnvAssignments(string(existing), values, [][2]string{{"# BEGIN AGORA CLI", "# END AGORA CLI"}}, nil)
-		if mergeStatus == "appended" && !appendMode && !usedDefaultTarget && !isDefaultEnvPath(filePath) {
+		merged, mergeStatus := mergeEnvAssignments(string(existing), values, [][2]string{{"# BEGIN AGORA CLI", "# END AGORA CLI"}}, conflictingKeys)
+		if mergeStatus == "appended" && !appendMode && !defaultPathChosen && !isDefaultEnvPath(filePath) {
 			return envWriteResult{}, fmt.Errorf("%s already exists. Use --append to append it or --overwrite to replace it.", path)
 		}
 		existing = []byte(merged)
@@ -747,5 +1084,5 @@ func (a *App) projectFeatureEnable(feature, projectArg string) (map[string]any, 
 	if err != nil {
 		return nil, err
 	}
-	return a.enableProjectFeature(feature, target.project, target.region)
+	return a.enableProjectFeature(feature, target.project, target.region, "")
 }

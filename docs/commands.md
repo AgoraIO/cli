@@ -1,6 +1,10 @@
+---
+title: Command Reference
+---
+
 # Agora CLI — Command Reference
 
-> Generated from `agora introspect --json` on 2026-04-30. Do not edit by hand — run `make docs-commands` or rely on the release workflow to regenerate.
+> Generated from `agora introspect --json` on 2026-05-04. Do not edit by hand — run `make docs-commands` or rely on the release workflow to regenerate.
 
 This page lists every enumerable command and its local flags. For long descriptions, examples, and inherited flags, run `agora <command> --help` or read the source in `internal/cli/`.
 
@@ -8,13 +12,14 @@ This page lists every enumerable command and its local flags. For long descripti
 
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
+| `--debug` | `bool` | — | echo structured logs to stderr (equivalent to AGORA_DEBUG=1); does not change exit codes or JSON envelopes |
 | `--json` | `bool` | — | shortcut for --output json |
 | `--no-color` | `bool` | — | disable ANSI color in pretty output |
 | `--output` | `string` | — | output mode for command results: pretty or json |
 | `--pretty` | `bool` | — | pretty-print JSON output when used with --json |
 | `--quiet` | `bool` | — | suppress success output (both pretty and JSON envelopes); rely on exit code. Errors still print on stderr. |
 | `--upgrade-check` | `bool` | — | print non-interactive upgrade guidance and exit |
-| `--verbose` | `bool` | — | echo structured logs to stderr (equivalent to AGORA_VERBOSE=1); does not change exit codes or JSON envelopes |
+| `--yes` | `bool` | — | assume the default answer to confirmation prompts (equivalent to AGORA_NO_INPUT=1); never starts new interactive flows in JSON/CI/non-TTY contexts |
 
 ## Pseudo Commands
 
@@ -79,13 +84,25 @@ Update persisted CLI defaults
 |------|------|---------|-------------|
 | `--api-base-url` | `string` | `https://agora-cli.agora.io` | default CLI API base URL |
 | `--browser-auto-open` | `bool` | — | persist browser auto-open preference; use --browser-auto-open=false to disable |
+| `--debug` | `bool` | — | persist the --debug preference (echo structured logs to stderr); use --debug=false to disable |
 | `--log-level` | `string` | `info` | persist default log level |
 | `--oauth-base-url` | `string` | `https://sso2.agora.io` | default OAuth base URL |
 | `--oauth-client-id` | `string` | `agora_web_cli` | default OAuth client ID |
 | `--oauth-scope` | `string` | `basic_info,console` | default OAuth scope |
 | `--output` | `output` | `pretty` | persist default output mode (pretty or json) |
 | `--telemetry-enabled` | `bool` | — | persist telemetry preference; use --telemetry-enabled=false to disable |
-| `--verbose` | `bool` | — | persist verbose logging preference; use --verbose=false to disable |
+
+### `agora doctor`
+
+Diagnose the local Agora CLI install (PATH, version, network, auth, MCP host)
+
+_No local flags. Inherited global flags still apply (see [Global Flags](#global-flags))._
+
+### `agora env-help`
+
+List every AGORA_* environment variable the CLI honors
+
+_No local flags. Inherited global flags still apply (see [Global Flags](#global-flags))._
 
 ### `agora init`
 
@@ -93,11 +110,13 @@ Create a project, clone a quickstart, and write env in one flow
 
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
+| `--add-agent-rules` | `stringArray` | `[]` | write AI agent rules into the quickstart (repeatable: cursor, claude, windsurf) |
 | `--dir` | `string` | — | target directory for the cloned quickstart; defaults to <name> |
-| `--feature` | `stringArray` | `[]` | enable a feature on the newly created project (repeatable); defaults to rtc and convoai |
+| `--feature` | `stringArray` | `[]` | enable a feature on the newly created project (repeatable); defaults to rtc, rtm, convoai; convoai also enables rtm |
 | `--new-project` | `bool` | — | always create a new Agora project instead of reusing an existing one |
 | `--project` | `string` | — | existing project ID or exact project name to bind to |
 | `--region` | `string` | — | control plane region for newly created projects (global or cn) |
+| `--rtm-data-center` | `string` | — | RTM data center to configure when rtm is enabled on a newly created project (CN, NA, EU, or AP); defaults to NA |
 | `--template` | `string` | — | quickstart template ID to use |
 
 ### `agora introspect`
@@ -121,6 +140,18 @@ Clear the local Agora session
 
 _No local flags. Inherited global flags still apply (see [Global Flags](#global-flags))._
 
+### `agora mcp`
+
+Run Agora CLI as a local MCP server
+
+_No local flags. Inherited global flags still apply (see [Global Flags](#global-flags))._
+
+### `agora mcp serve`
+
+Serve Agora CLI tools over MCP
+
+_No local flags. Inherited global flags still apply (see [Global Flags](#global-flags))._
+
 ### `agora open`
 
 Open Agora Console or CLI docs
@@ -128,7 +159,7 @@ Open Agora Console or CLI docs
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
 | `--no-browser` | `bool` | — | print the URL without opening a browser |
-| `--target` | `string` | `console` | target to open: console or docs |
+| `--target` | `string` | `console` | target to open: console, docs, docs-md, or product-docs |
 
 ### `agora project`
 
@@ -143,9 +174,10 @@ Create a new remote Agora project
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
 | `--dry-run` | `bool` | — | return the planned project create result without creating remote resources |
-| `--feature` | `stringArray` | `[]` | enable one or more features after creation |
+| `--feature` | `stringArray` | `[]` | enable one or more features after creation; defaults to rtc, rtm, convoai; convoai also enables rtm |
 | `--idempotency-key` | `string` | — | caller-provided key for safe retries when supported by the API |
 | `--region` | `string` | — | control plane region for the project context (global or cn) |
+| `--rtm-data-center` | `string` | — | RTM data center to configure when rtm is enabled (CN, NA, EU, or AP); defaults to NA |
 | `--template` | `string` | — | apply a higher-level project preset such as voice-agent |
 
 ### `agora project doctor`
@@ -155,7 +187,7 @@ Diagnose whether a project is ready for selected feature development
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
 | `--deep` | `bool` | — | run deeper repo-local checks for .agora metadata and quickstart env consistency |
-| `--feature` | `string` | `convoai` | target feature readiness to evaluate: rtc, rtm, or convoai |
+| `--feature` | `string` | `convoai` | target feature readiness to evaluate: rtc, rtm, convoai |
 
 ### `agora project env`
 
@@ -163,7 +195,7 @@ Export project environment variables
 
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
-| `--format` | `string` | — | output format: dotenv or shell; use --json for JSON output |
+| `--format` | `string` | — | output format: dotenv \| shell \| envelope \| json (default dotenv; envelope/json emit the unified JSON envelope) |
 | `--project` | `string` | — | project ID or exact project name; defaults to the current project context |
 | `--shell` | `bool` | — | render shell export statements instead of dotenv lines |
 | `--with-secrets` | `bool` | — | include sensitive values such as the app certificate |
@@ -176,6 +208,7 @@ Write project environment variables to a dotenv file
 |------|------|---------|-------------|
 | `--append` | `bool` | — | append Agora App ID and App Certificate values when no existing values are present |
 | `--overwrite` | `bool` | — | replace the target file with only Agora App ID and App Certificate values |
+| `--template` | `string` | — | credential key layout: nextjs or standard; if omitted, detect Next.js from the workspace |
 
 ### `agora project feature`
 
@@ -210,6 +243,7 @@ List projects available to the current account
 | `--keyword` | `string` | — | filter by exact or partial project name or project ID |
 | `--page` | `int` | `1` | page number to request |
 | `--page-size` | `int` | `20` | number of projects per page |
+| `--refresh-cache` | `bool` | — | force-refresh the unfiltered first-page project completion cache after listing |
 
 ### `agora project show`
 
@@ -261,8 +295,35 @@ List available official quickstarts
 
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
+| `--details` | `bool` | — | show repository, runtime, and env details in pretty output |
 | `--show-all` | `bool` | — | include upcoming or unavailable templates in the list |
-| `--verbose` | `bool` | — | show repository, runtime, and env details in pretty output |
+
+### `agora skills`
+
+Browse curated Agora workflows for humans and AI agents
+
+_No local flags. Inherited global flags still apply (see [Global Flags](#global-flags))._
+
+### `agora skills list`
+
+List available skills
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--category` | `string` | — | filter by category (scaffold, ops, agent) |
+| `--tag` | `string` | — | filter by tag (e.g. nextjs, rtc, mcp) |
+
+### `agora skills search`
+
+Search skills by id, title, description, or tag
+
+_No local flags. Inherited global flags still apply (see [Global Flags](#global-flags))._
+
+### `agora skills show`
+
+Show one skill in detail
+
+_No local flags. Inherited global flags still apply (see [Global Flags](#global-flags))._
 
 ### `agora telemetry`
 

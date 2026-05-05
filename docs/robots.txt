@@ -1,0 +1,38 @@
+# Agora CLI Documentation - Agent-Friendly
+
+User-agent: *
+Allow: /
+
+# Encourage agents to discover our structured documentation
+Allow: /md/
+Allow: /llms.txt
+
+# AI crawlers welcome
+User-agent: GPTBot
+Allow: /
+
+User-agent: ChatGPT-User
+Allow: /
+
+User-agent: Claude-Web
+Allow: /
+
+User-agent: anthropic-ai
+Allow: /
+
+User-agent: Cursor
+Allow: /
+
+User-agent: Applebot-Extended
+Allow: /
+
+User-agent: CCBot
+Allow: /
+
+User-agent: Google-Extended
+Allow: /
+
+User-agent: PerplexityBot
+Allow: /
+
+Sitemap: https://agoraio.github.io/cli/sitemap.xml

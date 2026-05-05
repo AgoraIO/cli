@@ -1,4 +1,4 @@
-// Package cli implements the agora-cli-go binary. The package is structured
+// Package cli implements the agora-cli binary. The package is structured
 // into focused files so each concern can be reasoned about independently:
 //
 //   - app.go       — App struct, Execute() entry point, output-mode resolver,
@@ -18,10 +18,13 @@
 package cli
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -136,23 +139,26 @@ type projectDoctorResult struct {
 // owns the shared HTTP client, the loaded config, the env snapshots, and the
 // fully-built cobra root command.
 type App struct {
-	root              *cobra.Command
-	env               map[string]string
-	osEnv             map[string]string // raw OS env snapshot before applyConfigToEnv; used for CI detection & user-set env precedence
-	cfg               appConfig
-	cfgState          configState
-	rootOutput        string
-	rootJSON          bool
-	rootPrettyJSON    bool
-	rootQuiet         bool
-	rootNoColor       bool
-	rootUpgradeCheck  bool
-	rootVerbose       bool
-	httpClient        *http.Client
-	projectEnvProject string
-	projectEnvFormat  string
-	projectEnvShell   bool
-	projectEnvSecrets bool
+	root                    *cobra.Command
+	env                     map[string]string
+	osEnv                   map[string]string // raw OS env snapshot before applyConfigToEnv; used for CI detection & user-set env precedence
+	cfg                     appConfig
+	cfgState                configState
+	rootOutput              string
+	rootJSON                bool
+	rootPrettyJSON          bool
+	rootQuiet               bool
+	rootNoColor             bool
+	rootUpgradeCheck        bool
+	rootDebug               bool
+	rootYes                 bool
+	httpClient              *http.Client
+	telemetry               telemetryClient
+	projectEnvProject       string
+	projectEnvFormat        string
+	projectEnvShell         bool
+	projectEnvSecrets       bool
+	projectEnvWriteTemplate string
 }
 
 // NewApp boots the App: snapshot env (before any mutation), load or migrate
@@ -177,6 +183,11 @@ func NewApp() (*App, error) {
 	}
 	a.applyConfigToEnv()
 	a.root = a.buildRoot()
+	// Best-effort initialize the telemetry sink. Returns a no-op when
+	// telemetry is disabled, when DO_NOT_TRACK is set, or when the
+	// Sentry DSN is empty (build without telemetry compiled in). Telemetry
+	// must never block the CLI from starting.
+	a.telemetry = initTelemetry(a.cfg.TelemetryEnabled, a.env, versionInfo())
 	return a, nil
 }
 
@@ -186,6 +197,23 @@ func NewApp() (*App, error) {
 // stderr path depending on the mode. Returns *exitError or *renderedError
 // for the cmd/main.go shim to translate into the process exit code.
 func (a *App) Execute() error {
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	// Best-effort telemetry flush at exit. Bounded by a short timeout so
+	// telemetry can never delay the CLI returning control to the shell.
+	defer func() {
+		if a.telemetry != nil {
+			a.telemetry.Flush(2 * time.Second)
+		}
+	}()
+	a.root.SetContext(ctx)
+	// Best-effort cache hygiene on every startup. Anything older than
+	// projectListCacheMaxAge (24h) is removed so we never accumulate
+	// unbounded data under <AGORA_HOME>/cache and so a stale cache
+	// from a prior auth session can never silently shape today's CLI
+	// output. Errors are intentionally ignored: cache cleanup must
+	// never block a user's command.
+	_ = pruneStaleCaches(a.env)
 	rawOutput := readRawFlagValue(os.Args[1:], "--output")
 	if rawOutput != "json" && rawOutput != "pretty" {
 		rawOutput = ""
@@ -199,7 +227,7 @@ func (a *App) Execute() error {
 			fmt.Fprintln(os.Stderr, banner)
 		}
 	}
-	if err := a.root.Execute(); err != nil {
+	if err := a.root.ExecuteContext(ctx); err != nil {
 		if _, ok := ExitCode(err); ok {
 			return err
 		}
@@ -209,6 +237,14 @@ func (a *App) Execute() error {
 			"error":       err.Error(),
 			"logFilePath": logPath,
 		})
+		// Forward the failure to telemetry. The sink is responsible for
+		// honoring opt-out, redacting sensitive fields, and never blocking.
+		if a.telemetry != nil {
+			a.telemetry.CaptureException(err, map[string]any{
+				"command":  a.guessCommandLabel(os.Args[1:]),
+				"exitCode": exitCode,
+			})
+		}
 		if mode == outputJSON {
 			_ = emitErrorEnvelope(os.Stdout, a.guessCommandLabel(os.Args[1:]), err, exitCode, logPath)
 			if exitCode != 1 {
@@ -358,6 +394,14 @@ func snapshotEnv() map[string]string {
 		}
 	}
 	return env
+}
+
+func (a *App) noInput() bool {
+	if a.rootYes {
+		return true
+	}
+	value := strings.ToLower(strings.TrimSpace(a.env["AGORA_NO_INPUT"]))
+	return value == "1" || value == "true" || value == "yes" || value == "y"
 }
 
 // isTTY reports whether the given file is connected to a terminal. Used for

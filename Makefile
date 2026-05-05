@@ -1,4 +1,4 @@
-.PHONY: build test lint lint-go lint-fmt snapshot snapshot-error-codes release release-snapshot docs-commands docs-commands-check
+.PHONY: build test lint lint-go lint-fmt snapshot snapshot-error-codes release release-snapshot docs-commands docs-commands-check docs-preview
 
 # Build a local agora binary with stripped paths.
 build:
@@ -68,3 +68,8 @@ docs-commands:
 # commit the result alongside the code change.
 docs-commands-check:
 	go run ./cmd/gendocs -check
+
+# Build and serve the GitHub Pages docs locally with the custom theme.
+# Uses an empty local baseurl so assets resolve from http://localhost:4000/.
+docs-preview:
+	./scripts/preview-pages-site.sh

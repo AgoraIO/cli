@@ -210,7 +210,7 @@ jobs:
 
           stage_platform() {
             local goos="$1" goarch="$2" npm_pkg="$3" bin_name="$4" archive_ext="$5"
-            local pkg_dir="packaging/npm/@agoraio/${npm_pkg}"
+            local pkg_dir="packaging/npm/${npm_pkg}"
             local archive="agora-cli-go_${tag}_${goos}_${goarch}.${archive_ext}"
 
             mkdir -p "${pkg_dir}/bin"
@@ -223,12 +223,12 @@ jobs:
             echo "  staged: ${pkg_dir}/bin/${bin_name}"
           }
 
-          stage_platform darwin  arm64 cli-darwin-arm64 agora     tar.gz
-          stage_platform darwin  amd64 cli-darwin-x64   agora     tar.gz
-          stage_platform linux   arm64 cli-linux-arm64  agora     tar.gz
-          stage_platform linux   amd64 cli-linux-x64    agora     tar.gz
-          stage_platform windows amd64 cli-win32-x64    agora.exe zip
-          stage_platform windows arm64 cli-win32-arm64  agora.exe zip
+          stage_platform darwin  arm64 agoraio-cli-darwin-arm64 agora     tar.gz
+          stage_platform darwin  amd64 agoraio-cli-darwin-x64   agora     tar.gz
+          stage_platform linux   arm64 agoraio-cli-linux-arm64  agora     tar.gz
+          stage_platform linux   amd64 agoraio-cli-linux-x64    agora     tar.gz
+          stage_platform windows amd64 agoraio-cli-win32-x64    agora.exe zip
+          stage_platform windows arm64 agoraio-cli-win32-arm64  agora.exe zip
 
       - name: Stamp version into all package.json files
         shell: bash
@@ -238,12 +238,12 @@ jobs:
           echo "Stamping version: $version"
 
           for pkg in \
-            packaging/npm/@agoraio/cli-darwin-arm64 \
-            packaging/npm/@agoraio/cli-darwin-x64 \
-            packaging/npm/@agoraio/cli-linux-arm64 \
-            packaging/npm/@agoraio/cli-linux-x64 \
-            packaging/npm/@agoraio/cli-win32-x64 \
-            packaging/npm/@agoraio/cli-win32-arm64; do
+            packaging/npm/agoraio-cli-darwin-arm64 \
+            packaging/npm/agoraio-cli-darwin-x64 \
+            packaging/npm/agoraio-cli-linux-arm64 \
+            packaging/npm/agoraio-cli-linux-x64 \
+            packaging/npm/agoraio-cli-win32-x64 \
+            packaging/npm/agoraio-cli-win32-arm64; do
             tmp=$(mktemp)
             jq --arg v "$version" '.version = $v' "${pkg}/package.json" > "$tmp"
             mv "$tmp" "${pkg}/package.json"
@@ -265,12 +265,12 @@ jobs:
         run: |
           set -euo pipefail
           for pkg in \
-            packaging/npm/@agoraio/cli-darwin-arm64 \
-            packaging/npm/@agoraio/cli-darwin-x64 \
-            packaging/npm/@agoraio/cli-linux-arm64 \
-            packaging/npm/@agoraio/cli-linux-x64 \
-            packaging/npm/@agoraio/cli-win32-x64 \
-            packaging/npm/@agoraio/cli-win32-arm64; do
+            packaging/npm/agoraio-cli-darwin-arm64 \
+            packaging/npm/agoraio-cli-darwin-x64 \
+            packaging/npm/agoraio-cli-linux-arm64 \
+            packaging/npm/agoraio-cli-linux-x64 \
+            packaging/npm/agoraio-cli-win32-x64 \
+            packaging/npm/agoraio-cli-win32-arm64; do
             echo "Publishing $pkg ${PUBLISH_ARGS}"
             # --provenance is honored by publishConfig.provenance; passing here for clarity.
             # When PUBLISH_ARGS contains --dry-run, no provenance attestation is created.

@@ -1,3 +1,7 @@
+---
+title: Automation Contract
+---
+
 # Automation Contract
 
 This document defines the machine-consumption contract for Agora CLI.
@@ -32,10 +36,15 @@ Use this guide for:
 - In JSON mode, both success and failure return the same top-level envelope shape.
 - Use `--json --pretty` when a human needs to inspect JSON directly. Scripts should keep the default single-line JSON.
 - Use `--quiet` to suppress the success envelope in **both** pretty and JSON modes; the exit code becomes the only result. Errors are still printed on stderr (and as a JSON envelope on stdout when `--json` is set without `--quiet`). NDJSON progress events are still emitted because they are observability, not results.
-- Use `--verbose` (equivalent to `AGORA_VERBOSE=1`) to echo structured log records to stderr. The flag does not change exit codes, JSON envelope shape, or NDJSON progress events; it only mirrors the entries that would normally be written to the log file. Pair with `--json` for fully machine-parseable runs that also surface internal events to your CI logs.
-- Interactive login prompts only appear in interactive pretty-mode runs. Automation should still authenticate up front with `agora login`; `--json`, `AGORA_OUTPUT=json`, and detected CI environments never prompt.
+- Use `--debug` (equivalent to `AGORA_DEBUG=1`) to echo structured log records to stderr. The flag does not change exit codes, JSON envelope shape, or NDJSON progress events; it only mirrors the entries that would normally be written to the log file. Pair with `--json` for fully machine-parseable runs that also surface internal events to your CI logs. v0.2.0 dropped the legacy `--verbose` / `-v` alias and the `AGORA_VERBOSE` env var; persisted configs that contain a `verbose` key are auto-promoted to `debug` on first load.
+- Use `--yes` (or `-y`) / `AGORA_NO_INPUT=1` to assume the default answer to confirmation prompts. Following industry convention for `-y` (apt-style), the flag never starts brand-new interactive flows: in JSON, CI, or non-TTY contexts the CLI still fails fast with the same `AUTH_UNAUTHENTICATED` error you would have seen without `--yes`, instead of silently launching an OAuth browser flow.
+- Interactive login prompts only appear in interactive pretty-mode TTY runs. Automation should authenticate up front with `agora login`; `--json`, `AGORA_OUTPUT=json`, detected CI environments, and non-TTY stdin all skip the prompt and fail with `AUTH_UNAUTHENTICATED`.
 - Output mode precedence is: explicit CLI flag (`--json` or `--output`) first, user-set `AGORA_OUTPUT` second, then user-customized config file value, then **CI auto-detect → JSON** (see below), then pretty.
-- Set `AGORA_AGENT=<tool-name>` in automated environments so support and analytics can distinguish agent traffic in the API `User-Agent`.
+- Set `AGORA_AGENT=<tool-name>` in automated environments to explicitly label agent traffic in the API `User-Agent`. When unset, the CLI may infer a coarse label such as `cursor`, `claude-code`, `cline`, `windsurf`, `codex`, or `aider` from known agent environment markers. Set `AGORA_AGENT_DISABLE_INFER=1` to disable inference.
+- Use `agora mcp serve` to expose local Agora CLI tools to MCP-capable agents. The full surface is exposed: `agora.version`, `agora.introspect`, `agora.auth.{status,logout}`, `agora.config.{path,get}`, `agora.telemetry.status`, `agora.upgrade.check`, `agora.project.{list,show,use,create,doctor,env,env_write}`, `agora.project.feature.{list,status,enable}`, `agora.quickstart.{list,create,env_write}`, and `agora.init`. Authentication is intentionally **not** exposed via MCP because OAuth requires an interactive browser; run `agora login` once on the host first.
+- Use `agora open --target docs` for the human GitHub Pages docs and `agora open --target docs-md` for the agent-facing raw Markdown index. The Markdown tree is published under predictable `/md/` URLs, for example `/md/commands.md`, `/md/automation.md`, and `/md/error-codes.md`.
+- Docs publishing reads `docs/site.env` for `CLI_DOCS_BASE_URL` and `CLI_DOCS_MD_BASE_URL`; staging Pages builds can override those environment variables at workflow time without changing docs content. The resolved values are published as `/docs.env` for transparency.
+- The CLI maintains a short-lived on-disk completion cache for `agora project use <TAB>` under `<AGORA_HOME>/cache/projects.json`. The cache is only used for completions when a **local unexpired session exists** (`session.json` with a non-empty access token and a future `expiresAt`, when present), so Tab does not suggest stale project names after logout or local session expiry. The cache TTL is 5 minutes by default; override with `AGORA_PROJECT_CACHE_TTL_SECONDS=<seconds>` (set to `0` to disable). Cache files older than 24 h are pruned at every CLI startup. Set `AGORA_DISABLE_CACHE=1` to drop the cache on the next startup. The cache is invalidated automatically by `agora logout` and `agora project create` (the latter clears the file; it does not embed the new project until the next successful list fetch). To **force-refresh** the cached completion page, run `agora project list --refresh-cache` while authenticated; that command fetches the unfiltered first page used by completion and rewrites `projects.json` when it succeeds.
 
 ### CI auto-detect
 
@@ -131,6 +140,40 @@ Agent guidance:
 - treat pretty output as human-only
 - do not parse stderr when `--json` is in use
 
+A **JSON Schema** for this envelope is published at
+[`docs/schema/envelope.v1.json`](schema/envelope.v1.json) (also available
+at the live URL `https://agoraio.github.io/cli/schema/envelope.v1.json`).
+Wrappers that want compile-time type safety can generate types from the
+schema with `quicktype`, `datamodel-code-generator`, or any
+JSON-Schema-aware tool.
+
+### One documented exception: `agora project env`
+
+`agora project env` is the only command whose **default** (non-JSON)
+output is raw stdout — without the unified envelope — so it can be used
+with shell substitution:
+
+```bash
+source <(agora project env --shell)
+eval "$(agora project env --format shell)"
+```
+
+To explicitly request a specific format, pass `--format`:
+
+| Flag                  | Output                                    |
+|-----------------------|-------------------------------------------|
+| `--format dotenv`     | `KEY=value` lines (default; `>> .env`)    |
+| `--format shell`      | shell `export KEY=value` statements       |
+| `--format envelope`   | unified JSON envelope (alias of `--json`) |
+| `--format json`       | same as `--format envelope`               |
+| `--shell`             | back-compat alias of `--format shell`     |
+| `--json`              | unified JSON envelope                     |
+
+For automation, prefer `--json` (or `--format envelope`) so the result
+has the same shape as every other command. `agora project env write`
+already emits the unified envelope under all output modes — only the
+read path has the raw-stdout exception above.
+
 ## Progress Events (NDJSON Stream)
 
 Long-running commands emit one or more **progress events** to stdout ahead of the final envelope when `--json` is set. The wire format is **NDJSON** (newline-delimited JSON): one complete JSON object per line, terminated by `\n`.
@@ -186,6 +229,20 @@ Additional stage-specific fields may appear (for example `repoUrl`, `projectId`,
 
 Stages are stable identifiers; new stages may be added over time. Agents should treat unknown stages as benign progress information rather than failing on them.
 
+### MCP transport caveat: progress events collapse into the tool result
+
+When the same long-running commands (`agora init`, `agora quickstart create`, `agora project create`, `agora login`) are invoked **through the MCP server** (`agora mcp serve`), the NDJSON progress event stream is **not** surfaced to the MCP client. MCP clients receive the final result payload only — JSON-stringified into the standard `content[0].text` slot of the `tools/call` response.
+
+Why: MCP's stdio transport uses stdout for JSON-RPC framing, so any extra newline-delimited objects emitted before the final response would corrupt the transport. The progress events are still produced internally but are intentionally swallowed before they reach the client.
+
+Implications for agent authors:
+
+- Do not rely on `stage`-based hooks (e.g. progress UIs, mid-flight cancellation prompts) when calling these tools over MCP. Use them only when shelling out to `agora ... --json` directly.
+- Plan for higher tail latency on MCP `tools/call` for the affected tools; the user-visible "nothing is happening" gap may be tens of seconds for git clones or project creation. Consider surfacing your own "running tool: agora.init…" UI in the host agent.
+- The terminal payload shape returned in `content[0].text` is identical to the CLI's terminal `data` envelope, so existing JSON-shape handlers continue to work unchanged.
+
+When future MCP transports support server-initiated `notifications/progress` (an open spec area), the CLI can add native MCP progress forwarding without changing the existing tool result shape.
+
 Failure example:
 
 ```json
@@ -230,7 +287,7 @@ Example:
 ./agora init my-nextjs-demo --template nextjs --new-project --json
 ```
 
-By default `init` reuses an existing project — preferring one named `"Default Project"`, then the project with the latest `createdAt` value from the current results page. Pass `--new-project` to force creation. Use `--project <name|id>` to bind to a specific project.
+By default `init` reuses an existing project — preferring one named exactly `"Default Project"`. If no default exists, interactive sessions show existing projects with a create-new option and default to the most recently created project; JSON, CI, and non-TTY runs select the most recent project automatically. Pass `--new-project` to force creation. Use `--project <name|id>` to bind to a specific project.
 
 Required `data` fields:
 - `action`
@@ -251,11 +308,15 @@ Required `data` fields:
 - `metadataPath`
   Repo-local project binding file path, currently `.agora/project.json`.
 - `enabledFeatures`
-  Array of features enabled during this run. Defaults to `rtc` and `convoai` for newly created projects unless overridden with `--feature`. Empty for existing projects since the CLI did not create them in this run.
+  Array of features enabled during this run. Defaults to `rtc`, `rtm`, and `convoai` for newly created projects unless overridden with `--feature`. Empty for existing projects since the CLI did not create them in this run.
 - `nextSteps`
   Ordered list of suggested follow-up commands for the selected template.
 - `status`
   Currently `ready`.
+
+Optional fields:
+- `rtmDataCenter`
+  RTM data center configured on the new project when RTM was enabled. Defaults to `NA` when `--rtm-data-center` is omitted.
 
 Display-oriented fields:
 - `title`
@@ -277,6 +338,8 @@ Automation notes:
 Example:
 
 ```bash
+./agora project create my-agent-demo --json
+./agora project create my-agent-demo --rtm-data-center EU --json
 ./agora project create my-agent-demo --feature rtc --feature convoai --json
 ```
 
@@ -288,7 +351,11 @@ Required `data` fields (success):
 - `appId`
 - `region`
 - `enabledFeatures`
-  Array of features that were enabled on the new project (e.g. `["rtc", "convoai"]`).
+  Array of features that were enabled on the new project. Defaults to `["rtc", "rtm", "convoai"]` when no `--feature` flags are passed. Explicit `convoai` requests also include `rtm`.
+
+Optional fields:
+- `rtmDataCenter`
+  RTM data center configured when RTM was enabled. Defaults to `NA` when `--rtm-data-center` is omitted.
 
 Required `data` fields (`--dry-run`):
 - `action`
@@ -304,6 +371,10 @@ Required `data` fields (`--dry-run`):
   Project preset that would be applied (empty when not requested).
 - `idempotencyKey`
   Echoes the caller-provided `--idempotency-key` value (empty when not provided).
+
+Optional fields (`--dry-run`):
+- `rtmDataCenter`
+  Uppercased data center value (`CN`, `NA`, `EU`, or `AP`) when RTM is enabled. Defaults to `NA` when omitted.
 
 Safe branch fields:
 - `projectId` (success only)
@@ -375,6 +446,10 @@ Example:
 ./agora project env write apps/web/.env.local --json
 ```
 
+Optional `data` fields:
+- `credentialLayout`
+  Either `standard` (AGORA_* keys) or `nextjs` (`NEXT_PUBLIC_AGORA_APP_ID` and `NEXT_AGORA_APP_CERTIFICATE`) when the workspace is detected or overridden as Next.js.
+
 Required `data` fields:
 - `action`
   Always `env-write`.
@@ -382,10 +457,20 @@ Required `data` fields:
 - `projectName`
 - `path`
   Absolute path to the written dotenv file.
+- `projectType`
+  Detected workspace type used for future repo metadata (`nextjs`, `go`, `python`, `node`, or `standard`).
 - `status`
   One of `created`, `updated`, `appended`, or `overwritten`.
 - `keysWritten`
-  Ordered list of credential keys that were written. `project env write` writes only `AGORA_APP_ID` and `AGORA_APP_CERTIFICATE`; non-secret project metadata is stored in `.agora/project.json` for repo-bound quickstarts instead of dotenv files.
+  Ordered list of credential keys that were written. By default `project env write` uses `AGORA_APP_ID` and `AGORA_APP_CERTIFICATE`. Next.js workspaces (detected via `package.json` / `next.config.*` / `env.local.example` / repo `.agora` `projectType` / `template: nextjs`, or forced with `--template nextjs`) use `NEXT_PUBLIC_AGORA_APP_ID` and `NEXT_AGORA_APP_CERTIFICATE` instead. Non-secret project metadata stays in `.agora/project.json`.
+
+Optional `data` fields (present when the CLI updates or creates repo metadata):
+- `metadataUpdated`
+  `true` when `.agora/project.json` was created or updated for the selected project (including `projectType` and `envPath` when missing).
+- `metadataPath`
+  Relative path `.agora/project.json` from the repo root when `metadataUpdated` is true.
+
+Pass `--template standard` to force AGORA_* keys when auto-detection would pick Next.js.
 
 Write behavior:
 - existing `.env` and `.env.local` files are preserved; missing credential keys are appended and existing credential keys are updated
@@ -397,6 +482,10 @@ Safe branch fields:
 - `path`
 - `status`
 - `keysWritten`
+- `credentialLayout`
+- `projectType`
+- `metadataUpdated` (when repo binding was updated)
+- `metadataPath` (when `metadataUpdated` is true)
 
 ### `project env`
 
@@ -533,7 +622,7 @@ Env write behavior:
 - quickstart env files contain only the App ID and App Certificate variable names required by the template
 - Next.js uses `NEXT_PUBLIC_AGORA_APP_ID` and `NEXT_AGORA_APP_CERTIFICATE`
 - Python and Go use `APP_ID` and `APP_CERTIFICATE`
-- project metadata such as project ID, project name, region, template, and env path is stored in `.agora/project.json`
+- project metadata such as project ID, project name, region, template, projectType, and env path is stored in `.agora/project.json`
 - existing quickstart env files are preserved; missing credential keys are appended and existing credential keys are updated
 - stale Agora credential aliases for another runtime are commented out to avoid ambiguous dotenv resolution; for example, a Next.js quickstart prefers `NEXT_PUBLIC_AGORA_APP_ID` and comments out old `AGORA_APP_ID` / `APP_ID` entries when replacing them
 
@@ -685,6 +774,7 @@ Example:
 ```bash
 ./agora project list --json
 ./agora project list --keyword demo --page 2 --json
+./agora project list --refresh-cache --json
 ```
 
 Required `data` fields:
@@ -696,6 +786,8 @@ Required `data` fields:
   Number of items per page.
 - `total`
   Total number of matching projects across all pages.
+- `cacheRefreshed`
+  Boolean. `true` only when `--refresh-cache` successfully refreshed the unfiltered first-page project completion cache.
 
 Each item includes: `projectId`, `name`, `appId`, `projectType`, `status`, `region`, `createdAt`, `updatedAt`.
 
@@ -806,7 +898,7 @@ Returns the current resolved config object. Safe branch fields:
 - `logLevel`
 - `browserAutoOpen`
 - `telemetryEnabled`
-- `verbose`
+- `debug` (renamed from legacy `verbose` in v0.2.0; legacy key is migrated on first load)
 
 ### `config update`
 

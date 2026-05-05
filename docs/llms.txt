@@ -1,0 +1,120 @@
+# Agora CLI Documentation
+
+> Command-line tool for Agora authentication, project management, and developer onboarding
+
+## Quick Start
+
+Install: curl -fsSL https://raw.githubusercontent.com/AgoraIO/cli/main/install.sh | sh
+
+Login: agora login
+Initialize project: agora init my-demo --template nextjs
+Check project health: agora project doctor --json
+
+## Documentation Index
+
+### Human-Readable HTML
+- Home: /cli/
+- Install options: /cli/install.html
+- Command reference: /cli/commands.html
+- Automation (JSON contract): /cli/automation.html
+- Error codes: /cli/error-codes.html
+- Telemetry controls: /cli/telemetry.html
+
+### Agent-Friendly Markdown
+- Index: /cli/md/index.md
+- Commands: /cli/md/commands.md
+- Automation: /cli/md/automation.md
+- Error codes: /cli/md/error-codes.md
+- Install guide: /cli/md/install.md
+- Telemetry: /cli/md/telemetry.md
+- Agent rules: /cli/md/agents/README.md
+
+### Machine-Readable Schema
+- JSON envelope schema (v1): /cli/schema/envelope.v1.json
+- Live introspection (run locally): agora introspect --json
+
+## Key Features
+
+- **Authentication**: OAuth-based login flow with token management
+- **Project Management**: Initialize, configure, and validate Agora projects
+- **JSON Output**: All commands support --json for automation and scripting (see Automation Notes below for one documented exception)
+- **Stable Exit Codes**: Consistent error codes for CI/CD integration
+- **Template System**: Quick-start templates for Next.js, Python, and Go (see `agora init --help` for the current catalog)
+- **Cross-Platform**: macOS, Linux, Windows support
+- **Agentic discovery**: `agora introspect --json` and `agora --help --all --json` emit the same machine-readable command tree
+- **MCP server**: `agora mcp serve` exposes the CLI as Model Context Protocol tools for agents
+
+## Common Use Cases
+
+### Login and Authentication
+```
+agora login
+agora whoami
+agora logout
+agora auth status --json
+```
+
+### Project Initialization
+```
+agora init my-app --template nextjs
+agora init my-app --template python --yes
+agora init my-app --template go --json
+```
+
+### Project Health Check
+```
+agora project doctor
+agora project doctor --json
+agora project doctor --quiet
+```
+
+### Configuration Management
+```
+agora config get
+agora config update --telemetry-enabled=false
+agora telemetry disable
+```
+
+## Automation
+
+All commands except `agora project env` (raw stdout in dotenv/shell mode for `eval $(...)` ergonomics) emit a uniform JSON envelope on `--json`:
+
+```
+{
+  "ok": true,
+  "command": "<stable label>",
+  "data": { ... },
+  "meta": { "outputMode": "json", "exitCode": 0 }
+}
+```
+
+To get the JSON envelope for `project env`, pass `--json` (the raw dotenv/shell formats remain available via `--format dotenv` / `--format shell` for shell sourcing).
+
+Exit codes (stable contract):
+- 0   success
+- 1   generic error
+- 2   doctor warnings (`project doctor` only)
+- 3   auth error (AUTH_UNAUTHENTICATED, AUTH_SESSION_EXPIRED)
+- 130 user interrupt (Ctrl+C / SIGINT)
+
+Full automation contract: /cli/md/automation.md
+Stable error codes: /cli/md/error-codes.md
+
+## Telemetry
+
+Telemetry is operational diagnostics only and never includes Agora App Certificates or OAuth tokens. Disable with any of:
+```
+agora telemetry disable
+agora config update --telemetry-enabled=false
+DO_NOT_TRACK=1 agora <command>
+```
+
+Full telemetry contract (events, fields, sinks): /cli/md/telemetry.md
+
+## Support
+
+- GitHub Issues: https://github.com/AgoraIO/cli/issues
+- GitHub Discussions: https://github.com/AgoraIO/cli/discussions
+- Security disclosure: security@agora.io (see SECURITY.md)
+- Documentation: https://agoraio.github.io/cli/
+- Agora Console: https://console.agora.io

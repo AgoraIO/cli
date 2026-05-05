@@ -101,6 +101,10 @@ func (a *App) logout() (map[string]any, error) {
 	if err := clearContext(a.env); err != nil {
 		return nil, err
 	}
+	// The on-disk completion cache assumes an active session; once the
+	// user is logged out it would be misleading to keep serving cached
+	// project names from a previous identity.
+	_ = clearProjectListCache(a.env)
 	return map[string]any{"action": "logout", "clearedSession": cleared, "status": "logged-out"}, nil
 }
 
@@ -326,7 +330,16 @@ func (a *App) exchangeToken(tokenURL string, values url.Values) (session, error)
 	defer resp.Body.Close()
 	body, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return session{}, fmt.Errorf("OAuth token exchange failed with status %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
+		detail := strings.TrimSpace(string(body))
+		if detail == "" {
+			detail = http.StatusText(resp.StatusCode)
+		}
+		return session{}, &cliError{
+			Message:    fmt.Sprintf("OAuth token exchange failed (HTTP %d): %s", resp.StatusCode, detail),
+			Code:       "AUTH_OAUTH_EXCHANGE_FAILED",
+			HTTPStatus: resp.StatusCode,
+			RequestID:  responseRequestID(resp.Header),
+		}
 	}
 	var token tokenResponse
 	if err := json.Unmarshal(body, &token); err != nil {
@@ -339,7 +352,7 @@ func (a *App) exchangeToken(tokenURL string, values url.Values) (session, error)
 			"response":     raw,
 			"responseKeys": sortedMapKeys(raw),
 		})
-		return session{}, errors.New("OAuth token response was missing required fields.")
+		return session{}, &cliError{Message: "OAuth token response was missing required fields.", Code: "AUTH_OAUTH_RESPONSE_INVALID"}
 	}
 	now := time.Now().UTC()
 	return session{
@@ -370,6 +383,30 @@ func noLocalSessionError() error {
 	return &cliError{Message: noLocalSessionErrorMessage, Code: "AUTH_UNAUTHENTICATED"}
 }
 
+// hasPersistedNonEmptySession reports whether session.json exists, parses,
+// and contains a non-empty access token. Shell completion consults this
+// before serving the on-disk project list cache so we never show
+// API-derived project names when the user has no local session (logout
+// already clears the cache; this also covers stray cache files without a
+// matching session).
+func hasPersistedNonEmptySession(env map[string]string) bool {
+	s, err := loadSession(env)
+	if err != nil || s == nil {
+		return false
+	}
+	if strings.TrimSpace(s.AccessToken) == "" {
+		return false
+	}
+	if strings.TrimSpace(s.ExpiresAt) == "" {
+		return true
+	}
+	expiresAt, err := time.Parse(time.RFC3339Nano, strings.TrimSpace(s.ExpiresAt))
+	if err != nil {
+		return false
+	}
+	return time.Now().Before(expiresAt)
+}
+
 func currentOutputModeFromArgs(env map[string]string) outputMode {
 	mode := resolveConfiguredOutputMode("", env)
 	if output := readRawFlagValue(os.Args[1:], "--output"); output == "json" || output == "pretty" {
@@ -381,14 +418,30 @@ func currentOutputModeFromArgs(env map[string]string) outputMode {
 	return mode
 }
 
+// shouldPromptForLogin reports whether `promptForLogin` may engage the user
+// interactively (or auto-confirm via --yes / AGORA_NO_INPUT). Industry
+// convention for `-y` / `--yes` flags is "assume yes to confirmation
+// prompts" — NOT "spawn brand-new interactive flows in non-interactive
+// contexts". So JSON, CI, and non-TTY runs always fail fast with the
+// existing AUTH_UNAUTHENTICATED error, regardless of --yes.
 func (a *App) shouldPromptForLogin() bool {
-	if currentOutputModeFromArgs(a.env) == outputJSON {
+	return decideShouldPromptForLogin(currentOutputModeFromArgs(a.env), isCIEnvironment(a.osEnv), isTTY(os.Stdin))
+}
+
+// decideShouldPromptForLogin is the pure-function form of
+// shouldPromptForLogin so tests can drive every code path without having
+// to forge os.Args, os.Stdin, or the CI env. The fix here is that
+// `--yes` / AGORA_NO_INPUT no longer short-circuits the JSON/CI/non-TTY
+// guards: those contexts always fail with AUTH_UNAUTHENTICATED so we
+// never silently launch an OAuth browser flow in CI.
+func decideShouldPromptForLogin(mode outputMode, ci bool, stdinIsTTY bool) bool {
+	if mode == outputJSON {
 		return false
 	}
-	if isCIEnvironment(a.osEnv) {
+	if ci {
 		return false
 	}
-	return isTTY(os.Stdin)
+	return stdinIsTTY
 }
 
 func readConfirmYesDefault(in io.Reader, out io.Writer, prompt string) (bool, error) {
@@ -431,6 +484,15 @@ func (a *App) loginPromptRegion() string {
 func (a *App) promptForLogin() error {
 	if !a.shouldPromptForLogin() {
 		return noLocalSessionError()
+	}
+	// Interactive context: either auto-confirm via --yes / AGORA_NO_INPUT
+	// (the "yes to the confirmation prompt" semantic) or ask the user.
+	if a.noInput() {
+		if _, err := fmt.Fprintln(os.Stderr, "This command requires an Agora account. Continuing without prompting because --yes is set."); err != nil {
+			return err
+		}
+		_, err := a.login(false, a.loginPromptRegion(), nil)
+		return err
 	}
 	if _, err := fmt.Fprintln(os.Stderr, "This command requires an Agora account."); err != nil {
 		return err
@@ -513,7 +575,7 @@ func (a *App) apiRequest(method, pathname string, query map[string]string, body 
 			return nil, err
 		}
 		req.Header.Set("Authorization", token.TokenType+" "+token.AccessToken)
-		req.Header.Set("User-Agent", agoraUserAgent(a.env))
+		req.Header.Set("User-Agent", agoraUserAgent(a.osEnv))
 		if body != nil {
 			req.Header.Set("content-type", "application/json")
 		}
@@ -559,7 +621,7 @@ func (a *App) apiRequest(method, pathname string, query map[string]string, body 
 
 func agoraUserAgent(env map[string]string) string {
 	base := "agora-cli/" + version
-	if agent := strings.TrimSpace(env["AGORA_AGENT"]); agent != "" {
+	if agent := agentLabelFromOSEnv(env); agent != "" {
 		return base + " agent/" + sanitizeUserAgentToken(agent)
 	}
 	return base

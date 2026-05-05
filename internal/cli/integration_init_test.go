@@ -24,7 +24,7 @@ func TestCLIInitCreatesProjectAndQuickstart(t *testing.T) {
 		"app/page.tsx":      "export default function Page() { return null }\n",
 	})
 
-	initResult := runCLI(t, []string{"init", "starter-demo", "--template", "nextjs", "--dir", filepath.Join(rootDir, "starter-demo"), "--json"}, cliRunOptions{
+	initResult := runCLI(t, []string{"init", "starter-demo", "--template", "nextjs", "--dir", filepath.Join(rootDir, "starter-demo"), "--rtm-data-center", "ap", "--json"}, cliRunOptions{
 		env: map[string]string{
 			"XDG_CONFIG_HOME":                  configHome,
 			"AGORA_API_BASE_URL":               api.baseURL,
@@ -36,8 +36,19 @@ func TestCLIInitCreatesProjectAndQuickstart(t *testing.T) {
 	if initResult.exitCode != 0 || !strings.Contains(initResult.stdout, `"action":"init"`) || !strings.Contains(initResult.stdout, `"projectAction":"created"`) || !strings.Contains(initResult.stdout, `"template":"nextjs"`) {
 		t.Fatalf("unexpected init result: %+v", initResult)
 	}
-	if !strings.Contains(initResult.stdout, `"enabledFeatures":["rtc","convoai"]`) && !strings.Contains(initResult.stdout, `"enabledFeatures":["convoai","rtc"]`) {
-		t.Fatalf("expected default features in init result: %+v", initResult)
+	for _, feature := range []string{`"rtc"`, `"rtm"`, `"convoai"`} {
+		if !strings.Contains(initResult.stdout, feature) {
+			t.Fatalf("expected default feature %s in init result: %+v", feature, initResult)
+		}
+	}
+	if !strings.Contains(initResult.stdout, `"rtmDataCenter":"AP"`) {
+		t.Fatalf("expected RTM data center in init result: %+v", initResult)
+	}
+	api.mu.Lock()
+	initProject := api.projects["prj_0001"]
+	api.mu.Unlock()
+	if initProject == nil || initProject.FeatureState.RTMRegion != "AP" {
+		t.Fatalf("expected init to configure RTM data center AP, got %+v", initProject)
 	}
 	localEnv, err := os.ReadFile(filepath.Join(rootDir, "starter-demo", ".env.local"))
 	if err != nil {

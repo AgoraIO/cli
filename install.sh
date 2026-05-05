@@ -45,12 +45,19 @@ NO_COLOR_ENV="${NO_COLOR:-}"
 # ---- Mode flags ------------------------------------------------------------
 DRY_RUN=0
 FORCE=0
-ADD_TO_PATH=0
 LIST_VERSIONS=0
 PRERELEASE=0
 QUIET=0
 VERBOSE=0
 NO_COLOR_FLAG=0
+UNINSTALL=0
+# Shell-integration opt-outs. Default behavior matches modern installers
+# (bun, fnm, deno, uv, volta): auto-wire PATH and shell completion for
+# the detected $SHELL. Granular opt-outs let users decouple each piece;
+# --skip-shell is the umbrella that disables both.
+NO_PATH=0
+NO_COMPLETION=0
+SKIP_SHELL=0
 
 # ---- Exit codes ------------------------------------------------------------
 EXIT_OK=0
@@ -185,11 +192,23 @@ ${BOLD}Options:${RESET}
   --list-versions         Print recent published versions and exit.
   --force                 Reinstall even if the requested version is already present,
                           or proceed past a Homebrew/npm-managed install warning.
-  --add-to-path           Append the install directory to your shell rc file.
+
+${BOLD}Shell integration${RESET} ${DIM}(auto-on; pass an opt-out flag to disable)${RESET}
+  --no-path               Don't append the install directory to your shell rc file.
+                          The script will still print manual PATH instructions if
+                          'agora' is not already resolvable on PATH.
+  --no-completion         Don't install shell completion. The script will still
+                          print the manual 'agora completion <shell>' command.
+  --skip-shell            Umbrella for --no-path --no-completion. Install the
+                          binary only and skip every shell modification.
+
+${BOLD}Other:${RESET}
   --dry-run               Show what would happen without making changes.
+  --uninstall             Remove the installer-managed binary and receipt.
   --no-color              Disable colored output.
   -q, --quiet             Suppress non-error output.
-  -v, --verbose           Verbose debug output.
+  -v, --verbose           Verbose debug output (installer-internal; unrelated to
+                          'agora --debug').
   --installer-version     Print this installer's revision and exit.
   -h, --help              Show this help.
 
@@ -262,12 +281,24 @@ parse_args() {
         FORCE=1
         shift
         ;;
-      --add-to-path)
-        ADD_TO_PATH=1
+      --no-path)
+        NO_PATH=1
+        shift
+        ;;
+      --no-completion)
+        NO_COMPLETION=1
+        shift
+        ;;
+      --skip-shell)
+        SKIP_SHELL=1
         shift
         ;;
       --dry-run)
         DRY_RUN=1
+        shift
+        ;;
+      --uninstall)
+        UNINSTALL=1
         shift
         ;;
       --no-color)
@@ -297,6 +328,30 @@ parse_args() {
         ;;
     esac
   done
+}
+
+# ---- Uninstall --------------------------------------------------------------
+uninstall() {
+  ensure_install_dir_default
+  binary_path="${INSTALL_DIR}/${BINARY_NAME}"
+  receipt_path="${INSTALL_DIR}/${INSTALL_RECEIPT_FILE}"
+  say_step "Uninstalling Agora CLI from ${INSTALL_DIR}"
+  if [ "$DRY_RUN" = "1" ]; then
+    say "[dry-run] Would remove ${binary_path}"
+    say "[dry-run] Would remove ${receipt_path}"
+    return 0
+  fi
+  if [ -e "$binary_path" ]; then
+    rm -f "$binary_path" 2>/dev/null || run_elevated rm -f "$binary_path"
+    say_ok "Removed ${binary_path}"
+  else
+    say "No agora binary found at ${binary_path}."
+  fi
+  if [ -e "$receipt_path" ]; then
+    rm -f "$receipt_path" 2>/dev/null || run_elevated rm -f "$receipt_path"
+    say_ok "Removed ${receipt_path}"
+  fi
+  say "Config, session, context, and logs are preserved under the Agora CLI config directory."
 }
 
 # ---- Helpers ---------------------------------------------------------------
@@ -804,13 +859,33 @@ detect_platform() {
 }
 
 # ---- PATH guidance ---------------------------------------------------------
+bash_writable_rc() {
+  for candidate in \
+    "${XDG_CONFIG_HOME:+$XDG_CONFIG_HOME/bash/bashrc}" \
+    "$HOME/.bashrc" \
+    "$HOME/.bash_profile" \
+    "$HOME/.profile"; do
+    if [ -z "$candidate" ]; then
+      continue
+    fi
+    if [ -w "$candidate" ] || { [ ! -e "$candidate" ] && [ -w "$(dirname "$candidate")" ]; }; then
+      printf '%s\n' "$candidate"
+      return 0
+    fi
+  done
+
+  # Fallback target for manual hints when no candidate can be written.
+  printf '%s\n' "$HOME/.bashrc"
+  return 0
+}
+
 shell_rc_for_path() {
   shell_name=""
   if [ -n "${SHELL:-}" ]; then
     shell_name=$(basename "$SHELL" 2>/dev/null || true)
   fi
   case "$shell_name" in
-    bash) printf '%s\n' "$HOME/.bashrc" ;;
+    bash) bash_writable_rc ;;
     zsh)  printf '%s\n' "$HOME/.zshrc" ;;
     fish) printf '%s\n' "$HOME/.config/fish/config.fish" ;;
     *)    printf '%s\n' "$HOME/.profile" ;;
@@ -828,15 +903,51 @@ shell_path_line() {
   esac
 }
 
+shell_refresh_command() {
+  shell_name=""
+  if [ -n "${SHELL:-}" ]; then
+    shell_name=$(basename "$SHELL" 2>/dev/null || true)
+  fi
+  case "$shell_name" in
+    fish) printf 'source %s\n' "$(shell_rc_for_path)" ;;
+    *)    printf 'exec %s\n' "${SHELL:-/bin/sh}" ;;
+  esac
+}
+
+# print_path_instructions is the manual-fallback hint shown when the
+# user opted out of auto-PATH (--no-path / --skip-shell) and the binary
+# is not yet resolvable on PATH. It reuses print_manual_path_block so
+# the wording and exact command match what the auto-failed path emits.
 print_path_instructions() {
   rcfile=$(shell_rc_for_path)
   line=$(shell_path_line)
   warn "agora is not on your PATH yet."
-  say  "  Add this to ${BOLD}${rcfile}${RESET}:"
-  say  "    ${GREEN}${line}${RESET}"
-  say  "  Or re-run with ${BOLD}--add-to-path${RESET} to do this automatically."
+  print_manual_path_block "$rcfile" "$line"
+  say "  ${DIM}(Tip: re-run the installer without --no-path / --skip-shell to do this automatically.)${RESET}"
 }
 
+# print_manual_path_block prints a complete, copy-pasteable manual
+# PATH-setup block. Used as the body of every PATH failure message so
+# the wording, indentation, and example command stay identical across
+# the mkdir-failed, write-failed, and explicit-opt-out paths.
+print_manual_path_block() {
+  rcfile=$1
+  line=$2
+  say "  agora is installed at ${BOLD}${DESTINATION}${RESET} and is ready to run."
+  say "  To add it to your PATH, append this line to a shell rc file you can write to:"
+  say ""
+  say "    ${GREEN}${line}${RESET}"
+  say ""
+  say "  Then open a new shell, or ${DIM}source${RESET} the file you edited."
+  say "  ${DIM}For other options (custom INSTALL_DIR, containers), see ${DOCS_URL}${RESET}"
+}
+
+# add_to_path appends INSTALL_DIR to the user's shell rc file. Best-effort:
+# returns 0 on success (added or already present), 1 on any write failure.
+# On failure it emits a plain-language branch message followed by a
+# copy-pasteable manual block. The caller does NOT need to print any
+# additional fallback hints. This mirrors the softer manual-fallback
+# style used by bun and uv.
 add_to_path() {
   rcfile=$(shell_rc_for_path)
   line=$(shell_path_line)
@@ -852,10 +963,159 @@ add_to_path() {
     return 0
   fi
 
-  mkdir -p "$(dirname "$rcfile")"
-  printf '\n# Added by Agora CLI installer\n%s\n' "$line" >> "$rcfile"
+  rcdir=$(dirname "$rcfile")
+  if ! mkdir -p "$rcdir" 2>/dev/null; then
+    say "${rcfile} is not writable, so the installer can't add agora to your PATH automatically."
+    print_manual_path_block "$rcfile" "$line"
+    return 1
+  fi
+  # Wrap the redirection in a brace group so the shell's own
+  # "Permission denied" message on the redirection (emitted before
+  # the command runs, so a bare `>> file 2>/dev/null` does not catch
+  # it) is suppressed. We surface only the friendlier warn below.
+  if ! { printf '\n# Added by Agora CLI installer\n%s\n' "$line" >> "$rcfile"; } 2>/dev/null; then
+    say "${rcfile} is not writable, so the installer can't add agora to your PATH automatically."
+    print_manual_path_block "$rcfile" "$line"
+    return 1
+  fi
   say "Added ${INSTALL_DIR} to PATH in ${rcfile}."
-  say "Open a new shell to apply."
+  say "To use agora in this shell now, run:"
+  say "    ${GREEN}$(shell_refresh_command)${RESET}"
+  say "${DIM}(Or open a new terminal - the change takes effect either way.)${RESET}"
+  return 0
+}
+
+# detect_user_shell returns "bash", "zsh", "fish", or "" for the user's
+# login shell. Reads $SHELL because the installer often runs in a
+# subshell that does not match the user's interactive shell.
+detect_user_shell() {
+  case "${SHELL:-}" in
+    */bash) printf 'bash' ;;
+    */zsh)  printf 'zsh' ;;
+    */fish) printf 'fish' ;;
+    *)      printf '' ;;
+  esac
+}
+
+# completion_target_for_shell prints the user-writable file path the
+# completion script should be written to for the given shell. Empty
+# output means "no known target", and the caller should print a manual
+# hint instead. We deliberately prefer user-owned paths so the
+# installer never needs sudo just to wire completion.
+completion_target_for_shell() {
+  shell_name=$1
+  case "$shell_name" in
+    bash)
+      # bash-completion v2 reads from XDG_DATA_HOME/bash-completion/completions.
+      # Falls back to ~/.local/share/... which is the documented default.
+      data_home="${XDG_DATA_HOME:-$HOME/.local/share}"
+      printf '%s/bash-completion/completions/agora' "$data_home"
+      ;;
+    zsh)
+      # ~/.zsh/completions is appended to fpath in our zsh hint below.
+      printf '%s/.zsh/completions/_agora' "$HOME"
+      ;;
+    fish)
+      # fish auto-loads ~/.config/fish/completions/*.fish.
+      config_home="${XDG_CONFIG_HOME:-$HOME/.config}"
+      printf '%s/fish/completions/agora.fish' "$config_home"
+      ;;
+    *)
+      printf ''
+      ;;
+  esac
+}
+
+# print_completion_instructions tells the user how to enable completion
+# manually when they opted out (--no-completion / --skip-shell) or when
+# auto-detect failed. Mirrors print_path_instructions for symmetry.
+print_completion_instructions() {
+  shell_name=$(detect_user_shell)
+  case "$shell_name" in
+    bash|zsh|fish)
+      say "  ${GREEN}agora completion ${shell_name} > $(completion_target_for_shell "$shell_name")${RESET}"
+      ;;
+    *)
+      say "  ${GREEN}agora completion --help${RESET}"
+      ;;
+  esac
+}
+
+# install_completion writes the cobra-generated completion script to a
+# user-writable location for the detected shell. Best-effort: failures
+# never abort the install, and we always print the manual fallback
+# command the user can copy-paste if anything goes wrong. Honors
+# NO_COMPLETION and SKIP_SHELL.
+install_completion() {
+  if [ "$NO_COMPLETION" = "1" ] || [ "$SKIP_SHELL" = "1" ]; then
+    return 0
+  fi
+
+  shell_name=$(detect_user_shell)
+  case "$shell_name" in
+    bash|zsh|fish) ;;
+    "")
+      say "Could not detect your shell from \$SHELL. To enable completion later, run 'agora completion --help'."
+      return 0
+      ;;
+    *)
+      say "Shell completion auto-install not supported for ${shell_name}. Run 'agora completion --help' to wire it manually."
+      return 0
+      ;;
+  esac
+
+  target=$(completion_target_for_shell "$shell_name")
+  if [ -z "$target" ]; then
+    say "No known completion install path for ${shell_name}. Run 'agora completion --help' for manual instructions."
+    return 0
+  fi
+
+  if [ "$DRY_RUN" = "1" ]; then
+    say "[dry-run] Would install ${shell_name} completion to ${target}."
+    return 0
+  fi
+
+  if ! command -v agora >/dev/null 2>&1 && [ ! -x "$DESTINATION" ]; then
+    warn "Cannot install completion: agora binary not found yet."
+    return 0
+  fi
+
+  agora_bin="$DESTINATION"
+  if [ ! -x "$agora_bin" ]; then
+    agora_bin=$(command -v agora 2>/dev/null || printf '')
+  fi
+  if [ -z "$agora_bin" ]; then
+    return 0
+  fi
+
+  if ! mkdir -p "$(dirname "$target")" 2>/dev/null; then
+    warn "Could not create completion directory: $(dirname "$target")"
+    return 0
+  fi
+
+  if ! "$agora_bin" completion "$shell_name" > "$target" 2>/dev/null; then
+    warn "Could not generate ${shell_name} completion. You can enable it manually with 'agora completion ${shell_name}'."
+    rm -f "$target" 2>/dev/null || true
+    return 0
+  fi
+
+  say_ok "Shell completion installed: ${target}"
+
+  # Print the one-time activation hint per shell. This is deliberately
+  # idempotent — we never modify rc files for completion (only PATH).
+  case "$shell_name" in
+    bash)
+      say "  Activate now (or open a new shell):  source \"${target}\""
+      say "  Note: requires bash-completion v2. Most distros install it by default; on macOS use 'brew install bash-completion@2'."
+      ;;
+    zsh)
+      say "  Add this to ~/.zshrc if not already present:"
+      say "    fpath=(\"\${HOME}/.zsh/completions\" \$fpath); autoload -Uz compinit && compinit"
+      ;;
+    fish)
+      say "  Completion is auto-loaded on next fish session."
+      ;;
+  esac
 }
 
 # ---- Banner / footer -------------------------------------------------------
@@ -910,6 +1170,11 @@ main() {
     list_versions_and_exit
   fi
 
+  if [ "$UNINSTALL" = "1" ]; then
+    uninstall
+    exit "$EXIT_OK"
+  fi
+
   print_banner
 
   normalize_version
@@ -957,8 +1222,23 @@ main() {
       sudo_status="yes"
     fi
     say "  sudo:      ${sudo_status}"
-    if [ "$ADD_TO_PATH" = "1" ]; then
-      add_to_path
+    say "  shell setup:"
+    if [ "$SKIP_SHELL" = "1" ]; then
+      say "    PATH:       skip (--skip-shell)"
+      say "    completion: skip (--skip-shell)"
+    else
+      if [ "$NO_PATH" = "1" ]; then
+        say "    PATH:       skip (--no-path)"
+      else
+        say "    PATH:       auto-add to your shell rc file if needed"
+        add_to_path
+      fi
+      if [ "$NO_COMPLETION" = "1" ]; then
+        say "    completion: skip (--no-completion)"
+      else
+        say "    completion: auto-install for the detected shell"
+        install_completion
+      fi
     fi
     exit "$EXIT_OK"
   fi
@@ -1019,20 +1299,85 @@ main() {
   write_install_receipt "$DESTINATION"
   say_ok "agora ${VERSION} installed."
 
-  if [ "$ADD_TO_PATH" = "1" ]; then
-    add_to_path
-  fi
-
+  # ---- Shell setup (auto-by-default) -------------------------------------
+  # PATH and completion are wired automatically by default. --no-path,
+  # --no-completion, and --skip-shell let users opt out granularly.
+  # Order matters: we resolve PATH first, then completion, so the
+  # completion step can use the binary we just installed. Both PATH and
+  # completion are best-effort — a write failure never aborts the
+  # install; we always fall back to printing exact manual instructions.
+  path_status="ok"          # ok | added | auto_failed | skipped | shadowed | manual
+  completion_status="ok"    # ok | installed | skipped
   resolved=""
-  if resolved=$(command -v agora 2>/dev/null); then
-    if [ "$resolved" = "$DESTINATION" ]; then
-      say "Resolved on PATH: ${DESTINATION}"
+
+  if [ "$SKIP_SHELL" = "1" ] || [ "$NO_PATH" = "1" ]; then
+    if resolved=$(command -v agora 2>/dev/null); then
+      if [ "$resolved" = "$DESTINATION" ]; then
+        path_status="ok"
+      else
+        path_status="shadowed"
+      fi
     else
-      warn "Another agora is earlier on PATH: ${resolved}"
-      warn "Reorder PATH so ${INSTALL_DIR} comes first, or remove the other binary."
+      path_status="manual"
     fi
   else
-    print_path_instructions
+    # Auto path-wiring: only modify rc when DESTINATION isn't already
+    # resolvable on PATH. INSTALL_DIR=/usr/local/bin (the macOS/Linux
+    # default) is normally already on PATH, so this is a no-op for the
+    # common case and only writes to ~/.zshrc / ~/.bashrc / fish config
+    # when needed (custom INSTALL_DIR like ~/.local/bin).
+    if resolved=$(command -v agora 2>/dev/null); then
+      if [ "$resolved" = "$DESTINATION" ]; then
+        path_status="ok"
+      else
+        # Another binary shadows ours; don't silently rewrite the user's
+        # rc file — that wouldn't fix the shadowing anyway.
+        path_status="shadowed"
+      fi
+    else
+      if add_to_path; then
+        path_status="added"
+      else
+        # Auto-add failed (rc unwritable, permission denied, etc.).
+        # Fall back to printing exact manual instructions so the user
+        # always knows the next step.
+        path_status="auto_failed"
+      fi
+    fi
+  fi
+
+  if [ "$SKIP_SHELL" = "1" ] || [ "$NO_COMPLETION" = "1" ]; then
+    completion_status="skipped"
+  else
+    install_completion
+    completion_status="installed"
+  fi
+
+  # ---- Shell-setup summary footer ---------------------------------------
+  case "$path_status" in
+    ok)
+      say "Resolved on PATH: ${DESTINATION}"
+      ;;
+    added)
+      : # already explained inside add_to_path
+      ;;
+    auto_failed)
+      : # add_to_path already printed a complete failure block — do
+        # not duplicate it here. The single warn + manual block style
+        # mirrors rustup / uv / Stripe CLI conventions.
+      ;;
+    shadowed)
+      warn "Another agora is earlier on PATH: ${resolved}"
+      warn "Reorder PATH so ${INSTALL_DIR} comes first, or remove the other binary."
+      ;;
+    manual)
+      print_path_instructions
+      ;;
+  esac
+
+  if [ "$completion_status" = "skipped" ]; then
+    say "Shell completion skipped. Enable later with:"
+    print_completion_instructions
   fi
 
   print_next_steps

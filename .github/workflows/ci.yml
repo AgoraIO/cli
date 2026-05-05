@@ -61,11 +61,16 @@ jobs:
           # run `make docs-commands` locally and commit the result.
           go run ./cmd/gendocs -check
 
+      # Prebuilt golangci-lint binaries may be compiled with an older Go than
+      # go.mod; loading .golangci.yml then fails ("Go language version used to
+      # build golangci-lint is lower than the targeted Go version"). Building
+      # from source with setup-go matches the project's toolchain.
       - name: golangci-lint
         if: runner.os == 'Linux'
         uses: golangci/golangci-lint-action@v6
         with:
           version: v1.64.8
+          install-mode: goinstall
           args: --timeout=5m
 
       - name: Build CLI
@@ -82,6 +87,11 @@ jobs:
         if: runner.os != 'Windows'
         shell: bash
         run: sh -n install.sh
+
+      - name: Smoke test installer messages
+        if: runner.os != 'Windows'
+        shell: bash
+        run: sh scripts/test-installer-messages.sh
 
       - name: Check PowerShell installer syntax
         if: runner.os == 'Windows'

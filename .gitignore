@@ -15,3 +15,6 @@ agora-cli-go
 # IDE and editor files
 .idea/
 .vscode/
+
+# Local Jekyll / Pages preview output (see `make docs-preview`)
+_site/

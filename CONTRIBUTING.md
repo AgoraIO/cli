@@ -8,7 +8,7 @@ detailed guidance, and what we expect from contributions.
 
 This project adheres to the [Contributor Covenant](CODE_OF_CONDUCT.md). By
 participating, you agree to uphold its standards. Please report unacceptable
-behavior to <devex@agora.io>.
+behavior to <devrel@agora.io>.
 
 ## Where to read first
 
@@ -27,6 +27,7 @@ so it is kept current as the canonical engineering guide.
 For end-user behavior and machine-readable contracts, see:
 
 - [`README.md`](README.md) — install, getting-started, command tree.
+- [Published docs](https://agoraio.github.io/cli/) — human-readable CLI documentation (GitHub Pages).
 - [`docs/automation.md`](docs/automation.md) — JSON envelope, agent guidance,
   output mode precedence (including CI auto-detect).
 - [`docs/error-codes.md`](docs/error-codes.md) — every stable `error.code`.
@@ -36,7 +37,7 @@ For end-user behavior and machine-readable contracts, see:
 
 Requirements:
 
-- **Go** 1.24+ (see `go.mod`).
+- **Go** 1.26.2+ (see `go.mod`). Release builds intentionally track the current stable Go toolchain; this distributed CLI does not target older Go compiler support.
 - **Git**.
 - (Optional) `golangci-lint` v1.64.8 — install matches CI; instructions in
   the next section.
@@ -66,14 +67,21 @@ gofmt -l .                                  # must print nothing
 golangci-lint run --timeout=5m              # uses .golangci.yml
 ./scripts/check-error-codes.sh              # docs/error-codes.md drift check
 go run ./cmd/gendocs -check                 # docs/commands.md drift check
+make docs-preview                           # optional: local Jekyll site + /md preview (requires Ruby/Jekyll)
 ```
 
-Install `golangci-lint` (matches the CI version):
+Documentation work:
+
+- Run `make docs-commands` after command-tree changes; CI uses `go run ./cmd/gendocs -check`.
+- For GitHub Pages content, use `make docs-preview` (see `scripts/preview-pages-site.sh`). Published docs resolve `@@CLI_DOCS_*@@` tokens via `scripts/prepare-pages-site.py` and `docs/site.env` as documented in `docs/automation.md`.
+
+Install `golangci-lint` **v1.64.8** (matches CI). CI builds it with `go install` against your toolchain; locally prefer:
 
 ```bash
-curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh \
-  | sh -s -- -b "$(go env GOPATH)/bin" v1.64.8
+go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.64.8
 ```
+
+Or use the [install script](https://golangci-lint.run/welcome/install/) if the binary supports your `go.mod` Go version.
 
 When changing release packaging, also run a snapshot release:
 
@@ -121,22 +129,48 @@ change; prefer adding a new code and deprecating the old one over a rename.
   that is part of the public contract (JSON shape, exit code, stderr text).
   Use `app_test.go` for isolated helper logic.
 
+## Branching model
+
+- `main` is always releasable. CI must be green before merge.
+- Feature work happens on short-lived topic branches off `main` named
+  `feat/<scope>`, `fix/<scope>`, `docs/<scope>`, or `chore/<scope>`
+  (matches the conventional-commits prefixes). Avoid long-running
+  branches; rebase on `main` instead of merging it back into your
+  topic branch.
+- Releases are cut from `main` by tagging `vX.Y.Z`. The release
+  workflow handles building, signing, publishing, and Homebrew /
+  Scoop / npm bumps. See [docs/install.md](docs/install.md) for the
+  release matrix.
+
 ## Commit hygiene
 
 - Keep commits focused. One logical change per commit is preferred.
 - Write present-tense imperative subjects ("Add CI auto-detect", not
-  "Added CI auto-detect").
+  "Added CI auto-detect"). We prefer (but do not strictly require)
+  the [Conventional Commits](https://www.conventionalcommits.org/)
+  prefixes (`feat:`, `fix:`, `docs:`, `chore:`, `refactor:`,
+  `test:`, `build:`).
 - Reference issues with `Fixes #123` / `Refs #456` in the body when relevant.
+- We do not require [DCO](https://developercertificate.org/) sign-off
+  today, but contributors are welcome to sign their commits with
+  `git commit -s`. If we adopt mandatory sign-off in the future, we
+  will announce it here and add a CI check.
 
 ## Pull requests
 
 - Fill in the [pull request template](.github/pull_request_template.md).
 - Make sure `make test && make lint` pass locally.
-- Include changelog entries in the `## Unreleased` section of `CHANGELOG.md`
+- Include changelog entries under the `## [Unreleased]` section of `CHANGELOG.md`
   for user-facing changes (new commands, behavior changes, breaking changes,
-  CLI exit code changes, error code additions).
+  CLI exit code changes, error code additions). When cutting a release, move
+  those bullets into a dated `## [x.y.z] - YYYY-MM-DD` section per the note at
+  the top of `CHANGELOG.md` (for example, v0.2.0 shipped as `## [0.2.0] - 2026-05-04`).
 - For UI/UX-affecting changes (pretty output, prompts, progress events,
   errors), include before/after copy-paste samples in the PR description.
+- New commands MUST include a per-command example block in the Cobra
+  `Example:` field. See "Adding a new command" above and the existing
+  `agora skills`, `agora doctor`, and `agora env-help` builders for the
+  current style.
 
 ## Reporting bugs and requesting features
 
@@ -145,9 +179,11 @@ Use the GitHub issue templates:
 - [Bug report](https://github.com/AgoraIO/cli/issues/new?template=bug_report.yml)
 - [Feature request](https://github.com/AgoraIO/cli/issues/new?template=feature_request.yml)
 
-For security issues, please email <security@agora.io> rather than filing a
-public issue. Do not include credentials or App Certificates in any public
-report.
+For **support** (questions, "how do I", install help) see [SUPPORT.md](SUPPORT.md).
+
+For **security** issues, see [SECURITY.md](SECURITY.md). Email
+<security@agora.io> rather than filing a public issue. Do not include
+credentials or App Certificates in any public report.
 
 ## License
 

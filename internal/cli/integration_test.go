@@ -344,6 +344,7 @@ type fakeProject struct {
 	FeatureState           struct {
 		ConvoAIEnabled bool `json:"convoaiEnabled"`
 		RTMEnabled     bool `json:"rtmEnabled"`
+		RTMRegion      string
 	} `json:"-"`
 	Name         string  `json:"name"`
 	ProjectID    string  `json:"projectId"`
@@ -497,7 +498,12 @@ func newFakeCLIBFF() *fakeCLIBFF {
 					"projectId": projectID,
 				})
 			case http.MethodPut:
+				var body map[string]any
+				_ = json.NewDecoder(r.Body).Decode(&body)
 				project.FeatureState.RTMEnabled = true
+				if region, _ := body["region"].(string); region != "" {
+					project.FeatureState.RTMRegion = region
+				}
 				_ = json.NewEncoder(w).Encode(map[string]any{
 					"enabled":   true,
 					"projectId": projectID,

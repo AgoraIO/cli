@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light dark">
+    <title>{% if page.title %}{{ page.title | escape }} · {% endif %}{{ site.title | escape }}</title>
+    <meta name="description" content="{{ site.description | escape }}">
+    <meta name="keywords" content="agora, cli, command-line, developer tools, authentication, project management, sdk">
+    <meta name="robots" content="index, follow">
+    
+    <!-- Agent Discovery -->
+    <link rel="alternate" type="text/markdown" href="{{ '/md/index.md' | relative_url }}" title="Agent-friendly Markdown documentation">
+    <link rel="alternate" type="text/plain" href="{{ '/llms.txt' | relative_url }}" title="LLM-optimized documentation index">
+    
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ '/assets/css/site.css' | relative_url }}">
+  </head>
+  <body>
+    <div class="page-shell">
+      <header class="site-header" aria-label="Site header">
+        <a class="brand" href="{{ '/' | relative_url }}" aria-label="Agora CLI Docs home">
+          <svg class="brand-mark" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 97.8 89.8" aria-hidden="true">
+            <path d="M47,62.5c-9.3,0-16.9-7.6-16.9-16.9s7.6-16.9,16.9-16.9,16.9,7.6,16.9,16.9-7.6,16.9-16.9,16.9M66.6,21.1l-.2.3-.3.4-.4-.3-.3-.3c-5.4-4.1-11.7-6.2-18.4-6.2-16.9,0-30.6,13.7-30.6,30.6s13.7,30.6,30.6,30.6,13.1-2.1,18.4-6.2l.3-.3.3-.3.3.4.2.3c2.3,3.2,5.9,5.4,9.8,5.9l1.1.2V15.1l-1.1.2c-3.9.5-7.5,2.7-9.8,5.9"/>
+          </svg>
+          <span>
+            <span class="brand-title">Agora CLI</span>
+            <span class="brand-subtitle">Developer docs</span>
+          </span>
+        </a>
+        <nav class="site-nav" aria-label="Primary navigation">
+          <a href="{{ '/install.html' | relative_url }}">Install</a>
+          <a href="{{ '/commands.html' | relative_url }}">Commands</a>
+          <a href="{{ '/automation.html' | relative_url }}">Automation</a>
+          <a href="{{ '/error-codes.html' | relative_url }}">Errors</a>
+          <a href="{{ '/telemetry.html' | relative_url }}">Telemetry</a>
+          <a href="{{ '/troubleshooting.html' | relative_url }}">Troubleshooting</a>
+          <a href="{{ '/md/index.md' | relative_url }}">Agent MD</a>
+        </nav>
+      </header>
+
+      <main class="content-card" id="main-content">
+        <article class="doc-content">
+          {{ content }}
+        </article>
+      </main>
+    </div>
+  </body>
+</html>

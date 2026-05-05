@@ -1,3 +1,7 @@
+---
+title: Error Codes
+---
+
 # Agora CLI Error Codes
 
 Structured JSON failures include `error.code` when the CLI can classify the recovery path. Agents and scripts should branch on `error.code` first, then `error.message`.
@@ -12,6 +16,8 @@ This catalog is the source of truth for stable codes. CI runs `make snapshot-err
 |------|------|---------|----------|
 | `AUTH_UNAUTHENTICATED` | 3 | No usable local session exists. | Run `agora login`. |
 | `AUTH_SESSION_EXPIRED` | 3 | The stored session is expired or rejected after refresh. | Run `agora login` again. |
+| `AUTH_OAUTH_EXCHANGE_FAILED` | 1 | The OAuth token endpoint rejected the authorization-code or refresh-token exchange. | Retry login; if persistent, file a bug with the HTTP status and request ID. |
+| `AUTH_OAUTH_RESPONSE_INVALID` | 1 | The OAuth token endpoint returned a response missing required token fields. | Retry login; if persistent, file a bug. |
 
 ### Project resolution
 
@@ -21,6 +27,7 @@ This catalog is the source of truth for stable codes. CI runs `make snapshot-err
 | `PROJECT_NOT_FOUND` | 1 | The requested project ID or exact name was not found. | Run `agora project list` and retry with the project ID. |
 | `PROJECT_AMBIGUOUS` | 1 | A project name matched multiple projects. | Retry with the project ID. |
 | `PROJECT_NO_CERTIFICATE` | 1 | The selected project has no app certificate for env seeding. | Enable an app certificate in Console or select another project. |
+| `PROJECT_ENV_TEMPLATE_UNKNOWN` | 1 | The `--template` value for `project env write` is not supported. | Use `nextjs` or `standard`. |
 | `PROJECT_NOT_READY` | 1 | `project doctor` could not surface a more specific issue. | Re-run `project doctor` for details. |
 
 ### Quickstart / init
@@ -32,7 +39,9 @@ This catalog is the source of truth for stable codes. CI runs `make snapshot-err
 | `QUICKSTART_TEMPLATE_UNAVAILABLE` | 1 | The template exists but is not currently available. | Choose an available template. |
 | `QUICKSTART_TEMPLATE_ENV_UNSUPPORTED` | 1 | The selected template does not define an env target path. | Choose a template with env support or configure the env file manually. |
 | `QUICKSTART_TARGET_EXISTS` | 1 | The clone target already exists. | Choose a new directory. |
+| `INIT_NAME_REQUIRED` | 1 | `agora init` was run without the required target directory name. | Pass a directory name, for example `agora init my-nextjs-demo --template nextjs`. |
 | `INIT_ABORTED` | 1 | The interactive `agora init` reuse prompt was answered "no". | Re-run with `--project <id>`, `--new-project`, or accept the prompt. |
+| `PROJECT_NAME_REQUIRED` | 1 | `agora project create` (or the equivalent MCP tool) was called without `name`. | Pass a project name, for example `agora project create my-app`. |
 
 ### Self-update (`agora upgrade`)
 
@@ -68,6 +77,12 @@ These codes appear inside `data.checks[].issues[].code` and (for blocking issues
 | `APP_CREDENTIALS_MISSING` | 1 | The selected project has no app ID / app certificate yet. | Run the command from `suggestedCommand` (`agora project show --project <id>`) to re-fetch credentials; if still missing, enable the app certificate in Console (`agora open --target console`). |
 | `TOKEN_CAPABILITY_DISABLED` | (warning) | The project has token issuance disabled. | Enable token issuance in Console. |
 
+### Skills (curated workflows)
+
+| Code | Exit | Meaning | Recovery |
+|------|------|---------|----------|
+| `SKILL_NOT_FOUND` | 1 | `agora skills show <id>` was given an unknown skill ID. | Run `agora skills list` to see available IDs. |
+
 ## Dynamic code families
 
 Some doctor codes are generated from the feature name at runtime. Agents should match by prefix.
@@ -76,6 +91,7 @@ Some doctor codes are generated from the feature name at runtime. Agents should 
 |---------|---------|---------|----------|
 | `FEATURE_<NAME>_PROVISIONING` | `FEATURE_RTC_PROVISIONING` | The named feature is being provisioned (warning). | Wait and re-run `project doctor`. |
 | `FEATURE_<NAME>_DISABLED` | `FEATURE_CONVOAI_DISABLED` | The named feature is disabled for this project. | Run the command from `suggestedCommand` or enable the feature in Console. |
+| `INSTALL_DOCTOR_<STATUS>` | `INSTALL_DOCTOR_NOT_READY` | `agora doctor` (top-level) summary code, where `<STATUS>` is `WARNING`, `NOT_READY`, or `AUTH_ERROR`. The detailed per-check items live in `data.blockingIssues[].code` / `data.warnings[].code` and follow the same dotted naming as `project doctor` codes (e.g. `INSTALL_PATH_RESOLUTION`, `NETWORK_API_DNS`). | Read `data.summary` and the per-check `suggestedCommand`. |
 
 `<NAME>` is uppercased and matches the feature ID set returned by `agora introspect --json` under `data.enums.features` (currently `RTC`, `RTM`, `CONVOAI`).
 

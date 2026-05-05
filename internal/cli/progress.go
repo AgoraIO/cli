@@ -2,23 +2,27 @@ package cli
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
+	"os"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/spf13/cobra"
 )
 
-// jsonProgressFor returns a progressEmitter wired to cmd.OutOrStdout() when
-// the command is producing JSON output, and nil otherwise. Callers should
-// pass the returned emitter through to long-running operations so agents
-// watching --json can see step-by-step progress events ahead of the final
-// envelope.
+// jsonProgressFor returns a progressEmitter for long-running operations.
+// JSON mode emits NDJSON on stdout for agents/scripts. Pretty TTY mode emits
+// compact status lines on stderr so humans can see that work is progressing.
 func jsonProgressFor(a *App, cmd *cobra.Command, command string) progressEmitter {
 	if a == nil || cmd == nil {
 		return nil
 	}
 	if a.resolveOutputMode(cmd) != outputJSON {
+		if isTTY(os.Stderr) {
+			return makePrettyProgressEmitter(cmd.ErrOrStderr())
+		}
 		return nil
 	}
 	return makeJSONProgressEmitter(cmd.OutOrStdout(), command)
@@ -69,6 +73,41 @@ func makeJSONProgressEmitter(out io.Writer, command string) progressEmitter {
 		defer mu.Unlock()
 		_, _ = out.Write(b)
 		_, _ = out.Write([]byte("\n"))
+	}
+}
+
+// makePrettyProgressEmitter returns the pretty-mode progress writer.
+//
+// Design choice: each event becomes a single newline-terminated bullet
+// line ("- message"). This is intentionally NOT an animated ANSI
+// spinner because:
+//
+//   - Pretty progress lines must remain useful when stderr is being
+//     captured into a CI build log, redirected to a file, or scraped
+//     by an editor's terminal pane (none of which honor cursor moves).
+//   - Spinners produce noisy artifacts on dumb terminals and inside
+//     `tee` / `script` capture, where each redraw lands as garbage.
+//   - JSON mode already emits stable NDJSON progress events for
+//     real-time observability; pretty mode just needs a readable trace.
+//
+// If a future revision wants a real spinner, gate it on
+// term.IsTerminal(stderr) and a TERM != "dumb" check, and keep this
+// path as the fallback. The CHANGELOG entry is intentionally worded
+// "progress status lines" (not "spinner support") to match this
+// implementation.
+func makePrettyProgressEmitter(out io.Writer) progressEmitter {
+	if out == nil {
+		return nil
+	}
+	var mu sync.Mutex
+	return func(_, message string, _ map[string]any) {
+		message = strings.TrimSpace(message)
+		if message == "" {
+			return
+		}
+		mu.Lock()
+		defer mu.Unlock()
+		_, _ = fmt.Fprintf(out, "- %s\n", message)
 	}
 }
 

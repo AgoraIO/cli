@@ -33,7 +33,7 @@ func TestDetectInstallProvenanceUsesReceiptThenExecutablePath(t *testing.T) {
 		Tool:          "agora",
 		InstallMethod: "installer",
 		InstallPath:   installerPath,
-		Version:       "0.1.9",
+		Version:       "0.2.0",
 		InstalledAt:   "2026-04-30T11:00:00Z",
 		Source:        "install.sh",
 	}
@@ -67,7 +67,7 @@ func TestDetectInstallProvenanceFallsBackToExecutablePath(t *testing.T) {
 		{
 			name:       "homebrew detected from resolved Cellar path",
 			env:        map[string]string{"HOMEBREW_PREFIX": "/usr/local"},
-			exePath:    "/usr/local/Cellar/agora-cli/0.1.9/bin/agora",
+			exePath:    "/usr/local/Cellar/agora-cli/0.2.0/bin/agora",
 			wantMethod: "homebrew",
 		},
 		{
@@ -79,7 +79,7 @@ func TestDetectInstallProvenanceFallsBackToExecutablePath(t *testing.T) {
 		{
 			name:       "npm detected from node_modules path",
 			env:        map[string]string{"npm_config_prefix": "/usr/local"},
-			exePath:    "/usr/local/lib/node_modules/@agoraio/cli-darwin-arm64/bin/agora",
+			exePath:    "/usr/local/lib/node_modules/agoraio-cli-darwin-arm64/bin/agora",
 			wantMethod: "npm",
 		},
 		{
@@ -107,7 +107,7 @@ func TestDetectInstallProvenanceIgnoresStaleReceipt(t *testing.T) {
 		Tool:          "agora",
 		InstallMethod: "npm",
 		InstallPath:   filepath.Join(dir, "old-agora"),
-		Version:       "0.1.9",
+		Version:       "0.2.0",
 		InstalledAt:   "2026-04-30T11:00:00Z",
 		Source:        "test",
 	}
@@ -127,7 +127,7 @@ func TestDetectInstallProvenanceIgnoresStaleReceipt(t *testing.T) {
 
 func TestWriteInstallReceiptRoundTrips(t *testing.T) {
 	exePath := filepath.Join(t.TempDir(), "agora")
-	receiptPath, err := writeInstallReceipt(exePath, "v0.1.9", "agora upgrade")
+	receiptPath, err := writeInstallReceipt(exePath, "v0.2.0", "agora upgrade")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -138,7 +138,7 @@ func TestWriteInstallReceiptRoundTrips(t *testing.T) {
 	if !receipt.validForPath(exePath) {
 		t.Fatalf("expected valid receipt for %s: %+v", exePath, receipt)
 	}
-	if receipt.Version != "0.1.9" || receipt.Source != "agora upgrade" {
+	if receipt.Version != "0.2.0" || receipt.Source != "agora upgrade" {
 		t.Fatalf("unexpected receipt contents: %+v", receipt)
 	}
 }
@@ -172,7 +172,7 @@ func TestWriteProjectEnvFileWritesOnlyCredentials(t *testing.T) {
 	first, err := writeProjectEnvFile(path, map[string]any{
 		"AGORA_APP_ID":          "app_1",
 		"AGORA_APP_CERTIFICATE": "cert_1",
-	}, false, false)
+	}, false, false, nil, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -182,7 +182,7 @@ func TestWriteProjectEnvFileWritesOnlyCredentials(t *testing.T) {
 	second, err := writeProjectEnvFile(path, map[string]any{
 		"AGORA_APP_ID":          "app_2",
 		"AGORA_APP_CERTIFICATE": "cert_2",
-	}, false, false)
+	}, false, false, nil, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -218,7 +218,7 @@ func TestWriteProjectEnvFileReplacesOldManagedBlockWithCredentials(t *testing.T)
 	result, err := writeProjectEnvFile(path, map[string]any{
 		"AGORA_APP_ID":          "app_1",
 		"AGORA_APP_CERTIFICATE": "cert_1",
-	}, false, false)
+	}, false, false, nil, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -387,7 +387,7 @@ func TestWriteProjectEnvFileRequiresAppendOrOverwriteForExplicitFile(t *testing.
 	_, err := writeProjectEnvFile(path, map[string]any{
 		"AGORA_APP_ID":          "app_1",
 		"AGORA_APP_CERTIFICATE": "cert_1",
-	}, false, false)
+	}, false, false, nil, false)
 	if err == nil || !strings.Contains(err.Error(), "--append") || !strings.Contains(err.Error(), "--overwrite") {
 		t.Fatalf("expected explicit file error, got %v", err)
 	}
@@ -399,7 +399,7 @@ func TestWriteProjectEnvFileCreatesNestedDirectories(t *testing.T) {
 	result, err := writeProjectEnvFile(path, map[string]any{
 		"AGORA_APP_ID":          "app_1",
 		"AGORA_APP_CERTIFICATE": "cert_1",
-	}, false, false)
+	}, false, false, nil, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -451,7 +451,7 @@ func TestEnsureAppConfigStateMigratesPartialAndCustomPreviousConfigs(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
-	if state.Status != "migrated" || state.Config.Output != outputJSON || !state.Config.Verbose {
+	if state.Status != "migrated" || state.Config.Output != outputJSON || !state.Config.Debug {
 		t.Fatalf("unexpected migrated partial config: %+v", state)
 	}
 
@@ -465,6 +465,50 @@ func TestEnsureAppConfigStateMigratesPartialAndCustomPreviousConfigs(t *testing.
 	}
 	if state.Status != "migrated" || state.Config.APIBaseURL != "https://staging.internal.example.com" || state.Config.OAuthClientID != "custom-dev-client" || state.Config.TelemetryEnabled {
 		t.Fatalf("unexpected migrated custom config: %+v", state)
+	}
+}
+
+// TestEnsureAppConfigStateMigratesLegacyVerboseKeyToDebug proves that
+// 0.1.x configs containing the legacy "verbose" key are transparently
+// promoted to the new "debug" field on first load by 0.2.0+, and that
+// the rewritten file no longer contains the legacy key. Regression
+// guard for the v0.2.0 --verbose -> --debug rename.
+func TestEnsureAppConfigStateMigratesLegacyVerboseKeyToDebug(t *testing.T) {
+	dir := t.TempDir()
+	configPath, err := resolveConfigFilePath(map[string]string{"XDG_CONFIG_HOME": dir})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Dir(configPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	legacy := `{"version":2,"output":"json","verbose":true}`
+	if err := os.WriteFile(configPath, []byte(legacy), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	state, err := ensureAppConfigState(map[string]string{"XDG_CONFIG_HOME": dir})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if state.Status != "migrated" || !state.Config.Debug || state.Config.Output != outputJSON {
+		t.Fatalf("expected legacy verbose=true to migrate to Debug=true, got %+v", state)
+	}
+	rewritten, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var rewrittenMap map[string]any
+	if err := json.Unmarshal(rewritten, &rewrittenMap); err != nil {
+		t.Fatal(err)
+	}
+	if _, hasLegacy := rewrittenMap["verbose"]; hasLegacy {
+		t.Fatalf("expected rewritten config to drop legacy verbose key, got %s", string(rewritten))
+	}
+	if debug, ok := rewrittenMap["debug"].(bool); !ok || !debug {
+		t.Fatalf("expected rewritten config to contain debug=true, got %s", string(rewritten))
+	}
+	if version, _ := rewrittenMap["version"].(float64); int(version) != currentAppConfigVersion {
+		t.Fatalf("expected rewritten config to be stamped with version %d, got %v", currentAppConfigVersion, rewrittenMap["version"])
 	}
 }
 
@@ -589,13 +633,13 @@ func TestResolveConfiguredOutputModeAndConfigApplication(t *testing.T) {
 	app.cfg.APIBaseURL = "https://config.example.com"
 	app.cfg.LogLevel = "warn"
 	app.cfg.BrowserAutoOpen = false
-	app.cfg.Verbose = true
+	app.cfg.Debug = true
 	app.applyConfigToEnv()
 
 	if env["AGORA_API_BASE_URL"] != "https://env.example.com" || env["AGORA_OUTPUT"] != "json" {
 		t.Fatalf("expected env values to win, got %+v", env)
 	}
-	if env["AGORA_BROWSER_AUTO_OPEN"] != "0" || env["AGORA_LOG_LEVEL"] != "warn" || env["AGORA_VERBOSE"] != "1" {
+	if env["AGORA_BROWSER_AUTO_OPEN"] != "0" || env["AGORA_LOG_LEVEL"] != "warn" || env["AGORA_DEBUG"] != "1" {
 		t.Fatalf("expected missing env values to be filled, got %+v", env)
 	}
 
@@ -718,7 +762,7 @@ func TestExchangeAuthorizationCodeFailureAndScopeArray(t *testing.T) {
 	defer failServer.Close()
 
 	app := &App{httpClient: failServer.Client(), env: map[string]string{}}
-	if _, err := app.exchangeAuthorizationCode(failServer.URL, "cli_demo", "bad-code", "code-verifier", "http://localhost/callback"); err == nil || !strings.Contains(err.Error(), "OAuth token exchange failed with status 400") {
+	if _, err := app.exchangeAuthorizationCode(failServer.URL, "cli_demo", "bad-code", "code-verifier", "http://localhost/callback"); err == nil || !strings.Contains(err.Error(), "OAuth token exchange failed (HTTP 400)") {
 		t.Fatalf("unexpected auth-code failure error: %v", err)
 	}
 
@@ -839,7 +883,7 @@ func TestAPIRequestReturnsStructuredErrors(t *testing.T) {
 	}
 }
 
-func TestPathsLogsAndArtifactsParity(t *testing.T) {
+func TestPathsLogsAndArtifacts(t *testing.T) {
 	dir := t.TempDir()
 	env := map[string]string{"XDG_CONFIG_HOME": dir}
 	agoraDir, err := resolveAgoraDirectory(env)
@@ -944,7 +988,7 @@ func TestLogRotationFilteringAndVerboseMirror(t *testing.T) {
 		t.Fatalf("unexpected filtered log contents: %s", string(saved))
 	}
 
-	verboseDir := t.TempDir()
+	debugDir := t.TempDir()
 	readPipe, writePipe, err := os.Pipe()
 	if err != nil {
 		t.Fatal(err)
@@ -952,12 +996,12 @@ func TestLogRotationFilteringAndVerboseMirror(t *testing.T) {
 	originalStderr := os.Stderr
 	os.Stderr = writePipe
 	defer func() { os.Stderr = originalStderr }()
-	verboseEnv := map[string]string{
-		"XDG_CONFIG_HOME": verboseDir,
+	debugEnv := map[string]string{
+		"XDG_CONFIG_HOME": debugDir,
 		"AGORA_LOG_LEVEL": "debug",
-		"AGORA_VERBOSE":   "1",
+		"AGORA_DEBUG":     "1",
 	}
-	if err := appendAppLog("debug", "test.verbose.output", verboseEnv, map[string]any{
+	if err := appendAppLog("debug", "test.debug.mirror", debugEnv, map[string]any{
 		"accessToken": "secret-value",
 		"detail":      "visible",
 	}); err != nil {
@@ -968,8 +1012,8 @@ func TestLogRotationFilteringAndVerboseMirror(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(mirrored), "test.verbose.output") || !strings.Contains(string(mirrored), `"detail":"visible"`) || !strings.Contains(string(mirrored), `"accessToken":"[REDACTED]"`) || strings.Contains(string(mirrored), "secret-value") {
-		t.Fatalf("unexpected verbose mirror output: %s", string(mirrored))
+	if !strings.Contains(string(mirrored), "test.debug.mirror") || !strings.Contains(string(mirrored), `"detail":"visible"`) || !strings.Contains(string(mirrored), `"accessToken":"[REDACTED]"`) || strings.Contains(string(mirrored), "secret-value") {
+		t.Fatalf("unexpected debug mirror output: %s", string(mirrored))
 	}
 }
 

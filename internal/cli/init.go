@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -14,8 +15,12 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// defaultInitFeatures returns the features enabled on a freshly created
+// Agora project when no `--feature` flags are passed. Sourced from the
+// canonical feature catalog so adding a new feature in features.go
+// flows here automatically.
 func defaultInitFeatures() []string {
-	return []string{"rtc", "convoai"}
+	return featureIDs()
 }
 
 func initNextSteps(template quickstartTemplate, targetDir string) []string {
@@ -35,14 +40,16 @@ func (a *App) buildInitCommand() *cobra.Command {
 	var dir string
 	var existingProject string
 	var region string
+	var rtmDataCenter string
 	var features []string
+	var agentRules []string
 	var newProject bool
 	cmd := &cobra.Command{
 		Use:   "init <name>",
 		Short: "Create a project, clone a quickstart, and write env in one flow",
 		Long: `Init is the recommended onboarding command.
 
-By default it reuses your existing Agora project — preferring one named "Default Project", then falling back to the most recent project. A new project is only created when no projects exist yet or when --new-project is passed.
+By default it reuses your existing Agora project — preferring one named "Default Project". In interactive sessions without a Default Project, init shows your existing projects and a create-new option. Non-interactive runs fall back to the most recent project. A new project is created when no projects exist yet or when --new-project is passed.
 
 Use --project to bind to a specific existing project by name or ID.
 Use --new-project to always create a fresh project regardless of existing ones.
@@ -51,11 +58,12 @@ Use --feature to specify which features to enable on a newly created project (re
   agora init my-nextjs-demo --template nextjs
   agora init my-python-demo --template python
   agora init my-go-demo --template go --project my-existing-project
+  agora init my-rtm-demo --template nextjs --new-project --rtm-data-center AP
   agora init my-rtm-demo --template nextjs --new-project --feature rtc --feature rtm
 `),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) != 1 || strings.TrimSpace(args[0]) == "" {
-				return fmt.Errorf("project name is required")
+				return &cliError{Message: "directory name is required", Code: "INIT_NAME_REQUIRED"}
 			}
 			if strings.TrimSpace(templateID) == "" {
 				selected, err := a.selectInitTemplate(cmd)
@@ -77,13 +85,21 @@ Use --feature to specify which features to enable on a newly created project (re
 			// default for --json / CI / non-TTY agent runs.
 			promptForReuse := strings.TrimSpace(existingProject) == "" &&
 				!newProject &&
+				!a.noInput() &&
 				a.resolveOutputMode(cmd) != outputJSON &&
 				!isCIEnvironment(a.osEnv) &&
 				isTTY(os.Stdin)
 			progress := jsonProgressFor(a, cmd, "init")
-			result, err := a.initProject(args[0], targetDir, *template, existingProject, region, features, newProject, promptForReuse, cmd.ErrOrStderr(), os.Stdin, progress)
+			result, err := a.initProject(args[0], targetDir, *template, existingProject, region, features, rtmDataCenter, newProject, promptForReuse, cmd.ErrOrStderr(), os.Stdin, progress)
 			if err != nil {
 				return err
+			}
+			if len(agentRules) > 0 {
+				written, err := writeAgentRules(asString(result["path"]), agentRules)
+				if err != nil {
+					return err
+				}
+				result["agentRules"] = written
 			}
 			return renderResult(cmd, "init", result)
 		},
@@ -92,12 +108,22 @@ Use --feature to specify which features to enable on a newly created project (re
 	cmd.Flags().StringVar(&dir, "dir", "", "target directory for the cloned quickstart; defaults to <name>")
 	cmd.Flags().StringVar(&existingProject, "project", "", "existing project ID or exact project name to bind to")
 	cmd.Flags().StringVar(&region, "region", "", "control plane region for newly created projects (global or cn)")
-	cmd.Flags().StringArrayVar(&features, "feature", nil, "enable a feature on the newly created project (repeatable); defaults to rtc and convoai")
+	cmd.Flags().StringVar(&rtmDataCenter, "rtm-data-center", "", "RTM data center to configure when rtm is enabled on a newly created project (CN, NA, EU, or AP); defaults to NA")
+	cmd.Flags().StringArrayVar(&features, "feature", nil, fmt.Sprintf("enable a feature on the newly created project (repeatable); defaults to %s; convoai also enables rtm", featureListString()))
+	cmd.Flags().StringArrayVar(&agentRules, "add-agent-rules", nil, "write AI agent rules into the quickstart (repeatable: cursor, claude, windsurf)")
 	cmd.Flags().BoolVar(&newProject, "new-project", false, "always create a new Agora project instead of reusing an existing one")
 	return cmd
 }
 
 func (a *App) selectInitTemplate(cmd *cobra.Command) (string, error) {
+	if a.noInput() {
+		for _, template := range quickstartTemplates() {
+			if template.Available && template.SupportsInit {
+				return template.ID, nil
+			}
+		}
+		return "", &cliError{Message: "no init-compatible quickstart templates are available.", Code: "QUICKSTART_TEMPLATE_UNAVAILABLE"}
+	}
 	if a.resolveOutputMode(cmd) == outputJSON || isCIEnvironment(a.osEnv) || !isTTY(os.Stdin) {
 		return "", &cliError{Message: "quickstart template is required. Pass `--template` or run `agora quickstart list`.", Code: "QUICKSTART_TEMPLATE_REQUIRED"}
 	}
@@ -150,10 +176,8 @@ func selectInitProjectFromList(items []projectSummary) (projectSummary, bool) {
 	if len(items) == 0 {
 		return projectSummary{}, false
 	}
-	for _, item := range items {
-		if item.Name == "Default Project" {
-			return item, true
-		}
+	if item, ok := selectDefaultInitProjectFromList(items); ok {
+		return item, true
 	}
 	selected := items[0]
 	selectedCreated, selectedCreatedOK := parseInitProjectTimestamp(selected.CreatedAt)
@@ -198,31 +222,114 @@ func selectInitProjectFromList(items []projectSummary) (projectSummary, bool) {
 	return selected, true
 }
 
-// findDefaultProject returns the user's preferred existing project: "Default Project" if it
-// exists, otherwise the most recently created project in the current results page. Returns
-// found=false when the account has no projects yet. The total count returned is the number
-// of projects in the listing, so callers can decide whether silent reuse is risky enough to
-// warrant a confirmation prompt.
-func (a *App) findDefaultProject() (target projectTarget, found bool, total int, err error) {
+func selectDefaultInitProjectFromList(items []projectSummary) (projectSummary, bool) {
+	for _, item := range items {
+		if item.Name == "Default Project" {
+			return item, true
+		}
+	}
+	return projectSummary{}, false
+}
+
+func initProjectChoiceItems(items []projectSummary) []projectSummary {
+	choices := append([]projectSummary{}, items...)
+	sort.SliceStable(choices, func(i, j int) bool {
+		leftCreated, leftCreatedOK := parseInitProjectTimestamp(choices[i].CreatedAt)
+		rightCreated, rightCreatedOK := parseInitProjectTimestamp(choices[j].CreatedAt)
+		switch {
+		case leftCreatedOK && rightCreatedOK && !leftCreated.Equal(rightCreated):
+			return leftCreated.Before(rightCreated)
+		case leftCreatedOK != rightCreatedOK:
+			return !leftCreatedOK
+		}
+		leftUpdated, leftUpdatedOK := parseInitProjectTimestamp(choices[i].UpdatedAt)
+		rightUpdated, rightUpdatedOK := parseInitProjectTimestamp(choices[j].UpdatedAt)
+		switch {
+		case leftUpdatedOK && rightUpdatedOK && !leftUpdated.Equal(rightUpdated):
+			return leftUpdated.Before(rightUpdated)
+		case leftUpdatedOK != rightUpdatedOK:
+			return !leftUpdatedOK
+		}
+		return choices[i].ProjectID < choices[j].ProjectID
+	})
+	return choices
+}
+
+// chooseInitProject prompts a human user to either create a fresh project or bind
+// the new quickstart to one of the existing projects. The default selection is
+// the most recently created project, displayed last.
+func chooseInitProject(in io.Reader, out io.Writer, items []projectSummary) (projectSummary, string, error) {
+	choices := initProjectChoiceItems(items)
+	if len(choices) == 0 {
+		return projectSummary{}, "new", nil
+	}
+	defaultIndex := len(choices) + 1
+	reader := bufio.NewReader(in)
+	for {
+		if _, err := fmt.Fprintln(out, "Choose an Agora project:"); err != nil {
+			return projectSummary{}, "", err
+		}
+		if _, err := fmt.Fprintln(out, "  1. Create a new project"); err != nil {
+			return projectSummary{}, "", err
+		}
+		for index, item := range choices {
+			suffix := ""
+			if index == len(choices)-1 {
+				suffix = " (most recent)"
+			}
+			if _, err := fmt.Fprintf(out, "  %d. %s (%s)%s\n", index+2, item.Name, item.ProjectID, suffix); err != nil {
+				return projectSummary{}, "", err
+			}
+		}
+		if _, err := fmt.Fprintf(out, "Project [%d]: ", defaultIndex); err != nil {
+			return projectSummary{}, "", err
+		}
+		answer, err := reader.ReadString('\n')
+		if err != nil && !errors.Is(err, io.EOF) {
+			return projectSummary{}, "", err
+		}
+		trimmed := strings.ToLower(strings.TrimSpace(answer))
+		switch trimmed {
+		case "":
+			return choices[len(choices)-1], "reuse", nil
+		case "1", "new", "c", "create":
+			return projectSummary{}, "new", nil
+		case "n", "no", "abort", "q", "quit":
+			return projectSummary{}, "abort", nil
+		}
+		if index, parseErr := strconv.Atoi(trimmed); parseErr == nil && index >= 2 && index <= len(choices)+1 {
+			return choices[index-2], "reuse", nil
+		}
+		for _, item := range choices {
+			if strings.EqualFold(item.ProjectID, strings.TrimSpace(answer)) || strings.EqualFold(item.Name, strings.TrimSpace(answer)) {
+				return item, "reuse", nil
+			}
+		}
+		if _, err := fmt.Fprintf(out, "Please choose 1-%d, enter a project name/id, or type new.\n", len(choices)+1); err != nil {
+			return projectSummary{}, "", err
+		}
+		if errors.Is(err, io.EOF) {
+			return projectSummary{}, "abort", nil
+		}
+	}
+}
+
+func (a *App) listInitProjects() (projectContext, []projectSummary, error) {
 	ctx, err := loadContext(a.env)
 	if err != nil {
-		return projectTarget{}, false, 0, err
+		return projectContext{}, nil, err
 	}
 	list, err := a.listProjects("", 1, 100)
 	if err != nil {
-		return projectTarget{}, false, 0, err
+		return projectContext{}, nil, err
 	}
-	total = len(list.Items)
-	if total == 0 {
-		return projectTarget{}, false, 0, nil
-	}
-	item, ok := selectInitProjectFromList(list.Items)
-	if !ok {
-		return projectTarget{}, false, total, nil
-	}
+	return ctx, list.Items, nil
+}
+
+func (a *App) resolveInitProject(ctx projectContext, item projectSummary) (projectTarget, error) {
 	project, err := a.getProject(item.ProjectID)
 	if err != nil {
-		return projectTarget{}, false, total, err
+		return projectTarget{}, err
 	}
 	region := ctx.CurrentRegion
 	if region == "" {
@@ -234,45 +341,15 @@ func (a *App) findDefaultProject() (target projectTarget, found bool, total int,
 	if project.Region != nil && *project.Region != "" {
 		region = *project.Region
 	}
-	return projectTarget{project: project, region: region}, true, total, nil
+	return projectTarget{project: project, region: region}, nil
 }
 
-// confirmProjectReuse prompts the user before silently binding a new repo to a
-// reused project. Returns one of "reuse", "new", or "abort". Empty input or 'y'
-// defaults to "reuse"; 'n' aborts; 'new' or 'c' creates a fresh project.
-func confirmProjectReuse(in io.Reader, out io.Writer, name, projectID string) (string, error) {
-	reader := bufio.NewReader(in)
-	prompt := fmt.Sprintf("Use existing project %q (%s)? [Y/n/new]: ", name, projectID)
-	for {
-		if _, err := fmt.Fprint(out, prompt); err != nil {
-			return "", err
-		}
-		answer, err := reader.ReadString('\n')
-		if err != nil && !errors.Is(err, io.EOF) {
-			return "", err
-		}
-		switch strings.ToLower(strings.TrimSpace(answer)) {
-		case "", "y", "yes":
-			return "reuse", nil
-		case "n", "no":
-			return "abort", nil
-		case "new", "c", "create":
-			return "new", nil
-		}
-		if _, err := fmt.Fprintln(out, "Please answer y (reuse), n (abort), or new (create a fresh project)."); err != nil {
-			return "", err
-		}
-		if errors.Is(err, io.EOF) {
-			return "abort", nil
-		}
-	}
-}
-
-func (a *App) initProject(name, targetDir string, template quickstartTemplate, existingProject, region string, features []string, newProject bool, promptForReuse bool, promptOut io.Writer, promptIn io.Reader, progress progressEmitter) (map[string]any, error) {
+func (a *App) initProject(name, targetDir string, template quickstartTemplate, existingProject, region string, features []string, rtmDataCenter string, newProject bool, promptForReuse bool, promptOut io.Writer, promptIn io.Reader, progress progressEmitter) (map[string]any, error) {
 	var target projectTarget
 	projectAction := "existing"
 	enabledFeatures := []string{}
 	needsCreate := false
+	createdRTMDataCenter := ""
 
 	switch {
 	case strings.TrimSpace(existingProject) != "":
@@ -284,41 +361,57 @@ func (a *App) initProject(name, targetDir string, template quickstartTemplate, e
 	case newProject:
 		needsCreate = true
 	default:
-		resolved, found, total, err := a.findDefaultProject()
+		ctx, items, err := a.listInitProjects()
 		if err != nil {
 			return nil, err
 		}
-		if found {
-			// Confirm reuse only if more than one project exists; if the
-			// account has exactly one project, silent reuse is unambiguous.
-			if promptForReuse && total > 1 {
-				choice, err := confirmProjectReuse(promptIn, promptOut, resolved.project.Name, resolved.project.ProjectID)
+		if len(items) == 0 {
+			needsCreate = true
+			break
+		}
+		if item, ok := selectDefaultInitProjectFromList(items); ok {
+			resolved, err := a.resolveInitProject(ctx, item)
+			if err != nil {
+				return nil, err
+			}
+			target = resolved
+			break
+		}
+		if promptForReuse {
+			selected, action, err := chooseInitProject(promptIn, promptOut, items)
+			if err != nil {
+				return nil, err
+			}
+			switch action {
+			case "abort":
+				return nil, &cliError{Message: "init aborted by user.", Code: "INIT_ABORTED"}
+			case "new":
+				needsCreate = true
+			default:
+				resolved, err := a.resolveInitProject(ctx, selected)
 				if err != nil {
 					return nil, err
 				}
-				switch choice {
-				case "abort":
-					return nil, &cliError{Message: "init aborted by user.", Code: "INIT_ABORTED"}
-				case "new":
-					needsCreate = true
-				default:
-					target = resolved
-				}
-			} else {
 				target = resolved
 			}
 		} else {
-			needsCreate = true
+			item, ok := selectInitProjectFromList(items)
+			if !ok {
+				needsCreate = true
+				break
+			}
+			resolved, err := a.resolveInitProject(ctx, item)
+			if err != nil {
+				return nil, err
+			}
+			target = resolved
 		}
 	}
 
 	if needsCreate {
-		featuresToEnable := features
-		if len(featuresToEnable) == 0 {
-			featuresToEnable = defaultInitFeatures()
-		}
+		featuresToEnable := normalizeProjectCreateFeatures(features)
 		progress.emit("project:create", "Creating Agora project", map[string]any{"projectName": name, "features": featuresToEnable})
-		projectResult, err := a.projectCreate(name, region, "", featuresToEnable, "")
+		projectResult, err := a.projectCreate(name, region, "", featuresToEnable, rtmDataCenter, "")
 		if err != nil {
 			return nil, err
 		}
@@ -326,6 +419,7 @@ func (a *App) initProject(name, targetDir string, template quickstartTemplate, e
 		if list, ok := projectResult["enabledFeatures"].([]string); ok {
 			enabledFeatures = list
 		}
+		createdRTMDataCenter = asString(projectResult["rtmDataCenter"])
 		resolved, err := a.resolveProjectTarget(asString(projectResult["projectId"]))
 		if err != nil {
 			return nil, err
@@ -370,6 +464,9 @@ func (a *App) initProject(name, targetDir string, template quickstartTemplate, e
 		"status":                "ready",
 		"template":              template.ID,
 		"title":                 template.Title,
+	}
+	if createdRTMDataCenter != "" {
+		result["rtmDataCenter"] = createdRTMDataCenter
 	}
 	return result, nil
 }

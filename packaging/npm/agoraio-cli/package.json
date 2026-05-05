@@ -33,12 +33,12 @@
     "bin/agora.js"
   ],
   "optionalDependencies": {
-    "@agoraio/cli-darwin-arm64": "0.0.0-dev",
-    "@agoraio/cli-darwin-x64": "0.0.0-dev",
-    "@agoraio/cli-linux-arm64": "0.0.0-dev",
-    "@agoraio/cli-linux-x64": "0.0.0-dev",
-    "@agoraio/cli-win32-x64": "0.0.0-dev",
-    "@agoraio/cli-win32-arm64": "0.0.0-dev"
+    "agoraio-cli-darwin-arm64": "0.0.0-dev",
+    "agoraio-cli-darwin-x64": "0.0.0-dev",
+    "agoraio-cli-linux-arm64": "0.0.0-dev",
+    "agoraio-cli-linux-x64": "0.0.0-dev",
+    "agoraio-cli-win32-x64": "0.0.0-dev",
+    "agoraio-cli-win32-arm64": "0.0.0-dev"
   },
   "publishConfig": {
     "access": "public",

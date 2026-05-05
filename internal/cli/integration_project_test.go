@@ -7,11 +7,12 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 )
 
-func TestCLIProjectAndEnvAndDoctorParity(t *testing.T) {
+func TestCLIProjectEnvAndDoctor(t *testing.T) {
 	configHome := t.TempDir()
 	projectDir := t.TempDir()
 	api := newFakeCLIBFF()
@@ -34,7 +35,7 @@ func TestCLIProjectAndEnvAndDoctorParity(t *testing.T) {
 		"AGORA_API_BASE_URL": api.baseURL,
 		"AGORA_AGENT":        "cursor-test",
 		"AGORA_LOG_LEVEL":    "error",
-		"AGORA_VERBOSE":      "0",
+		"AGORA_DEBUG":        "0",
 	}})
 	if envResult.exitCode != 0 || !strings.Contains(envResult.stdout, "AGORA_PROJECT_ID=prj_123456") {
 		t.Fatalf("unexpected project env result: exit=%d stdout=%s stderr=%s", envResult.exitCode, envResult.stdout, envResult.stderr)
@@ -61,7 +62,7 @@ func TestCLIProjectAndEnvAndDoctorParity(t *testing.T) {
 		"XDG_CONFIG_HOME":    configHome,
 		"AGORA_API_BASE_URL": api.baseURL,
 		"AGORA_LOG_LEVEL":    "error",
-		"AGORA_VERBOSE":      "0",
+		"AGORA_DEBUG":        "0",
 	}, workdir: projectDir})
 	if writeResult.exitCode != 0 {
 		t.Fatalf("unexpected env write result: exit=%d stderr=%s", writeResult.exitCode, writeResult.stderr)
@@ -74,7 +75,7 @@ func TestCLIProjectAndEnvAndDoctorParity(t *testing.T) {
 		"XDG_CONFIG_HOME":    configHome,
 		"AGORA_API_BASE_URL": api.baseURL,
 		"AGORA_LOG_LEVEL":    "error",
-		"AGORA_VERBOSE":      "0",
+		"AGORA_DEBUG":        "0",
 	}})
 	if doctorResult.exitCode != 1 {
 		t.Fatalf("expected doctor exit 1, got %d stdout=%s stderr=%s", doctorResult.exitCode, doctorResult.stdout, doctorResult.stderr)
@@ -93,6 +94,83 @@ func TestCLIProjectAndEnvAndDoctorParity(t *testing.T) {
 	}
 	if data["status"] != "not_ready" {
 		t.Fatalf("expected not_ready doctor result, got %s", doctorResult.stdout)
+	}
+}
+
+func TestCLIProjectCreateDefaultsToCoreFeatures(t *testing.T) {
+	configHome := t.TempDir()
+	api := newFakeCLIBFF()
+	defer api.server.Close()
+	persistSessionForIntegration(t, configHome)
+
+	dryRun := runCLI(t, []string{"project", "create", "Project Dry Run", "--dry-run", "--json"}, cliRunOptions{env: map[string]string{
+		"XDG_CONFIG_HOME":    configHome,
+		"AGORA_API_BASE_URL": api.baseURL,
+		"AGORA_LOG_LEVEL":    "error",
+	}})
+	if dryRun.exitCode != 0 {
+		t.Fatalf("unexpected dry-run result: %+v", dryRun)
+	}
+	for _, feature := range []string{`"rtc"`, `"rtm"`, `"convoai"`} {
+		if !strings.Contains(dryRun.stdout, feature) {
+			t.Fatalf("expected default feature %s in dry-run result: %+v", feature, dryRun)
+		}
+	}
+
+	create := runCLI(t, []string{"project", "create", "Project Gamma", "--json"}, cliRunOptions{env: map[string]string{
+		"XDG_CONFIG_HOME":    configHome,
+		"AGORA_API_BASE_URL": api.baseURL,
+		"AGORA_LOG_LEVEL":    "error",
+	}})
+	if create.exitCode != 0 {
+		t.Fatalf("unexpected create result: %+v", create)
+	}
+	if !strings.Contains(create.stdout, `"rtmDataCenter":"NA"`) {
+		t.Fatalf("expected default RTM data center in create result: %+v", create)
+	}
+	for _, feature := range []string{`"rtc"`, `"rtm"`, `"convoai"`} {
+		if !strings.Contains(create.stdout, feature) {
+			t.Fatalf("expected default feature %s in create result: %+v", feature, create)
+		}
+	}
+	api.mu.Lock()
+	defaultProject := api.projects["prj_0001"]
+	api.mu.Unlock()
+	if defaultProject == nil || defaultProject.FeatureState.RTMRegion != "NA" {
+		t.Fatalf("expected omitted RTM data center to default to NA, got %+v", defaultProject)
+	}
+
+	withDataCenter := runCLI(t, []string{"project", "create", "Project Delta", "--rtm-data-center", "eu", "--json"}, cliRunOptions{env: map[string]string{
+		"XDG_CONFIG_HOME":    configHome,
+		"AGORA_API_BASE_URL": api.baseURL,
+		"AGORA_LOG_LEVEL":    "error",
+	}})
+	if withDataCenter.exitCode != 0 || !strings.Contains(withDataCenter.stdout, `"rtmDataCenter":"EU"`) {
+		t.Fatalf("unexpected create with data center result: %+v", withDataCenter)
+	}
+	api.mu.Lock()
+	dataCenterProject := api.projects["prj_0002"]
+	api.mu.Unlock()
+	if dataCenterProject == nil || dataCenterProject.FeatureState.RTMRegion != "EU" {
+		t.Fatalf("expected RTM data center EU, got %+v", dataCenterProject)
+	}
+
+	rtcOnly := runCLI(t, []string{"project", "create", "Project RTC Only", "--feature", "rtc", "--dry-run", "--json"}, cliRunOptions{env: map[string]string{
+		"XDG_CONFIG_HOME":    configHome,
+		"AGORA_API_BASE_URL": api.baseURL,
+		"AGORA_LOG_LEVEL":    "error",
+	}})
+	if rtcOnly.exitCode != 0 || strings.Contains(rtcOnly.stdout, `"rtmDataCenter"`) || strings.Contains(rtcOnly.stdout, `"rtm"`) {
+		t.Fatalf("unexpected rtc-only dry-run result: %+v", rtcOnly)
+	}
+
+	convoAIOnly := runCLI(t, []string{"project", "create", "Project ConvoAI", "--feature", "convoai", "--dry-run", "--json"}, cliRunOptions{env: map[string]string{
+		"XDG_CONFIG_HOME":    configHome,
+		"AGORA_API_BASE_URL": api.baseURL,
+		"AGORA_LOG_LEVEL":    "error",
+	}})
+	if convoAIOnly.exitCode != 0 || !strings.Contains(convoAIOnly.stdout, `"convoai"`) || !strings.Contains(convoAIOnly.stdout, `"rtm"`) || !strings.Contains(convoAIOnly.stdout, `"rtmDataCenter":"NA"`) {
+		t.Fatalf("expected convoai dry-run to include rtm dependency: %+v", convoAIOnly)
 	}
 }
 
@@ -297,6 +375,13 @@ func TestCLIProjectEnvFormatsAndWriteRules(t *testing.T) {
 		t.Fatalf("unexpected append result: %+v", appendResult)
 	}
 
+	if err := os.MkdirAll(filepath.Join(projectDir, "apps", "web"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(projectDir, "apps", "web", "package.json"), []byte(`{"dependencies":{"next":"15.0.0"}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
 	nestedResult := runCLI(t, []string{"project", "env", "write", "apps/web/.env.local", "--json"}, cliRunOptions{
 		env: map[string]string{
 			"XDG_CONFIG_HOME":    configHome,
@@ -315,8 +400,10 @@ func TestCLIProjectEnvFormatsAndWriteRules(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(nestedEnv), "AGORA_APP_ID=app_9999") || !strings.Contains(string(nestedEnv), "AGORA_APP_CERTIFICATE=") || strings.Contains(string(nestedEnv), "AGORA_PROJECT_ID=") || strings.Contains(string(nestedEnv), "# BEGIN AGORA CLI") {
-		t.Fatalf("unexpected nested env contents: %s", string(nestedEnv))
+	nextLegacyKeys := regexp.MustCompile(`(?m)^\s*(?:export\s+)?AGORA_APP_ID=|^\s*(?:export\s+)?AGORA_APP_CERTIFICATE=`)
+	if !strings.Contains(string(nestedEnv), "NEXT_PUBLIC_AGORA_APP_ID=") || !strings.Contains(string(nestedEnv), "NEXT_AGORA_APP_CERTIFICATE=") ||
+		nextLegacyKeys.MatchString(string(nestedEnv)) || strings.Contains(string(nestedEnv), "AGORA_PROJECT_ID=") || strings.Contains(string(nestedEnv), "# BEGIN AGORA CLI") {
+		t.Fatalf("unexpected nested env contents (expected Next.js credential names): %s", string(nestedEnv))
 	}
 
 	explicitDefaultPath := filepath.Join(projectDir, ".env.local")
@@ -340,6 +427,65 @@ func TestCLIProjectEnvFormatsAndWriteRules(t *testing.T) {
 	}
 	if !strings.Contains(string(defaultEnv), "USER_VALUE=keep") || !strings.Contains(string(defaultEnv), "AGORA_APP_ID=app_9999") || !strings.Contains(string(defaultEnv), "AGORA_APP_CERTIFICATE=") || strings.Contains(string(defaultEnv), "AGORA_PROJECT_ID=") || strings.Contains(string(defaultEnv), "# BEGIN AGORA CLI") {
 		t.Fatalf("unexpected explicit .env.local contents: %s", string(defaultEnv))
+	}
+}
+
+func TestCLIProjectEnvWriteRecordsProjectTypeInBinding(t *testing.T) {
+	configHome := t.TempDir()
+	repoRoot := t.TempDir()
+	api := newFakeCLIBFF()
+	defer api.server.Close()
+
+	project := buildFakeProject("Project Gamma", "prj_bindmeta", "app_bindmeta", "global")
+	project.FeatureState.ConvoAIEnabled = true
+	project.FeatureState.RTMEnabled = true
+	api.projects[project.ProjectID] = &project
+	persistSessionForIntegration(t, configHome)
+	if err := saveContext(map[string]string{"XDG_CONFIG_HOME": configHome}, projectContext{
+		CurrentProjectID:   &project.ProjectID,
+		CurrentProjectName: &project.Name,
+		CurrentRegion:      "global",
+		PreferredRegion:    "global",
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := writeLocalProjectBinding(repoRoot, localProjectBinding{
+		ProjectID:   project.ProjectID,
+		ProjectName: project.Name,
+		Region:      "global",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(repoRoot, "package.json"), []byte(`{"dependencies":{"next":"15.0.0"}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	result := runCLI(t, []string{"project", "env", "write", ".env.local", "--json"}, cliRunOptions{
+		env: map[string]string{
+			"XDG_CONFIG_HOME":    configHome,
+			"AGORA_API_BASE_URL": api.baseURL,
+			"AGORA_LOG_LEVEL":    "error",
+		},
+		workdir: repoRoot,
+	})
+	if result.exitCode != 0 || !strings.Contains(result.stdout, `"metadataUpdated":true`) || !strings.Contains(result.stdout, `"metadataPath":".agora/project.json"`) {
+		t.Fatalf("expected metadata update in result: %+v", result)
+	}
+
+	raw, err := os.ReadFile(filepath.Join(repoRoot, ".agora", "project.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var meta map[string]any
+	if err := json.Unmarshal(raw, &meta); err != nil {
+		t.Fatal(err)
+	}
+	if meta["projectType"] != "nextjs" {
+		t.Fatalf("expected projectType nextjs in binding, got %s", string(raw))
+	}
+	if meta["envPath"] != ".env.local" {
+		t.Fatalf("expected envPath .env.local, got %s", string(raw))
 	}
 }
 

@@ -5,9 +5,9 @@ import "fmt"
 // Build-time injected version variables. These are populated by ldflags at
 // release time:
 //
-//	go build -ldflags '-X github.com/.../internal/cli.version=v0.1.9
+//	go build -ldflags '-X github.com/.../internal/cli.version=v0.2.0
 //	                    -X github.com/.../internal/cli.commit=abc1234
-//	                    -X github.com/.../internal/cli.date=2026-04-30'
+//	                    -X github.com/.../internal/cli.date=2026-05-04'
 //
 // Snapshot/local builds keep the placeholder values below.
 var (
