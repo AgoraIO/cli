@@ -18,3 +18,7 @@ agora-cli-go
 
 # Local Jekyll / Pages preview output (see `make docs-preview`)
 _site/
+
+# Python bytecode
+__pycache__/
+*.py[cod]
