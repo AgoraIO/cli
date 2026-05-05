@@ -13,7 +13,6 @@ import (
 	"fmt"
 	"io"
 	"strings"
-	"time"
 
 	"github.com/spf13/cobra"
 )
@@ -25,19 +24,12 @@ import (
 func RenderCommandReference(out io.Writer, root *cobra.Command) error {
 	data := buildIntrospectionData(root)
 
-	// extractTime keeps the generated header informative without making the
-	// timestamp diff noisy on every regen — we floor to the hour. Production
-	// callers can always look at git history for the exact regen commit.
-	stamp := time.Now().UTC().Format("2006-01-02")
-
 	var b strings.Builder
 	b.WriteString("---\n")
 	b.WriteString("title: Command Reference\n")
 	b.WriteString("---\n\n")
 	b.WriteString("# Agora CLI — Command Reference\n\n")
-	b.WriteString("> Generated from `agora introspect --json` on ")
-	b.WriteString(stamp)
-	b.WriteString(". Do not edit by hand — run `make docs-commands` or rely on the release workflow to regenerate.\n\n")
+	b.WriteString("> Generated from `agora introspect --json`. Do not edit by hand — run `make docs-commands` or rely on the release workflow to regenerate.\n\n")
 	b.WriteString("This page lists every enumerable command and its local flags. For long descriptions, examples, and inherited flags, run `agora <command> --help` or read the source in `internal/cli/`.\n\n")
 
 	if version, ok := data["version"].(map[string]string); ok {

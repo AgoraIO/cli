@@ -7,7 +7,7 @@ import "fmt"
 //
 //	go build -ldflags '-X github.com/.../internal/cli.version=v0.2.0
 //	                    -X github.com/.../internal/cli.commit=abc1234
-//	                    -X github.com/.../internal/cli.date=2026-05-04'
+//	                    -X github.com/.../internal/cli.date=2026-05-05'
 //
 // Snapshot/local builds keep the placeholder values below.
 var (

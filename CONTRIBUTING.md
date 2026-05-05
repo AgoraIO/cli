@@ -164,7 +164,7 @@ change; prefer adding a new code and deprecating the old one over a rename.
   for user-facing changes (new commands, behavior changes, breaking changes,
   CLI exit code changes, error code additions). When cutting a release, move
   those bullets into a dated `## [x.y.z] - YYYY-MM-DD` section per the note at
-  the top of `CHANGELOG.md` (for example, v0.2.0 shipped as `## [0.2.0] - 2026-05-04`).
+  the top of `CHANGELOG.md` (for example, v0.2.0 shipped as `## [0.2.0] - 2026-05-05`).
 - For UI/UX-affecting changes (pretty output, prompts, progress events,
   errors), include before/after copy-paste samples in the PR description.
 - New commands MUST include a per-command example block in the Cobra

@@ -6,7 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 When tagging a new release, rename the `[Unreleased]` section to the new version
-(e.g. `[0.2.0] - 2026-05-04`), add a fresh empty `[Unreleased]` heading at the top,
+(e.g. `[0.2.0] - 2026-05-05`), add a fresh empty `[Unreleased]` heading at the top,
 and update the link references at the bottom of this file.
 
 When adding a new entry, link the change to the PR or commit that introduced it
@@ -15,7 +15,7 @@ Earlier entries pre-date this convention and only carry their version's compare 
 
 ## [Unreleased]
 
-## [0.2.0] - 2026-05-04
+## [0.2.0] - 2026-05-05
 
 ### Added
 
