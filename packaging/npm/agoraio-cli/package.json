@@ -33,7 +33,7 @@
     "bin/agora.js"
   ],
   "optionalDependencies": {
-    "agoraio-cli-darwin-arm64": "0.0.0-dev",
+    "agoraio-cli-darwin-arm64": "0.2.0",
     "agoraio-cli-darwin-x64": "0.0.0-dev",
     "agoraio-cli-linux-arm64": "0.0.0-dev",
     "agoraio-cli-linux-x64": "0.0.0-dev",
