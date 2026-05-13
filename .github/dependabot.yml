@@ -1,20 +1,33 @@
+# Delay version-update PRs so compromised releases are more likely to be caught or yanked.
+# Cooldown does not apply to Dependabot security updates (those still open immediately).
 version: 2
 updates:
   - package-ecosystem: gomod
     directory: /
     schedule:
       interval: weekly
+    cooldown:
+      semver-patch-days: 7
+      semver-minor-days: 14
+      semver-major-days: 30
     open-pull-requests-limit: 5
 
   - package-ecosystem: npm
     directory: /packaging/npm/agoraio-cli
     schedule:
       interval: weekly
+    cooldown:
+      semver-patch-days: 7
+      semver-minor-days: 14
+      semver-major-days: 30
     open-pull-requests-limit: 5
 
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: weekly
+    cooldown:
+      semver-patch-days: 7
+      semver-minor-days: 14
+      semver-major-days: 30
     open-pull-requests-limit: 5
-
