@@ -20,6 +20,9 @@ updates:
       semver-patch-days: 7
       semver-minor-days: 14
       semver-major-days: 30
+    # optionalDependencies stay 0.0.0-dev in git; release workflow stamps versions.
+    ignore:
+      - dependency-name: "agoraio-cli-*"
     open-pull-requests-limit: 5
 
   - package-ecosystem: github-actions
