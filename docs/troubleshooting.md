@@ -67,15 +67,32 @@ older binary.
 
 ## `agora init` or `agora quickstart create` fails on `git clone`
 
-The CLI shells out to `git clone` for quickstarts. Verify:
+The CLI shells out to `git clone` for quickstarts. Most failures map to a stable error code:
+
+| Error code | Meaning | Fix |
+|------------|---------|-----|
+| `QUICKSTART_GIT_MISSING` | `git` is not on `PATH`. | Install git ([git-scm.com/downloads](https://git-scm.com/downloads)) and retry. |
+| `QUICKSTART_REF_INVALID` | `--ref` is empty, dash-prefixed, or contains whitespace. | Pass a valid branch/tag/commit. |
+| `QUICKSTART_REPO_OVERRIDE_INVALID` | The `AGORA_QUICKSTART_<TEMPLATE>_REPO_URL` env override is malformed. | Set it to an `https://`, `ssh://`, `git://`, `file://`, `git@host:path`, or absolute local path URL — or unset it. |
+
+If the clone reaches git but still fails, verify connectivity:
 
 ```bash
 git --version
-git ls-remote https://github.com/AgoraIO/agora-quickstart-nextjs.git
+git ls-remote https://github.com/AgoraIO-Conversational-AI/agent-quickstart-nextjs.git
 ```
 
-If `git` is missing, install it (Homebrew, apt, winget, etc.). If
-network access fails, check proxies and corporate firewall rules.
+Check proxies and corporate firewall rules if `ls-remote` hangs or fails.
+
+The CLI invokes git with `-c credential.helper=` so credential helpers (including macOS keychain) are not consulted for these public clones — agent and CI subprocesses no longer fail with "Device not configured."
+
+Workshops and internal forks can override the clone URL per template, e.g.:
+
+```bash
+AGORA_QUICKSTART_NEXTJS_REPO_URL=https://github.com/my-org/fork agora init demo --template nextjs
+```
+
+A `clone:override` progress event is emitted whenever this is in use, so JSON automation runs show which fork was cloned.
 
 ## "project does not have an app certificate"
 
