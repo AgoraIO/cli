@@ -200,6 +200,7 @@ Additional stage-specific fields may appear (for example `repoUrl`, `projectId`,
 
 | Stage | Emitted by | When | Stage-specific fields |
 |-------|------------|------|------------------------|
+| `clone:override` | `quickstart create`, `init` | Before `clone:start` when an `AGORA_QUICKSTART_<TEMPLATE>_REPO_URL` override is in use | `repoUrl`, `envVar` |
 | `clone:start` | `quickstart create`, `init` | Before the `git clone` shell-out | `repoUrl`, `targetPath`, `ref` |
 | `clone:complete` | `quickstart create`, `init` | After `git clone` succeeds | `targetPath` |
 | `project:create` | `init` | Before creating a new Agora project | `projectName`, `features` |

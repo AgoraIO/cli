@@ -46,6 +46,7 @@ func agoraEnvCatalog() []agoraEnvVar {
 		{Name: "AGORA_CONSOLE_URL", Category: "endpoints", Description: "Override the URL used by `agora open --target console`."},
 		{Name: "AGORA_DOCS_URL", Category: "endpoints", Description: "Override the URL used by `agora open --target docs`."},
 		{Name: "AGORA_PRODUCT_DOCS_URL", Category: "endpoints", Description: "Override the URL used by `agora open --target product-docs`."},
+		{Name: "AGORA_QUICKSTART_<TEMPLATE>_REPO_URL", Category: "endpoints", Description: "Override the clone URL for a specific quickstart template (e.g. AGORA_QUICKSTART_NEXTJS_REPO_URL). Used for workshops, internal forks, and integration tests; everyday users do not set this.", Effect: "https:// | ssh:// | git:// | file:// | git@host:path | absolute local path"},
 		// Telemetry
 		{Name: "DO_NOT_TRACK", Category: "telemetry", Description: "Standard DO_NOT_TRACK convention; hard opt-out of telemetry and file logging.", Effect: "any non-empty value"},
 		{Name: "AGORA_SENTRY_ENABLED", Category: "telemetry", Description: "When 0, disable telemetry transport even if config has telemetryEnabled=true.", Default: "1", Effect: "0 | 1"},

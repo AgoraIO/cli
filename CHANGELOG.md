@@ -17,9 +17,16 @@ Earlier entries pre-date this convention and only carry their version's compare 
 
 ## [0.2.1] - 2026-05-19
 
+### Added
+
+- Emit a `clone:override` progress event when `AGORA_QUICKSTART_<TEMPLATE>_REPO_URL` overrides the clone URL, so workshop and CI runs can confirm which fork they cloned.
+- Document `AGORA_QUICKSTART_<TEMPLATE>_REPO_URL` in `agora env-help` and the automation reference.
+
 ### Fixed
 
 - Disable git credential helpers for quickstart clone subprocesses so `agora init` and `agora quickstart create` succeed in non-interactive agent and CI environments without macOS keychain access.
+- Pass `--` before the repo URL and target directory on `git clone` so values starting with `-` cannot be parsed as git options.
+- Fail fast with `QUICKSTART_GIT_MISSING` when `git` is not on `PATH`, with `QUICKSTART_REF_INVALID` for malformed `--ref` values, and with `QUICKSTART_REPO_OVERRIDE_INVALID` when the env override URL is malformed, instead of surfacing cryptic git errors.
 
 ## [0.2.0] - 2026-05-05
 
