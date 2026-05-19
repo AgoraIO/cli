@@ -410,12 +410,7 @@ func (a *App) quickstartRepoURL(template quickstartTemplate) string {
 }
 
 func cloneQuickstartRepo(repoURL, targetDir, ref string) error {
-	args := []string{"clone", "--depth", "1"}
-	if strings.TrimSpace(ref) != "" {
-		args = append(args, "--branch", strings.TrimSpace(ref))
-	}
-	args = append(args, repoURL, targetDir)
-	cmd := exec.Command("git", args...)
+	cmd := exec.Command("git", gitQuickstartCloneArgs(repoURL, targetDir, ref)...)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		trimmed := strings.TrimSpace(string(output))
@@ -426,6 +421,17 @@ func cloneQuickstartRepo(repoURL, targetDir, ref string) error {
 		return fmt.Errorf("git clone failed for %s (%s). %s", repoURL, trimmed, hint)
 	}
 	return nil
+}
+
+func gitQuickstartCloneArgs(repoURL, targetDir, ref string) []string {
+	// Disable credential helpers for this invocation so non-TTY agent/CI runs
+	// do not consult macOS keychain for public HTTPS repos.
+	args := []string{"-c", "credential.helper=", "clone", "--depth", "1"}
+	if strings.TrimSpace(ref) != "" {
+		args = append(args, "--branch", strings.TrimSpace(ref))
+	}
+	args = append(args, repoURL, targetDir)
+	return args
 }
 
 func (a *App) resolveOptionalProjectTarget(explicitProject, startPath string) (projectTarget, bool, error) {
