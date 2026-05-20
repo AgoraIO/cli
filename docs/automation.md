@@ -39,10 +39,11 @@ Use this guide for:
 - Use `--debug` (equivalent to `AGORA_DEBUG=1`) to echo structured log records to stderr. The flag does not change exit codes, JSON envelope shape, or NDJSON progress events; it only mirrors the entries that would normally be written to the log file. Pair with `--json` for fully machine-parseable runs that also surface internal events to your CI logs. v0.2.0 dropped the legacy `--verbose` / `-v` alias and the `AGORA_VERBOSE` env var; persisted configs that contain a `verbose` key are auto-promoted to `debug` on first load.
 - Use `--yes` (or `-y`) / `AGORA_NO_INPUT=1` to assume the default answer to confirmation prompts. Following industry convention for `-y` (apt-style), the flag never starts brand-new interactive flows: in JSON, CI, or non-TTY contexts the CLI still fails fast with the same `AUTH_UNAUTHENTICATED` error you would have seen without `--yes`, instead of silently launching an OAuth browser flow.
 - Interactive login prompts only appear in interactive pretty-mode TTY runs. Automation should authenticate up front with `agora login`; `--json`, `AGORA_OUTPUT=json`, detected CI environments, and non-TTY stdin all skip the prompt and fail with `AUTH_UNAUTHENTICATED`.
+- In non-interactive runs (`--yes`, JSON, CI, non-TTY), pass `--template` explicitly to `agora init`. The CLI now fails fast with `QUICKSTART_TEMPLATE_REQUIRED` instead of silently selecting a template.
 - Output mode precedence is: explicit CLI flag (`--json` or `--output`) first, user-set `AGORA_OUTPUT` second, then user-customized config file value, then **CI auto-detect → JSON** (see below), then pretty.
 - Set `AGORA_AGENT=<tool-name>` in automated environments to explicitly label agent traffic in the API `User-Agent`. When unset, the CLI may infer a coarse label such as `cursor`, `claude-code`, `cline`, `windsurf`, `codex`, or `aider` from known agent environment markers. Set `AGORA_AGENT_DISABLE_INFER=1` to disable inference.
 - Use `agora mcp serve` to expose local Agora CLI tools to MCP-capable agents. The full surface is exposed: `agora.version`, `agora.introspect`, `agora.auth.{status,logout}`, `agora.config.{path,get}`, `agora.telemetry.status`, `agora.upgrade.check`, `agora.project.{list,show,use,create,doctor,env,env_write}`, `agora.project.feature.{list,status,enable}`, `agora.quickstart.{list,create,env_write}`, and `agora.init`. Authentication is intentionally **not** exposed via MCP because OAuth requires an interactive browser; run `agora login` once on the host first.
-- Use `agora open --target docs` for the human GitHub Pages docs and `agora open --target docs-md` for the agent-facing raw Markdown index. The Markdown tree is published under predictable `/md/` URLs, for example `/md/commands.md`, `/md/automation.md`, and `/md/error-codes.md`.
+- Use `agora open --target docs` for the human GitHub Pages docs and `agora open --target docs-md` for the agent-facing raw Markdown index. In CI/non-TTY runs the command defaults to URL-only output unless `--browser` is set. The Markdown tree is published under predictable `/md/` URLs, for example `/md/commands.md`, `/md/automation.md`, and `/md/error-codes.md`.
 - Docs publishing reads `docs/site.env` for `CLI_DOCS_BASE_URL` and `CLI_DOCS_MD_BASE_URL`; staging Pages builds can override those environment variables at workflow time without changing docs content. The resolved values are published as `/docs.env` for transparency.
 - The CLI maintains a short-lived on-disk completion cache for `agora project use <TAB>` under `<AGORA_HOME>/cache/projects.json`. The cache is only used for completions when a **local unexpired session exists** (`session.json` with a non-empty access token and a future `expiresAt`, when present), so Tab does not suggest stale project names after logout or local session expiry. The cache TTL is 5 minutes by default; override with `AGORA_PROJECT_CACHE_TTL_SECONDS=<seconds>` (set to `0` to disable). Cache files older than 24 h are pruned at every CLI startup. Set `AGORA_DISABLE_CACHE=1` to drop the cache on the next startup. The cache is invalidated automatically by `agora logout` and `agora project create` (the latter clears the file; it does not embed the new project until the next successful list fetch). To **force-refresh** the cached completion page, run `agora project list --refresh-cache` while authenticated; that command fetches the unfiltered first page used by completion and rewrites `projects.json` when it succeeds.
 
@@ -241,6 +242,7 @@ Implications for agent authors:
 - Do not rely on `stage`-based hooks (e.g. progress UIs, mid-flight cancellation prompts) when calling these tools over MCP. Use them only when shelling out to `agora ... --json` directly.
 - Plan for higher tail latency on MCP `tools/call` for the affected tools; the user-visible "nothing is happening" gap may be tens of seconds for git clones or project creation. Consider surfacing your own "running tool: agora.init…" UI in the host agent.
 - The terminal payload shape returned in `content[0].text` is identical to the CLI's terminal `data` envelope, so existing JSON-shape handlers continue to work unchanged.
+- If you need per-stage progress and cancellation hooks, run the same workflow via shell commands (`agora ... --json`) and parse NDJSON locally.
 
 When future MCP transports support server-initiated `notifications/progress` (an open spec area), the CLI can add native MCP progress forwarding without changing the existing tool result shape.
 
@@ -289,6 +291,7 @@ Example:
 ```
 
 By default `init` reuses an existing project — preferring one named exactly `"Default Project"`. If no default exists, interactive sessions show existing projects with a create-new option and default to the most recently created project; JSON, CI, and non-TTY runs select the most recent project automatically. Pass `--new-project` to force creation. Use `--project <name|id>` to bind to a specific project.
+For deterministic automation, always pass `--project <name|id>` or `--new-project`.
 
 Required `data` fields:
 - `action`
@@ -301,6 +304,8 @@ Required `data` fields:
   Boolean mirror for agents that branch on init reuse.
 - `projectId`
 - `projectName`
+- `projectSelectionReason`
+  One of `explicit_project`, `new_project`, `no_existing_projects`, `default_name`, `interactive_new_project`, `interactive_selection`, or `most_recent`.
 - `region`
 - `path`
   Absolute path to the cloned quickstart.
@@ -922,6 +927,8 @@ Example:
 ./agora --upgrade-check --json
 ```
 
+CI/agent guidance: prefer `--check` (or `--upgrade-check`) so automation does not mutate the running binary.
+
 Required `data` fields:
 - `action`
   `upgrade` for the subcommand and `upgrade-check` for the root `--upgrade-check` pseudo-command.
@@ -949,9 +956,14 @@ Optional fields:
   Structured version payload for `agora --upgrade-check`.
 - `receiptWarning`
   Nonfatal warning when a direct-installer self-update succeeded but the CLI could not refresh `agora.install.json`.
+- `ciBlocked`
+  Present and `true` when installer-managed self-update is skipped because CI auto-detect is active and `AGORA_ALLOW_UPGRADE_IN_CI` is not set.
+- `suggestedCommand`
+  Suggested non-mutating check command when `ciBlocked` is true.
 
 Upgrade behavior:
 - direct-installer installs (`installMethod: "installer"`) self-update in place after downloading the GitHub release archive and verifying it against `checksums.txt`
+- in CI, installer-managed self-update is skipped by default (`status: "manual"` + `ciBlocked: true`); set `AGORA_ALLOW_UPGRADE_IN_CI=1` to opt in
 - package-manager installs return `status: "manual"` with the owning package-manager command; agents should run that command only after user approval
 - `unknown` means the CLI could not verify the install channel, usually because the binary is a development/test build
 

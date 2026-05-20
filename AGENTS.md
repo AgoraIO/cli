@@ -219,7 +219,8 @@ Tagging `v0.2.0` (or any `v*` semver tag) triggers the release workflow automati
 | Headless OAuth | Use `--no-browser` to print a URL instead of opening a browser |
 | `quickstart env write` ≠ `project env write` | Template-aware paths and variable names vs generic dotenv block |
 | `add` namespace | Reserved and hidden; must behave as not-found from the user's perspective |
-| `doctor --deep` | Flag exists but deep checks are not fully implemented; don't document as stable yet |
+| `doctor --deep` | Stable workspace checks for `.agora` metadata and quickstart env consistency; prefer `--deep --json` in repo-bound automation. |
+| `open` browser launch | Auto-open happens only in interactive pretty TTY sessions outside CI. Use `--browser` to force opening or `--no-browser` for URL-only behavior. |
 | App certificate required | `quickstart env write` and `init` fail env injection if the project has no certificate |
 
 ## npm Distribution (Node Wrapper)

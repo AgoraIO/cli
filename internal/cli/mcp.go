@@ -56,6 +56,7 @@ Use this when an MCP client (Cursor, Claude Code, Windsurf, custom) wants to dri
 
 Notes for agents:
 - Long-running tools (init, quickstart create, project create) emit no NDJSON progress over MCP. The result payload is returned as a single tool response.
+- If you need stage-level progress hooks, shell out to ` + "`agora <command> --json`" + ` and parse NDJSON directly instead of using MCP for that step.
 - ` + "`agora.auth.login`" + ` is intentionally not exposed because OAuth requires an interactive browser. Run ` + "`agora login`" + ` once on the host before starting the MCP server.
 - All tools return JSON-stringified payloads in the standard MCP ` + "`content[0].text`" + ` slot.`,
 		Example: example(`
