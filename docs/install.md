@@ -6,6 +6,22 @@ title: Install Agora CLI
 
 This page lists the supported installation paths for Agora CLI and the direct installers for macOS, Linux, and Windows.
 
+## Enterprise / locked-down environments
+
+If your organization blocks pipe-to-shell installers, use one of these supported paths:
+
+```bash
+# npm package with provenance metadata
+npm install -g agoraio-cli
+
+# Manual release archive download
+curl -fsSLO https://github.com/AgoraIO/cli/releases/download/vX.Y.Z/agora-cli_vX.Y.Z_linux_amd64.tar.gz
+curl -fsSLO https://github.com/AgoraIO/cli/releases/download/vX.Y.Z/checksums.txt
+sha256sum -c checksums.txt --ignore-missing
+```
+
+Manual installs should verify SHA-256 at minimum; Cosign and SBOM verification are documented in [Security](#security). Enterprises may mirror the verified archive internally as long as the binary name remains `agora` / `agora.exe` on `PATH`.
+
 ## Direct Installers
 
 ### macOS, Linux, and Windows POSIX shells

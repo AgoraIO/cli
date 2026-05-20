@@ -51,6 +51,8 @@ npm install -g agoraio-cli
 irm https://raw.githubusercontent.com/AgoraIO/cli/main/install.ps1 | iex
 ```
 
+Locked-down environments that block `curl | sh` can use npm, download a release archive from GitHub, or mirror the binary internally. Every release includes `checksums.txt`, a Cosign keyless signature, and an SBOM; see [docs/install.md](docs/install.md#enterprise--locked-down-environments) for manual tarball and verification steps.
+
 Notes:
 
 - The shell installer supports macOS, Linux, and Windows POSIX shells such as Git Bash. Use `install.ps1` for native PowerShell installs on Windows.
