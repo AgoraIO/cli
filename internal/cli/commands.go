@@ -792,6 +792,9 @@ For automation, prefer --json (or --format envelope) so the result has the same 
 				})
 			}
 			_, err = fmt.Fprint(cmd.OutOrStdout(), renderProjectEnv(values, format))
+			if err == nil && format != envJSON && !cmd.Flags().Changed("format") && !cmd.Flags().Changed("shell") && a.resolveOutputMode(cmd) == outputPretty && isTTY(os.Stderr) {
+				fmt.Fprintln(cmd.ErrOrStderr(), "Tip: `agora project env` prints raw dotenv by default. Use `--json` or `--format envelope` for automation.")
+			}
 			return err
 		},
 	}
