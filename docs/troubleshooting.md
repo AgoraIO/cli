@@ -235,6 +235,18 @@ DO_NOT_TRACK=1 agora <command>
 
 See [Telemetry](telemetry.html) for the field schema.
 
+## Boolean config flags are not turning off
+
+Boolean flags in `agora config update` need explicit `=false` syntax. For example:
+
+```bash
+agora config update --telemetry-enabled=false
+agora config update --browser-auto-open=false
+agora config update --debug=false
+```
+
+Passing only `--telemetry-enabled` sets the value to true; omitting the flag leaves the existing config unchanged.
+
 ## Still stuck?
 
 - Open a [GitHub Discussion](https://github.com/AgoraIO/cli/discussions)

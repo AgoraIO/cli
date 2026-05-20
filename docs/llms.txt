@@ -48,8 +48,8 @@ Check project health: agora project doctor --json
 
 - **MCP transport**: `agora mcp serve` uses stdio JSON-RPC.
 - **Auth prerequisite**: `agora.auth.login` is intentionally not exposed over MCP. Run `agora login` on the host first.
-- **Progress caveat**: Long-running tools over MCP return a single final response; NDJSON progress stages are not streamed over MCP.
-- **When progress matters**: shell out directly (for example `agora init ... --json`) and parse stdout line-by-line (progress events + final envelope).
+- **Progress over MCP**: Long-running tools emit `notifications/progress` when the MCP `tools/call` params include `_meta.progressToken`.
+- **When shelling out**: run commands like `agora init ... --json` and parse stdout line-by-line (progress events + final envelope).
 - **Capability discovery**: prefer `agora --help --all --json` or `agora introspect --json`.
 - **Environment catalog**: use `agora env-help --json` to enumerate all supported `AGORA_*` controls.
 

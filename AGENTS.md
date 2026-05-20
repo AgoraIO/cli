@@ -200,6 +200,7 @@ When adding a command:
 4. Add the command to the README command model
 5. Add a stable JSON result shape to `docs/automation.md`
 6. Call out breaking JSON or exit-code changes in `CHANGELOG.md` and migration notes in `docs/automation.md` when behavior is intentional.
+7. If the command is exposed through MCP, update `mcpTools()` and refresh the compact tool-surface summary in `docs/llms.txt`.
 
 ## CI and Release
 

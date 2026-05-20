@@ -18,7 +18,9 @@ Use this guide for:
 - [Project Resolution Precedence](#project-resolution-precedence)
 - [Config Isolation](#config-isolation)
 - [JSON Envelope](#json-envelope)
+- [Envelope Versioning](#envelope-versioning)
 - [Progress Events (NDJSON Stream)](#progress-events-ndjson-stream)
+- [MCP Progress Notifications](#mcp-progress-notifications)
 - [Exit Codes](#exit-codes)
 - [Stable Result Shapes](#stable-result-shapes)
 - [Human vs Machine Output](#human-vs-machine-output)
@@ -148,6 +150,12 @@ Wrappers that want compile-time type safety can generate types from the
 schema with `quicktype`, `datamodel-code-generator`, or any
 JSON-Schema-aware tool.
 
+## Envelope Versioning
+
+The current contract is `envelope.v1.json`. Minor CLI releases may add fields to envelopes, progress events, command result `data`, and introspection records. Agents must ignore unknown fields.
+
+Breaking envelope changes require a new schema file such as `envelope.v2.json`, a `CHANGELOG.md` entry, and a migration note in this document. Removing fields, changing field types, or changing the meaning of existing enum values is treated as breaking.
+
 ### One documented exception: `agora project env`
 
 `agora project env` is the only command whose **default** (non-JSON)
@@ -174,6 +182,8 @@ For automation, prefer `--json` (or `--format envelope`) so the result
 has the same shape as every other command. `agora project env write`
 already emits the unified envelope under all output modes — only the
 read path has the raw-stdout exception above.
+
+In interactive pretty TTY sessions, running `agora project env` without an explicit `--format`, `--shell`, or `--json` prints a stderr hint pointing agents to `--json` / `--format envelope`. The hint is not emitted in JSON mode or non-TTY automation.
 
 ## Progress Events (NDJSON Stream)
 
@@ -231,20 +241,40 @@ Additional stage-specific fields may appear (for example `repoUrl`, `projectId`,
 
 Stages are stable identifiers; new stages may be added over time. Agents should treat unknown stages as benign progress information rather than failing on them.
 
-### MCP transport caveat: progress events collapse into the tool result
+## MCP Progress Notifications
 
-When the same long-running commands (`agora init`, `agora quickstart create`, `agora project create`, `agora login`) are invoked **through the MCP server** (`agora mcp serve`), the NDJSON progress event stream is **not** surfaced to the MCP client. MCP clients receive the final result payload only — JSON-stringified into the standard `content[0].text` slot of the `tools/call` response.
+When long-running tools are invoked through MCP with `_meta.progressToken`, `agora mcp serve` forwards stage updates as JSON-RPC `notifications/progress` frames before the final `tools/call` response. This keeps stdio framing valid while allowing host agents to display progress.
 
-Why: MCP's stdio transport uses stdout for JSON-RPC framing, so any extra newline-delimited objects emitted before the final response would corrupt the transport. The progress events are still produced internally but are intentionally swallowed before they reach the client.
+Example `tools/call` params:
+
+```json
+{
+  "name": "agora.quickstart.create",
+  "arguments": {
+    "template": "nextjs",
+    "dir": "my-demo"
+  },
+  "_meta": {
+    "progressToken": "demo-1"
+  }
+}
+```
+
+Example progress notification:
+
+```json
+{"jsonrpc":"2.0","method":"notifications/progress","params":{"progressToken":"demo-1","progress":1,"stage":"clone:start","message":"Cloning quickstart repository","timestamp":"..."}}
+```
+
+The final MCP tool result is unchanged: the CLI result payload is JSON-stringified into `content[0].text`.
 
 Implications for agent authors:
 
-- Do not rely on `stage`-based hooks (e.g. progress UIs, mid-flight cancellation prompts) when calling these tools over MCP. Use them only when shelling out to `agora ... --json` directly.
+- Use `_meta.progressToken` when calling `agora.init`, `agora.quickstart.create`, or `agora.project.create` and your host can display progress notifications.
+- Without a progress token, MCP calls remain a single final response.
 - Plan for higher tail latency on MCP `tools/call` for the affected tools; the user-visible "nothing is happening" gap may be tens of seconds for git clones or project creation. Consider surfacing your own "running tool: agora.init…" UI in the host agent.
 - The terminal payload shape returned in `content[0].text` is identical to the CLI's terminal `data` envelope, so existing JSON-shape handlers continue to work unchanged.
-- If you need per-stage progress and cancellation hooks, run the same workflow via shell commands (`agora ... --json`) and parse NDJSON locally.
-
-When future MCP transports support server-initiated `notifications/progress` (an open spec area), the CLI can add native MCP progress forwarding without changing the existing tool result shape.
+- Shell commands (`agora ... --json`) still use NDJSON progress events followed by the terminal envelope.
 
 Failure example:
 
@@ -280,6 +310,28 @@ Known `error.code` values are cataloged in [error-codes.md](error-codes.md).
 ## Stable Result Shapes
 
 The following commands are part of the documented JSON contract.
+
+### `introspect`
+
+Example:
+
+```bash
+./agora introspect --json
+```
+
+Required `data` fields:
+- `commands`
+  Array of enumerable command metadata.
+- `globalFlags`
+  Root flags inherited by commands.
+- `pseudoCommands`
+  Stable command labels emitted by root flags such as `agora --upgrade-check`.
+- `enums`
+  Known enum values for agent validation.
+- `version`
+  Build metadata.
+
+Each `commands[]` item includes `path`, `command`, `short`, `flags`, `headlessSafe`, and `interactivity`. Agents should use `headlessSafe=false` to avoid flows that require direct user interaction, and use `interactivity` for a human-readable reason such as `interactive-browser`, `stdio-server`, or `browser-in-interactive-pretty-mode`.
 
 ### `init`
 
@@ -740,6 +792,8 @@ Example:
 ./agora auth login --json
 ```
 
+`login --json` is an NDJSON stream, not a single JSON blob: it emits `oauth:waiting`, `oauth:received`, and `oauth:complete` progress events before the final envelope. Parse stdout line-by-line and use the last object with top-level `ok` as the command result.
+
 Required `data` fields:
 - `action`
   Always `login`.
@@ -914,6 +968,8 @@ Example:
 ./agora config update --output json --json
 ./agora config update --telemetry-enabled=false --json
 ```
+
+Boolean config flags use Cobra's explicit false syntax. To disable a boolean, pass `--flag=false` (for example `--telemetry-enabled=false`, `--browser-auto-open=false`, or `--debug=false`); omitting the flag leaves the persisted value unchanged.
 
 Returns the updated config object with the same shape as `config get`. Safe branch fields are the same as `config get`.
 
