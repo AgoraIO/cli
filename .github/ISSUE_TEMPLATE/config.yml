@@ -10,5 +10,5 @@ contact_links:
     url: https://console.agora.io
     about: Manage your Agora account, projects, and credentials.
   - name: Agora CLI documentation
-    url: https://github.com/AgoraIO/cli/tree/main/agora-cli-go/docs
+    url: https://github.com/AgoraIO/cli/tree/main/docs
     about: Installation, automation, error code catalog, and JSON envelope reference.

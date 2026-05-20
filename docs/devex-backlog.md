@@ -21,7 +21,9 @@ Update this file as items ship or priorities change.
 
 ### P0-1 — Contributor clone path matches canonical repo layout
 
-**Problem:** `CONTRIBUTING.md` instructs `cd cli/agora-cli-go` after cloning `AgoraIO/cli`. If the default clone layout differs (single-package repo vs monorepo), new contributors hit a broken path immediately.
+**Status:** Shipped (2026-05-20).
+
+**Problem (resolved):** Contributor docs previously referenced workspace-only paths such as `cd cli/agora-cli-go`. The canonical public layout is clone `AgoraIO/cli`, then `cd cli/`.
 
 **Target files**
 
@@ -30,9 +32,9 @@ Update this file as items ship or priorities change.
 
 **Acceptance criteria**
 
-- [ ] Paths match the **actual** default layout of `github.com/AgoraIO/cli` (verify on default branch).
-- [ ] If multiple layouts exist (e.g. subtree mirror), document **both** with a one-line “use this if…” disambiguation.
-- [ ] `make test` / `go build` instructions run verbatim from a fresh clone.
+- [x] Paths match the **actual** default layout of `github.com/AgoraIO/cli` (`git clone … && cd cli/`).
+- [x] No workspace-only subdirectory names (for example `agora-cli-go/`) in contributor setup instructions.
+- [x] `make test` / `go build` instructions run verbatim from a fresh clone.
 
 ---
 
