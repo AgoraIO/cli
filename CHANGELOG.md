@@ -17,12 +17,15 @@ Earlier entries pre-date this convention and only carry their version's compare 
 
 ## [0.2.1] - 2026-05-20
 
-Automation hardening, quickstart reliability fixes, and release-artifact rename. See [docs/releases/v0.2.1.md](docs/releases/v0.2.1.md) for the GitHub release summary.
+Automation hardening, quickstart reliability fixes, agent introspection and MCP progress improvements, and release-artifact rename.
 
 ### Added
 
 - Emit a `clone:override` progress event when `AGORA_QUICKSTART_<TEMPLATE>_REPO_URL` overrides the clone URL, so workshop and CI runs can confirm which fork they cloned.
 - Document `AGORA_QUICKSTART_<TEMPLATE>_REPO_URL` in `agora env-help` and the automation reference.
+- Add MCP `notifications/progress` forwarding for long-running tools when clients pass `_meta.progressToken`.
+- Add `headlessSafe` and `interactivity` metadata to `agora introspect --json` command records.
+- Add automation contract tests for representative `docs/automation.md` examples.
 
 ### Changed
 
@@ -38,15 +41,40 @@ Automation hardening, quickstart reliability fixes, and release-artifact rename.
 - Pass `--` before the repo URL and target directory on `git clone` so values starting with `-` cannot be parsed as git options.
 - Fail fast with `QUICKSTART_GIT_MISSING` when `git` is not on `PATH`, with `QUICKSTART_REF_INVALID` for malformed `--ref` values, and with `QUICKSTART_REPO_OVERRIDE_INVALID` when the env override URL is malformed, instead of surfacing cryptic git errors.
 
+### Upgrade notes
+
+**Direct installer (`install.sh` / `install.ps1`):** Fresh installs and re-runs of the installer fetch the correct archive name automatically. If you are on v0.1.7 through v0.2.0 and `agora upgrade` fails to download v0.2.1+, re-run the installer once:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/AgoraIO/cli/main/install.sh | sh
+```
+
+Those older binaries only know the `agora-cli-go_*` archive prefix; after one reinstall, future upgrades use `agora-cli_*`.
+
+**npm / package managers:** Use your package manager as usual (`npm update -g agoraio-cli`, etc.). Archive naming does not affect npm installs.
+
+**Automation scripts:**
+
+| Before | After |
+| ------ | ----- |
+| `agora init demo --yes` (silent template pick) | `agora init demo --template nextjs --yes` (required) |
+| `agora upgrade` in CI jobs | `agora upgrade --check --json` (non-mutating) |
+| `agora open --target docs` in CI | URL-only by default; pass `--browser` to force launch |
+
+Set `AGORA_ALLOW_UPGRADE_IN_CI=1` only when a CI job intentionally needs to mutate the installed binary.
+
 ### Documentation
 
 - Align `AGENTS.md` with shipped `project doctor --deep` behavior and document current `agora open` browser-launch rules.
 - Expand `docs/automation.md` and `docs/llms.txt` with MCP transport/auth caveats, headless CI guidance, init/upgrade automation fields, and `agora env-help` discovery pointers.
 - Update agent quickstart rule and skills examples to include deterministic init (`--new-project`) defaults.
-- Document MCP progress caveat in `agora mcp serve` help and the skills catalog.
+- Document MCP progress notifications (`_meta.progressToken`) in `docs/automation.md`, `docs/llms.txt`, `agora mcp serve` help, and the skills catalog.
+- Document envelope versioning policy, login NDJSON parsing, raw `project env` hints, and boolean config flag syntax (`--flag=false`) in automation and troubleshooting docs.
+- Surface enterprise install paths for locked-down environments in `README.md` and `docs/install.md`.
 - Fix contributor clone path in `CONTRIBUTING.md` to match the canonical `git clone … && cd cli/` layout.
 - Align npm package `repository.directory` paths with the repo root layout and update the issue template docs link.
-- Add v0.2.1 release notes at `docs/releases/v0.2.1.md` and document archive naming / upgrade migration in `docs/install.md` and `docs/troubleshooting.md`.
+- Document archive naming and upgrade migration in `docs/install.md` and `docs/troubleshooting.md`.
+- Add a GitHub Pages skip link for keyboard navigation.
 
 ## [0.2.0] - 2026-05-05
 
