@@ -78,6 +78,12 @@ func (a *App) performSelfUpdate(dryRun bool) (map[string]any, error) {
 		result["status"] = "manual"
 		return result, nil
 	}
+	if !dryRun && isCIEnvironment(a.osEnv) && !truthyEnv(a.osEnv, "AGORA_ALLOW_UPGRADE_IN_CI") {
+		result["status"] = "manual"
+		result["ciBlocked"] = true
+		result["suggestedCommand"] = "agora upgrade --check --json"
+		return result, nil
+	}
 
 	// Resolve the latest release tag from GitHub.
 	latest, err := resolveLatestVersion(a.env)

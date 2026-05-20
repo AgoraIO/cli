@@ -131,6 +131,18 @@ agora login
 Or set `AGORA_HOME=$(mktemp -d)` per job for an isolated session and
 provision credentials via your secret store before invoking the CLI.
 
+## CI accidentally self-upgraded the binary
+
+`agora upgrade` performs an in-place update for installer-managed installs.
+In CI and agent automation, prefer non-mutating checks:
+
+```bash
+agora upgrade --check --json
+agora --upgrade-check --json
+```
+
+For package-manager installs, use the package manager's own upgrade command.
+
 ## Output looks wrong in scripts (color codes, table widths)
 
 The CLI auto-detects CI and disables color and progress bars there. In

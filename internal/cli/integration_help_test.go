@@ -135,3 +135,15 @@ func TestCLIAgenticSurfaces(t *testing.T) {
 		t.Fatalf("unexpected upgrade result: %+v", upgrade)
 	}
 }
+
+func TestCLIOpenRejectsConflictingBrowserFlags(t *testing.T) {
+	result := runCLI(t, []string{"open", "--target", "docs", "--browser", "--no-browser", "--json"}, cliRunOptions{
+		env: map[string]string{
+			"AGORA_HOME":      t.TempDir(),
+			"AGORA_LOG_LEVEL": "error",
+		},
+	})
+	if result.exitCode != 1 || !strings.Contains(result.stdout, `"ok":false`) || !strings.Contains(result.stdout, "choose only one of --browser or --no-browser") {
+		t.Fatalf("unexpected open conflicting flag result: %+v", result)
+	}
+}

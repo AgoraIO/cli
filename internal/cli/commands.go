@@ -264,7 +264,10 @@ When the binary was installed with install.sh / install.ps1, this command perfor
 
 For Homebrew, npm, and other package-manager-managed installs, the command prints the recommended upgrade command and exits successfully (status: "manual"). It will not shadow a managed install.
 
-Use --check to resolve the latest version and report what would happen without writing anything.`,
+Use --check to resolve the latest version and report what would happen without writing anything.
+
+In CI and agent automation, prefer --check (or the root --upgrade-check flag)
+so runs stay deterministic and do not mutate the binary under test.`,
 		Example: example(`
   agora upgrade
   agora upgrade --check --json
@@ -286,6 +289,7 @@ Use --check to resolve the latest version and report what would happen without w
 func (a *App) buildOpenCommand() *cobra.Command {
 	var target string
 	var noBrowser bool
+	var browser bool
 	cmd := &cobra.Command{
 		Use:   "open",
 		Short: "Open Agora Console or CLI docs",
@@ -294,21 +298,31 @@ func (a *App) buildOpenCommand() *cobra.Command {
   agora open --target docs
   agora open --target docs-md
   agora open --target product-docs
+  agora open --target docs --browser
 `),
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			url, err := resolveOpenTarget(target, a.osEnv)
 			if err != nil {
 				return err
 			}
+			if browser && noBrowser {
+				return &cliError{Message: "choose only one of --browser or --no-browser"}
+			}
 			status := "printed"
-			if !noBrowser && a.resolveOutputMode(cmd) != outputJSON && openBrowser(url) {
+			mayAutoOpen := !noBrowser &&
+				!isCIEnvironment(a.osEnv) &&
+				isTTY(os.Stderr) &&
+				a.resolveOutputMode(cmd) != outputJSON
+			shouldOpen := browser || mayAutoOpen
+			if shouldOpen && openBrowser(url) {
 				status = "opened"
 			}
 			return renderResult(cmd, "open", map[string]any{"action": "open", "status": status, "target": target, "url": url})
 		},
 	}
 	cmd.Flags().StringVar(&target, "target", "console", "target to open: console, docs, docs-md, or product-docs")
-	cmd.Flags().BoolVar(&noBrowser, "no-browser", false, "print the URL without opening a browser")
+	cmd.Flags().BoolVar(&noBrowser, "no-browser", false, "always print the URL without opening a browser")
+	cmd.Flags().BoolVar(&browser, "browser", false, "force opening a browser even in CI/non-TTY pretty sessions")
 	return cmd
 }
 
