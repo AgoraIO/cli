@@ -3,6 +3,8 @@ package cli
 import (
 	"bytes"
 	"encoding/json"
+	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -181,6 +183,35 @@ func TestMCPVersionToolReturnsBuildInfo(t *testing.T) {
 	first := contentArr[0].(map[string]any)
 	if !strings.Contains(first["text"].(string), `"version"`) {
 		t.Fatalf("expected version payload, got: %v", first["text"])
+	}
+}
+
+func TestMCPQuickstartCreateEmitsProgressNotifications(t *testing.T) {
+	repo := createLocalGitRepo(t, map[string]string{
+		"env.local.example": "NEXT_PUBLIC_AGORA_APP_ID=\nNEXT_AGORA_APP_CERTIFICATE=\n",
+		"README.md":         "demo\n",
+	})
+	t.Setenv("AGORA_QUICKSTART_NEXTJS_REPO_URL", repo)
+	a := newTestApp(t)
+	target := filepath.Join(t.TempDir(), "demo")
+	frame := []byte(`{"jsonrpc":"2.0","id":9,"method":"tools/call","params":{"name":"agora.quickstart.create","arguments":{"template":"nextjs","dir":` + strconv.Quote(target) + `},"_meta":{"progressToken":"clone-1"}}}` + "\n")
+	var out bytes.Buffer
+	if err := a.serveMCP(bytes.NewReader(frame), &out); err != nil {
+		t.Fatalf("serveMCP: %v", err)
+	}
+	lines := strings.Split(strings.TrimSpace(out.String()), "\n")
+	if len(lines) < 2 {
+		t.Fatalf("expected progress notification and final response, got: %q", out.String())
+	}
+	if !strings.Contains(lines[0], `"method":"notifications/progress"`) || !strings.Contains(lines[0], `"progressToken":"clone-1"`) || !strings.Contains(out.String(), `"stage":"clone:start"`) {
+		t.Fatalf("expected MCP progress notification, got: %q", out.String())
+	}
+	var resp mcpResponse
+	if err := json.Unmarshal([]byte(lines[len(lines)-1]), &resp); err != nil {
+		t.Fatalf("unmarshal final response: %v\nbody: %q", err, lines[len(lines)-1])
+	}
+	if resp.Error != nil {
+		t.Fatalf("unexpected final error: %+v\nall output: %q", resp.Error, out.String())
 	}
 }
 

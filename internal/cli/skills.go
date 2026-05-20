@@ -117,7 +117,7 @@ func skillsCatalog() []skill {
 				"agora login  # MCP does not expose OAuth; authenticate on the host first",
 				"agora mcp serve  # smoke test that it speaks MCP",
 				"In your IDE settings, add a server that runs 'agora mcp serve'.",
-				"If you need stage-level progress, run shell commands like 'agora init ... --json' instead of MCP tools.",
+				"For stage-level progress, pass _meta.progressToken in MCP tools/call params or shell out with 'agora init ... --json'.",
 			},
 			DocsURL: "https://agoraio.github.io/cli/md/agents/README.md",
 		},

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 )
@@ -44,6 +45,11 @@ type mcpRPCError struct {
 type mcpToolCall struct {
 	Name      string         `json:"name"`
 	Arguments map[string]any `json:"arguments"`
+	Meta      mcpCallMeta    `json:"_meta"`
+}
+
+type mcpCallMeta struct {
+	ProgressToken any `json:"progressToken"`
 }
 
 func (a *App) buildMCPCommand() *cobra.Command {
@@ -55,8 +61,8 @@ func (a *App) buildMCPCommand() *cobra.Command {
 Use this when an MCP client (Cursor, Claude Code, Windsurf, custom) wants to drive Agora workflows directly. The full Agora command surface is exposed as MCP tools so agents can authenticate, discover, manage projects, scaffold quickstarts, and run readiness checks without shelling out.
 
 Notes for agents:
-- Long-running tools (init, quickstart create, project create) emit no NDJSON progress over MCP. The result payload is returned as a single tool response.
-- If you need stage-level progress hooks, shell out to ` + "`agora <command> --json`" + ` and parse NDJSON directly instead of using MCP for that step.
+- Long-running tools (init, quickstart create, project create) emit MCP progress notifications when the tools/call params include _meta.progressToken.
+- Shell commands still use NDJSON progress (` + "`agora <command> --json`" + `); MCP uses JSON-RPC notifications so stdio framing remains valid.
 - ` + "`agora.auth.login`" + ` is intentionally not exposed because OAuth requires an interactive browser. Run ` + "`agora login`" + ` once on the host before starting the MCP server.
 - All tools return JSON-stringified payloads in the standard MCP ` + "`content[0].text`" + ` slot.`,
 		Example: example(`
@@ -107,7 +113,7 @@ func (a *App) serveMCP(in io.Reader, out io.Writer) error {
 		// MUST NOT receive a response. We respect that for any method,
 		// not just notifications/*.
 		isNotification := req.ID == nil
-		result, err := a.handleMCPRequest(req)
+		result, err := a.handleMCPRequest(req, encoder)
 		if isNotification {
 			continue
 		}
@@ -126,7 +132,7 @@ func (a *App) serveMCP(in io.Reader, out io.Writer) error {
 	return nil
 }
 
-func (a *App) handleMCPRequest(req mcpRequest) (any, error) {
+func (a *App) handleMCPRequest(req mcpRequest, encoder *json.Encoder) (any, error) {
 	switch req.Method {
 	case "initialize":
 		return map[string]any{
@@ -143,7 +149,7 @@ func (a *App) handleMCPRequest(req mcpRequest) (any, error) {
 		if err := json.Unmarshal(req.Params, &call); err != nil {
 			return nil, err
 		}
-		data, err := a.callMCPTool(call.Name, call.Arguments)
+		data, err := a.callMCPTool(call.Name, call.Arguments, makeMCPProgressEmitter(encoder, call.Meta.ProgressToken))
 		if err != nil {
 			return nil, err
 		}
@@ -243,6 +249,34 @@ func mcpTool(name, description string, properties map[string]string) map[string]
 	}
 }
 
+func makeMCPProgressEmitter(encoder *json.Encoder, token any) progressEmitter {
+	if encoder == nil || token == nil {
+		return nil
+	}
+	seq := 0
+	return func(stage, message string, fields map[string]any) {
+		seq++
+		params := map[string]any{
+			"progressToken": token,
+			"progress":      seq,
+			"stage":         stage,
+			"message":       message,
+			"timestamp":     time.Now().UTC().Format(time.RFC3339Nano),
+		}
+		for k, v := range fields {
+			if _, reserved := params[k]; reserved {
+				continue
+			}
+			params[k] = v
+		}
+		_ = encoder.Encode(map[string]any{
+			"jsonrpc": "2.0",
+			"method":  "notifications/progress",
+			"params":  params,
+		})
+	}
+}
+
 // callMCPTool dispatches a tool name to the underlying App method. New
 // tools must be added here in addition to mcpTools(); the switch
 // returns an explicit error for unknown names so agents see a clear
@@ -254,7 +288,7 @@ func mcpTool(name, description string, properties map[string]string) map[string]
 // when serving over stdio) is never read as if it were user input. We
 // pass bytes.NewReader(nil) and io.Discard explicitly to enforce the
 // no-stdin contract at the call site.
-func (a *App) callMCPTool(name string, args map[string]any) (any, error) {
+func (a *App) callMCPTool(name string, args map[string]any, progress progressEmitter) (any, error) {
 	switch name {
 
 	case "agora.version":
@@ -322,14 +356,20 @@ func (a *App) callMCPTool(name string, args map[string]any) (any, error) {
 		if err != nil {
 			return nil, err
 		}
-		return a.projectCreate(
+		features := stringSliceArg(args, "features")
+		progress.emit("project:create", "Creating Agora project", map[string]any{"projectName": name, "features": projectCreateFeatures(stringArg(args, "template"), features)})
+		result, err := a.projectCreate(
 			name,
 			stringArg(args, "region"),
 			stringArg(args, "template"),
-			stringSliceArg(args, "features"),
+			features,
 			rtmDataCenter,
 			stringArg(args, "idempotencyKey"),
 		)
+		if err == nil {
+			progress.emit("project:created", "Agora project ready", map[string]any{"projectId": result["projectId"], "projectName": result["projectName"]})
+		}
+		return result, err
 
 	case "agora.project.doctor":
 		return a.projectDoctor(stringArg(args, "project"), defaultString(stringArg(args, "feature"), "convoai"), boolArg(args, "deep", false)), nil
@@ -395,7 +435,7 @@ func (a *App) callMCPTool(name string, args map[string]any) (any, error) {
 		if target == "" {
 			return nil, errors.New("name or dir is required")
 		}
-		return a.quickstartCreate(*template, target, stringArg(args, "project"), stringArg(args, "ref"), nil)
+		return a.quickstartCreate(*template, target, stringArg(args, "project"), stringArg(args, "ref"), progress)
 
 	case "agora.quickstart.env_write":
 		return a.quickstartEnvWrite(defaultString(stringArg(args, "dir"), "."), stringArg(args, "template"), stringArg(args, "project"))
@@ -427,7 +467,7 @@ func (a *App) callMCPTool(name string, args map[string]any) (any, error) {
 			false,
 			&promptOut,
 			bytes.NewReader(nil),
-			nil,
+			progress,
 		)
 
 	default:
