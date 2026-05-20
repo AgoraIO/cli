@@ -22,7 +22,7 @@ agora --help
 Install a pinned version:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/AgoraIO/cli/main/install.sh | sh -s -- --version 0.2.0
+curl -fsSL https://raw.githubusercontent.com/AgoraIO/cli/main/install.sh | sh -s -- --version 0.2.1
 agora --help
 ```
 
@@ -64,7 +64,7 @@ agora --help
 Install a pinned version:
 
 ```powershell
-$env:VERSION = "0.2.0"
+$env:VERSION = "0.2.1"
 irm https://raw.githubusercontent.com/AgoraIO/cli/main/install.ps1 | iex
 agora --help
 ```
@@ -144,7 +144,7 @@ Uninstall removes the binary and `agora.install.json` receipt from the install d
 Both direct installers support these core overrides:
 
 - `GITHUB_REPO`: install from a fork or alternate repository.
-- `VERSION`: install a specific version. Both `0.2.0` and `v0.2.0` are accepted.
+- `VERSION`: install a specific version. Both `0.2.1` and `v0.2.1` are accepted.
 - `INSTALL_DIR`: install to a custom directory.
 - `GITHUB_TOKEN` or `GH_TOKEN`: optional GitHub token to avoid API rate limits when resolving the latest release.
 
@@ -206,6 +206,17 @@ Direct installer runs (`install.sh` and `install.ps1`) write `agora.install.json
 
 Direct-installer installs self-update in place. Package-manager installs print the package-manager command and exit successfully so the package manager remains the owner of the installed files.
 
+### Release archive naming
+
+GitHub release archives follow this pattern:
+
+| Release version | Archive prefix | Example |
+| --------------- | -------------- | ------- |
+| v0.1.7 – v0.2.0 | `agora-cli-go_v*` | `agora-cli-go_v0.2.0_linux_amd64.tar.gz` |
+| v0.2.1 and later | `agora-cli_v*` | `agora-cli_v0.2.1_linux_amd64.tar.gz` |
+
+`install.sh`, `install.ps1`, and `agora upgrade` (v0.2.1+) select the correct prefix from the target release version. Binaries installed from v0.1.7–v0.2.0 that fail to self-update across the rename should re-run the installer once — see [troubleshooting.md](troubleshooting.md#upgrade-from-v017v020-fails).
+
 ## Build From Source
 
 Requirements:
@@ -243,7 +254,7 @@ agora --help
 npx agoraio-cli --help
 
 # Pin a specific version
-npm install -g agoraio-cli@0.2.0
+npm install -g agoraio-cli@0.2.1
 
 # Update to the latest published version
 npm update -g agoraio-cli
@@ -271,12 +282,12 @@ For one-off shell sessions, source the generated script according to your shell'
 If latest-version resolution fails, retry with a pinned version or provide `GITHUB_TOKEN` / `GH_TOKEN`:
 
 ```bash
-GITHUB_TOKEN=your-token-here VERSION=0.2.0 sh install.sh
+GITHUB_TOKEN=your-token-here VERSION=0.2.1 sh install.sh
 ```
 
 ```powershell
 $env:GITHUB_TOKEN = "your-token-here"
-$env:VERSION = "0.2.0"
+$env:VERSION = "0.2.1"
 & ([scriptblock]::Create((irm https://raw.githubusercontent.com/AgoraIO/cli/main/install.ps1)))
 ```
 
@@ -322,7 +333,7 @@ For CI, automation, and reproducible environments, pin `VERSION` explicitly inst
 Every release is signed with [Cosign](https://docs.sigstore.dev/cosign/overview/) using GitHub Actions OIDC (keyless mode) and ships an [SPDX 2.3](https://spdx.dev/) SBOM per archive and per Linux package. To verify the `checksums.txt` file before trusting any artifact:
 
 ```bash
-TAG=v0.2.0
+TAG=v0.2.1
 ASSET_BASE="https://github.com/AgoraIO/cli/releases/download/${TAG}"
 curl -fsSLO "${ASSET_BASE}/checksums.txt"
 curl -fsSLO "${ASSET_BASE}/checksums.txt.sig"
@@ -346,8 +357,8 @@ cosign verify "ghcr.io/agoraio/agora-cli:${TAG#v}" \
   --certificate-oidc-issuer 'https://token.actions.githubusercontent.com'
 ```
 
-To audit dependencies, download the `*.spdx.json` SBOM that ships next to each archive (e.g. `agora-cli_v0.2.0_linux_amd64.tar.gz.spdx.json`) and feed it to a scanner such as [Grype](https://github.com/anchore/grype):
+To audit dependencies, download the `*.spdx.json` SBOM that ships next to each archive (e.g. `agora-cli_v0.2.1_linux_amd64.tar.gz.spdx.json`) and feed it to a scanner such as [Grype](https://github.com/anchore/grype):
 
 ```bash
-grype sbom:agora-cli_v0.2.0_linux_amd64.tar.gz.spdx.json
+grype sbom:agora-cli_v0.2.1_linux_amd64.tar.gz.spdx.json
 ```

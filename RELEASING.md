@@ -5,15 +5,15 @@ Releases are fully automated via GoReleaser. Pushing a `v*` tag is the only manu
 ## Release
 
 ```bash
-git tag v0.2.0
-git push origin v0.2.0
+git tag v0.2.1
+git push origin v0.2.1
 ```
 
 The release workflow (`.github/workflows/release.yml`) then:
 
 1. **GoReleaser** builds and publishes everything in parallel:
    - Cross-platform binaries (Linux, macOS, Windows — amd64 + arm64)
-   - Archives: `.tar.gz` (Unix), `.zip` (Windows)
+   - Archives: `agora-cli_v<version>_<os>_<arch>.{tar.gz,zip}` (v0.2.1+; older releases used `agora-cli-go_v*`)
    - Linux packages: `.deb`, `.rpm`, `.apk`
    - GitHub release with auto-generated changelog and checksums
    - Docker images → GitHub Container Registry (`ghcr.io/{owner}/agora-cli`)
@@ -32,6 +32,10 @@ The release workflow (`.github/workflows/release.yml`) then:
    - Downloads `.deb` files from the release
    - Rebuilds the signed apt repo on GitHub Pages
    - Requires `APT_SIGNING_KEY` secret + `APT_SIGNING_KEY_ID` variable
+
+## Release notes
+
+Before tagging, ensure [CHANGELOG.md](CHANGELOG.md) has the version section finalized. Optionally add a curated summary at `docs/releases/v<version>.md` and paste it into the GitHub release description alongside GoReleaser's auto-generated commit list.
 
 ## Local Verification
 

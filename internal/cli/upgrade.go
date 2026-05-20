@@ -403,23 +403,35 @@ type upgradeArchiveCandidate struct {
 	ext  string
 }
 
-// upgradeArchiveCandidates returns release archive filenames to try, newest
-// naming first. Legacy agora-cli-go_* names remain published as release
-// aliases (see .goreleaser.yaml) so older binaries and this fallback both
-// work across the rename.
+const legacyReleaseArchiveFirstVersion = "0.1.7"
+
+// releaseUsesLegacyArchiveNaming reports whether a published GitHub release
+// shipped archives under the historical agora-cli-go_* prefix (v0.1.7–v0.2.0).
+func releaseUsesLegacyArchiveNaming(version string) bool {
+	version = strings.TrimPrefix(strings.TrimSpace(version), "v")
+	if version == "" || version == "dev" {
+		return false
+	}
+	return isSameOrNewer(version, legacyReleaseArchiveFirstVersion) &&
+		!isSameOrNewer(version, "0.2.1")
+}
+
+// upgradeArchiveCandidates returns the archive filename(s) to try for a target
+// release version. Releases from v0.2.1 onward use agora-cli_* only; v0.1.7
+// through v0.2.0 used agora-cli-go_*.
 func upgradeArchiveCandidates(version, goos, goarch string) ([]upgradeArchiveCandidate, error) {
+	if releaseUsesLegacyArchiveNaming(version) {
+		legacy, ext, err := releaseArchiveFileName("agora-cli-go", version, goos, goarch)
+		if err != nil {
+			return nil, err
+		}
+		return []upgradeArchiveCandidate{{name: legacy, ext: ext}}, nil
+	}
 	primary, ext, err := releaseArchiveFileName("agora-cli", version, goos, goarch)
 	if err != nil {
 		return nil, err
 	}
-	legacy, _, err := releaseArchiveFileName("agora-cli-go", version, goos, goarch)
-	if err != nil {
-		return nil, err
-	}
-	return []upgradeArchiveCandidate{
-		{name: primary, ext: ext},
-		{name: legacy, ext: ext},
-	}, nil
+	return []upgradeArchiveCandidate{{name: primary, ext: ext}}, nil
 }
 
 func releaseArchiveFileName(prefix, version, goos, goarch string) (string, string, error) {

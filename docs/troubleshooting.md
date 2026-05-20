@@ -141,7 +141,37 @@ agora upgrade --check --json
 agora --upgrade-check --json
 ```
 
+Installer-managed self-update is blocked in CI by default (v0.2.1+). Blocked
+runs return `status: "manual"` with `ciBlocked: true` in JSON. Set
+`AGORA_ALLOW_UPGRADE_IN_CI=1` only when a job intentionally needs to mutate
+the installed binary.
+
 For package-manager installs, use the package manager's own upgrade command.
+
+## Upgrade from v0.1.7–v0.2.0 fails
+
+Release archives were renamed from `agora-cli-go_v*` to `agora-cli_v*`
+starting in v0.2.1. Binaries installed from v0.1.7 through v0.2.0 embed
+upgrade logic that only knows the old prefix, so `agora upgrade` may fail
+when downloading v0.2.1+.
+
+Re-run the installer once (it always fetches the latest script and archive
+names):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/AgoraIO/cli/main/install.sh | sh
+```
+
+npm and other package-manager installs are unaffected.
+
+## `agora init --yes` fails with QUICKSTART_TEMPLATE_REQUIRED
+
+In JSON, CI, or non-TTY runs, `agora init` requires an explicit template.
+Pass `--template` (list options with `agora quickstart list`):
+
+```bash
+agora init my-demo --template nextjs --new-project --yes --json
+```
 
 ## Output looks wrong in scripts (color codes, table widths)
 

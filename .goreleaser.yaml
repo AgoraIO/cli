@@ -25,22 +25,10 @@ builds:
       - -X github.com/AgoraIO/cli/internal/cli.date={{ .Date }}
 
 # Archive naming matches install.sh, install.ps1, and agora upgrade self-update.
-# A legacy alias (agora-cli-go_*) is also published so older installed
-# binaries whose embedded upgrade logic only knows the previous prefix can
-# still self-update — the same self-healing idea as always fetching install.sh.
 archives:
   - id: agora-cli
     ids: [agora-cli]
     name_template: 'agora-cli_{{ .Tag }}_{{ .Os }}_{{ .Arch }}'
-    formats:
-      - tar.gz
-    format_overrides:
-      - goos: windows
-        formats:
-          - zip
-  - id: agora-cli-legacy-alias
-    ids: [agora-cli]
-    name_template: 'agora-cli-go_{{ .Tag }}_{{ .Os }}_{{ .Arch }}'
     formats:
       - tar.gz
     format_overrides:

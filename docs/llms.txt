@@ -57,9 +57,11 @@ Check project health: agora project doctor --json
 
 - Use `--json` for automation and parse the terminal envelope.
 - Use explicit `--project <id|name>` or `--new-project` for deterministic init/project mutations.
+- Pass `--template` with `agora init --yes` in non-interactive runs (v0.2.1+).
 - `--yes` accepts confirmation defaults; it does not replace `agora login`.
 - Isolate per-job state with `AGORA_HOME="$(mktemp -d)"`.
-- For URL-only docs access in agents, use `agora open --target docs-md --json`.
+- For URL-only docs access in agents, use `agora open --target docs-md --json` (add `--browser` to force launch).
+- Prefer `agora upgrade --check --json` in CI; set `AGORA_ALLOW_UPGRADE_IN_CI=1` only when mutating the binary is intentional.
 
 ## Common Use Cases
 

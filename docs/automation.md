@@ -963,6 +963,7 @@ Optional fields:
 
 Upgrade behavior:
 - direct-installer installs (`installMethod: "installer"`) self-update in place after downloading the GitHub release archive and verifying it against `checksums.txt`
+- archive prefix is version-aware: `agora-cli-go_*` for target releases v0.1.7–v0.2.0, `agora-cli_*` for v0.2.1+
 - in CI, installer-managed self-update is skipped by default (`status: "manual"` + `ciBlocked: true`); set `AGORA_ALLOW_UPGRADE_IN_CI=1` to opt in
 - package-manager installs return `status: "manual"` with the owning package-manager command; agents should run that command only after user approval
 - `unknown` means the CLI could not verify the install channel, usually because the binary is a development/test build
