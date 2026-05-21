@@ -9,9 +9,9 @@ These snippets help AI coding agents use Agora CLI safely and consistently in ap
 Use the CLI to scaffold rules into a new quickstart:
 
 ```bash
-agora init my-nextjs-demo --template nextjs --add-agent-rules cursor
-agora init my-python-demo --template python --add-agent-rules claude
-agora init my-go-demo --template go --add-agent-rules windsurf
+agora init my-nextjs-demo --template nextjs --new-project --add-agent-rules cursor
+agora init my-python-demo --template python --new-project --add-agent-rules claude
+agora init my-go-demo --template go --new-project --add-agent-rules windsurf
 ```
 
 Available rule targets:

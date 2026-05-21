@@ -25,7 +25,7 @@ jobs:
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -136,7 +136,7 @@ jobs:
           download_dir="$fixture_root/download/v${version}"
           install_dir="$PWD/.tmp/install-bin"
           bad_install_dir="$PWD/.tmp/install-bin-bad"
-          archive="agora-cli-go_v${version}_${goos}_${goarch}.tar.gz"
+          archive="agora-cli_v${version}_${goos}_${goarch}.tar.gz"
 
           rm -rf "$fixture_root" "$install_dir" "$bad_install_dir"
           mkdir -p "$download_dir"
@@ -191,7 +191,7 @@ jobs:
           $downloadDir = Join-Path $fixtureRoot "download/v$version"
           $installDir = Join-Path $PWD '.tmp/install-bin'
           $badInstallDir = Join-Path $PWD '.tmp/install-bin-bad'
-          $archive = "agora-cli-go_v$version" + "_windows_${arch}.zip"
+          $archive = "agora-cli_v$version" + "_windows_${arch}.zip"
 
           Remove-Item -Recurse -Force $fixtureRoot, $installDir, $badInstallDir -ErrorAction SilentlyContinue
           New-Item -ItemType Directory -Force -Path $downloadDir | Out-Null

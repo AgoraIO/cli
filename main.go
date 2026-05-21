@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/agora/cli-workspace/agora-cli-go/internal/cli"
+	"github.com/AgoraIO/cli/internal/cli"
 )
 
 func main() {

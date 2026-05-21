@@ -20,16 +20,15 @@ builds:
       - -trimpath
     ldflags:
       - -s -w
-      - -X github.com/agora/cli-workspace/agora-cli-go/internal/cli.version={{ .Version }}
-      - -X github.com/agora/cli-workspace/agora-cli-go/internal/cli.commit={{ .ShortCommit }}
-      - -X github.com/agora/cli-workspace/agora-cli-go/internal/cli.date={{ .Date }}
+      - -X github.com/AgoraIO/cli/internal/cli.version={{ .Version }}
+      - -X github.com/AgoraIO/cli/internal/cli.commit={{ .ShortCommit }}
+      - -X github.com/AgoraIO/cli/internal/cli.date={{ .Date }}
 
-# Preserve existing archive naming so install scripts (and future package managers)
-# continue to work without changes.
+# Archive naming matches install.sh, install.ps1, and agora upgrade self-update.
 archives:
   - id: agora-cli
     ids: [agora-cli]
-    name_template: 'agora-cli-go_{{ .Tag }}_{{ .Os }}_{{ .Arch }}'
+    name_template: 'agora-cli_{{ .Tag }}_{{ .Os }}_{{ .Arch }}'
     formats:
       - tar.gz
     format_overrides:

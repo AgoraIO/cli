@@ -17,10 +17,12 @@ import (
 //	Short   — one-line description from the cobra command
 //	Flags   — local flags (inherited flags omitted to keep the tree compact)
 type commandHelpInfo struct {
-	Path    string         `json:"path"`
-	Command string         `json:"command"`
-	Short   string         `json:"short"`
-	Flags   []flagHelpInfo `json:"flags"`
+	Path          string         `json:"path"`
+	Command       string         `json:"command"`
+	Short         string         `json:"short"`
+	HeadlessSafe  bool           `json:"headlessSafe"`
+	Interactivity string         `json:"interactivity"`
+	Flags         []flagHelpInfo `json:"flags"`
 }
 
 // flagHelpInfo describes a single command-local flag in machine-readable
@@ -117,10 +119,12 @@ func buildCommandTree(root *cobra.Command) []commandHelpInfo {
 				continue
 			}
 			result = append(result, commandHelpInfo{
-				Path:    child.CommandPath(),
-				Command: strings.TrimSpace(strings.TrimPrefix(child.CommandPath(), root.CommandPath())),
-				Short:   child.Short,
-				Flags:   localFlagInfos(child),
+				Path:          child.CommandPath(),
+				Command:       strings.TrimSpace(strings.TrimPrefix(child.CommandPath(), root.CommandPath())),
+				Short:         child.Short,
+				HeadlessSafe:  commandHeadlessSafe(strings.TrimSpace(strings.TrimPrefix(child.CommandPath(), root.CommandPath()))),
+				Interactivity: commandInteractivity(strings.TrimSpace(strings.TrimPrefix(child.CommandPath(), root.CommandPath()))),
+				Flags:         localFlagInfos(child),
 			})
 			walk(child)
 		}
@@ -128,6 +132,30 @@ func buildCommandTree(root *cobra.Command) []commandHelpInfo {
 	walk(root)
 	sort.Slice(result, func(i, j int) bool { return result[i].Path < result[j].Path })
 	return result
+}
+
+func commandHeadlessSafe(command string) bool {
+	switch command {
+	case "login", "auth login":
+		return false
+	default:
+		return true
+	}
+}
+
+func commandInteractivity(command string) string {
+	switch command {
+	case "login", "auth login":
+		return "interactive-browser"
+	case "mcp serve":
+		return "stdio-server"
+	case "init", "quickstart create", "project create":
+		return "headless-safe-with-required-arguments"
+	case "open":
+		return "browser-in-interactive-pretty-mode"
+	default:
+		return "none"
+	}
 }
 
 func localFlagInfos(cmd *cobra.Command) []flagHelpInfo {

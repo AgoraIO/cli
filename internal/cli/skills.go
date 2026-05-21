@@ -39,7 +39,7 @@ func skillsCatalog() []skill {
 			Tags:        []string{"nextjs", "rtc", "video", "init"},
 			Steps: []string{
 				"agora login",
-				"agora init my-nextjs-demo --template nextjs --json",
+				"agora init my-nextjs-demo --template nextjs --new-project --json",
 				"cd my-nextjs-demo && npm install && npm run dev",
 			},
 			NextSteps: []string{
@@ -56,7 +56,7 @@ func skillsCatalog() []skill {
 			Tags:        []string{"python", "convoai", "voice", "init"},
 			Steps: []string{
 				"agora login",
-				"agora init my-voice-agent --template python --feature convoai --json",
+				"agora init my-voice-agent --template python --new-project --feature convoai --json",
 				"cd my-voice-agent/server && pip install -r requirements.txt",
 			},
 			NextSteps: []string{
@@ -72,7 +72,7 @@ func skillsCatalog() []skill {
 			Tags:        []string{"go", "rtc", "token", "backend", "init"},
 			Steps: []string{
 				"agora login",
-				"agora init my-go-token-service --template go --feature rtc --json",
+				"agora init my-go-token-service --template go --new-project --feature rtc --json",
 				"cd my-go-token-service/server-go && go run .",
 			},
 			NextSteps: []string{
@@ -117,6 +117,7 @@ func skillsCatalog() []skill {
 				"agora login  # MCP does not expose OAuth; authenticate on the host first",
 				"agora mcp serve  # smoke test that it speaks MCP",
 				"In your IDE settings, add a server that runs 'agora mcp serve'.",
+				"For stage-level progress, pass _meta.progressToken in MCP tools/call params or shell out with 'agora init ... --json'.",
 			},
 			DocsURL: "https://agoraio.github.io/cli/md/agents/README.md",
 		},

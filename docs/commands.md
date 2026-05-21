@@ -158,7 +158,8 @@ Open Agora Console or CLI docs
 
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
-| `--no-browser` | `bool` | — | print the URL without opening a browser |
+| `--browser` | `bool` | — | force opening a browser even in CI/non-TTY pretty sessions |
+| `--no-browser` | `bool` | — | always print the URL without opening a browser |
 | `--target` | `string` | `console` | target to open: console, docs, docs-md, or product-docs |
 
 ### `agora project`

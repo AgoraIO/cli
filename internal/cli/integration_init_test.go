@@ -68,3 +68,15 @@ func TestCLIInitCreatesProjectAndQuickstart(t *testing.T) {
 		t.Fatalf("expected init to persist current project context, got %+v", ctx)
 	}
 }
+
+func TestCLIInitRequiresTemplateWhenNoInputIsSet(t *testing.T) {
+	result := runCLI(t, []string{"init", "starter-demo", "--yes", "--json"}, cliRunOptions{
+		env: map[string]string{
+			"AGORA_HOME":      t.TempDir(),
+			"AGORA_LOG_LEVEL": "error",
+		},
+	})
+	if result.exitCode != 1 || !strings.Contains(result.stdout, `"code":"QUICKSTART_TEMPLATE_REQUIRED"`) {
+		t.Fatalf("expected QUICKSTART_TEMPLATE_REQUIRED, got %+v", result)
+	}
+}

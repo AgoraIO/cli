@@ -446,7 +446,7 @@ $tempRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("agora-install-" + [Sys
 
 try {
     Resolve-Version
-    $fileName = "agora-cli-go_v$Version" + "_windows_${arch}.zip"
+    $fileName = "agora-cli_v$Version" + "_windows_${arch}.zip"
     $archivePath = Join-Path $tempRoot $fileName
     $checksumsPath = Join-Path $tempRoot 'checksums.txt'
     $extractDir = Join-Path $tempRoot 'extract'

@@ -44,8 +44,7 @@ Requirements:
 
 ```bash
 git clone https://github.com/AgoraIO/cli.git
-cd cli/agora-cli-go
-
+cd cli/
 go build -trimpath -o agora .
 ./agora --help
 ```

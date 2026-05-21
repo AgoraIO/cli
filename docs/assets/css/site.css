@@ -77,6 +77,22 @@ a:focus-visible {
   outline-offset: 3px;
 }
 
+.skip-link {
+  position: absolute;
+  left: 1rem;
+  top: 0.75rem;
+  z-index: 10;
+  padding: 0.6rem 0.85rem;
+  border-radius: 9999px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+  transform: translateY(-150%);
+}
+
+.skip-link:focus {
+  transform: translateY(0);
+}
+
 .page-shell {
   width: 100%;
   max-width: 1200px;

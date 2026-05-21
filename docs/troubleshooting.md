@@ -67,15 +67,32 @@ older binary.
 
 ## `agora init` or `agora quickstart create` fails on `git clone`
 
-The CLI shells out to `git clone` for quickstarts. Verify:
+The CLI shells out to `git clone` for quickstarts. Most failures map to a stable error code:
+
+| Error code | Meaning | Fix |
+|------------|---------|-----|
+| `QUICKSTART_GIT_MISSING` | `git` is not on `PATH`. | Install git ([git-scm.com/downloads](https://git-scm.com/downloads)) and retry. |
+| `QUICKSTART_REF_INVALID` | `--ref` is empty, dash-prefixed, or contains whitespace. | Pass a valid branch/tag/commit. |
+| `QUICKSTART_REPO_OVERRIDE_INVALID` | The `AGORA_QUICKSTART_<TEMPLATE>_REPO_URL` env override is malformed. | Set it to an `https://`, `ssh://`, `git://`, `file://`, `git@host:path`, or absolute local path URL — or unset it. |
+
+If the clone reaches git but still fails, verify connectivity:
 
 ```bash
 git --version
-git ls-remote https://github.com/AgoraIO/agora-quickstart-nextjs.git
+git ls-remote https://github.com/AgoraIO-Conversational-AI/agent-quickstart-nextjs.git
 ```
 
-If `git` is missing, install it (Homebrew, apt, winget, etc.). If
-network access fails, check proxies and corporate firewall rules.
+Check proxies and corporate firewall rules if `ls-remote` hangs or fails.
+
+The CLI invokes git with `-c credential.helper=` so credential helpers (including macOS keychain) are not consulted for these public clones — agent and CI subprocesses no longer fail with "Device not configured."
+
+Workshops and internal forks can override the clone URL per template, e.g.:
+
+```bash
+AGORA_QUICKSTART_NEXTJS_REPO_URL=https://github.com/my-org/fork agora init demo --template nextjs
+```
+
+A `clone:override` progress event is emitted whenever this is in use, so JSON automation runs show which fork was cloned.
 
 ## "project does not have an app certificate"
 
@@ -113,6 +130,48 @@ agora login
 
 Or set `AGORA_HOME=$(mktemp -d)` per job for an isolated session and
 provision credentials via your secret store before invoking the CLI.
+
+## CI accidentally self-upgraded the binary
+
+`agora upgrade` performs an in-place update for installer-managed installs.
+In CI and agent automation, prefer non-mutating checks:
+
+```bash
+agora upgrade --check --json
+agora --upgrade-check --json
+```
+
+Installer-managed self-update is blocked in CI by default (v0.2.1+). Blocked
+runs return `status: "manual"` with `ciBlocked: true` in JSON. Set
+`AGORA_ALLOW_UPGRADE_IN_CI=1` only when a job intentionally needs to mutate
+the installed binary.
+
+For package-manager installs, use the package manager's own upgrade command.
+
+## Upgrade from v0.1.7–v0.2.0 fails
+
+Release archives were renamed from `agora-cli-go_v*` to `agora-cli_v*`
+starting in v0.2.1. Binaries installed from v0.1.7 through v0.2.0 embed
+upgrade logic that only knows the old prefix, so `agora upgrade` may fail
+when downloading v0.2.1+.
+
+Re-run the installer once (it always fetches the latest script and archive
+names):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/AgoraIO/cli/main/install.sh | sh
+```
+
+npm and other package-manager installs are unaffected.
+
+## `agora init --yes` fails with QUICKSTART_TEMPLATE_REQUIRED
+
+In JSON, CI, or non-TTY runs, `agora init` requires an explicit template.
+Pass `--template` (list options with `agora quickstart list`):
+
+```bash
+agora init my-demo --template nextjs --new-project --yes --json
+```
 
 ## Output looks wrong in scripts (color codes, table widths)
 
@@ -175,6 +234,18 @@ DO_NOT_TRACK=1 agora <command>
 ```
 
 See [Telemetry](telemetry.html) for the field schema.
+
+## Boolean config flags are not turning off
+
+Boolean flags in `agora config update` need explicit `=false` syntax. For example:
+
+```bash
+agora config update --telemetry-enabled=false
+agora config update --browser-auto-open=false
+agora config update --debug=false
+```
+
+Passing only `--telemetry-enabled` sets the value to true; omitting the flag leaves the existing config unchanged.
 
 ## Still stuck?
 

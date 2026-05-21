@@ -7,7 +7,7 @@
 Install: curl -fsSL https://raw.githubusercontent.com/AgoraIO/cli/main/install.sh | sh
 
 Login: agora login
-Initialize project: agora init my-demo --template nextjs
+Initialize project: agora init my-demo --template nextjs --new-project
 Check project health: agora project doctor --json
 
 ## Documentation Index
@@ -44,6 +44,25 @@ Check project health: agora project doctor --json
 - **Agentic discovery**: `agora introspect --json` and `agora --help --all --json` emit the same machine-readable command tree
 - **MCP server**: `agora mcp serve` exposes the CLI as Model Context Protocol tools for agents
 
+## Agent and MCP Notes
+
+- **MCP transport**: `agora mcp serve` uses stdio JSON-RPC.
+- **Auth prerequisite**: `agora.auth.login` is intentionally not exposed over MCP. Run `agora login` on the host first.
+- **Progress over MCP**: Long-running tools emit `notifications/progress` when the MCP `tools/call` params include `_meta.progressToken`.
+- **When shelling out**: run commands like `agora init ... --json` and parse stdout line-by-line (progress events + final envelope).
+- **Capability discovery**: prefer `agora --help --all --json` or `agora introspect --json`.
+- **Environment catalog**: use `agora env-help --json` to enumerate all supported `AGORA_*` controls.
+
+## Headless / CI guidance
+
+- Use `--json` for automation and parse the terminal envelope.
+- Use explicit `--project <id|name>` or `--new-project` for deterministic init/project mutations.
+- Pass `--template` with `agora init --yes` in non-interactive runs (v0.2.1+).
+- `--yes` accepts confirmation defaults; it does not replace `agora login`.
+- Isolate per-job state with `AGORA_HOME="$(mktemp -d)"`.
+- For URL-only docs access in agents, use `agora open --target docs-md --json` (add `--browser` to force launch).
+- Prefer `agora upgrade --check --json` in CI; set `AGORA_ALLOW_UPGRADE_IN_CI=1` only when mutating the binary is intentional.
+
 ## Common Use Cases
 
 ### Login and Authentication
@@ -57,8 +76,8 @@ agora auth status --json
 ### Project Initialization
 ```
 agora init my-app --template nextjs
-agora init my-app --template python --yes
-agora init my-app --template go --json
+agora init my-app --template python --new-project --json
+agora init my-app --template go --project <project-id> --json
 ```
 
 ### Project Health Check
@@ -89,6 +108,7 @@ All commands except `agora project env` (raw stdout in dotenv/shell mode for `ev
 ```
 
 To get the JSON envelope for `project env`, pass `--json` (the raw dotenv/shell formats remain available via `--format dotenv` / `--format shell` for shell sourcing).
+Never parse the default raw `project env` output in agents; use `--json` or `--format envelope`.
 
 Exit codes (stable contract):
 - 0   success

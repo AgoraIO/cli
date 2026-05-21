@@ -15,6 +15,67 @@ Earlier entries pre-date this convention and only carry their version's compare 
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-05-20
+
+Automation hardening, quickstart reliability fixes, agent introspection and MCP progress improvements, and release-artifact rename.
+
+### Added
+
+- Emit a `clone:override` progress event when `AGORA_QUICKSTART_<TEMPLATE>_REPO_URL` overrides the clone URL, so workshop and CI runs can confirm which fork they cloned.
+- Document `AGORA_QUICKSTART_<TEMPLATE>_REPO_URL` in `agora env-help` and the automation reference.
+- Add MCP `notifications/progress` forwarding for long-running tools when clients pass `_meta.progressToken`.
+- Add `headlessSafe` and `interactivity` metadata to `agora introspect --json` command records.
+- Add automation contract tests for representative `docs/automation.md` examples.
+
+### Changed
+
+- `agora open` now defaults to URL-only behavior in CI and non-TTY sessions (unless `--browser` is explicitly passed), and adds explicit `--browser` / `--no-browser` conflict validation.
+- `agora init` now requires `--template` in non-interactive (`--yes`) runs instead of silently selecting the first available template; init JSON output now includes `projectSelectionReason` for deterministic agent branching.
+- Block installer-managed `agora upgrade` in CI unless `AGORA_ALLOW_UPGRADE_IN_CI=1` is set; blocked runs return `status: "manual"` with `ciBlocked: true` and suggest `agora upgrade --check --json`.
+- Align `go.mod` module path with the public repository: `github.com/AgoraIO/cli` (replaces the workspace-only `github.com/agora/cli-workspace/agora-cli-go` path).
+- Rename GitHub release archives from `agora-cli-go_v*` to `agora-cli_v*` starting in v0.2.1 (install scripts and docs use the new name). `agora upgrade` selects the archive prefix from the target release version: `agora-cli-go_*` for v0.1.7–v0.2.0, `agora-cli_*` for v0.2.1+.
+
+### Fixed
+
+- Disable git credential helpers for quickstart clone subprocesses so `agora init` and `agora quickstart create` succeed in non-interactive agent and CI environments without macOS keychain access.
+- Pass `--` before the repo URL and target directory on `git clone` so values starting with `-` cannot be parsed as git options.
+- Fail fast with `QUICKSTART_GIT_MISSING` when `git` is not on `PATH`, with `QUICKSTART_REF_INVALID` for malformed `--ref` values, and with `QUICKSTART_REPO_OVERRIDE_INVALID` when the env override URL is malformed, instead of surfacing cryptic git errors.
+
+### Upgrade notes
+
+**Direct installer (`install.sh` / `install.ps1`):** Fresh installs and re-runs of the installer fetch the correct archive name automatically. If you are on v0.1.7 through v0.2.0 and `agora upgrade` fails to download v0.2.1+, re-run the installer once:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/AgoraIO/cli/main/install.sh | sh
+```
+
+Those older binaries only know the `agora-cli-go_*` archive prefix; after one reinstall, future upgrades use `agora-cli_*`.
+
+**npm / package managers:** Use your package manager as usual (`npm update -g agoraio-cli`, etc.). Archive naming does not affect npm installs.
+
+**Automation scripts:**
+
+| Before | After |
+| ------ | ----- |
+| `agora init demo --yes` (silent template pick) | `agora init demo --template nextjs --yes` (required) |
+| `agora upgrade` in CI jobs | `agora upgrade --check --json` (non-mutating) |
+| `agora open --target docs` in CI | URL-only by default; pass `--browser` to force launch |
+
+Set `AGORA_ALLOW_UPGRADE_IN_CI=1` only when a CI job intentionally needs to mutate the installed binary.
+
+### Documentation
+
+- Align `AGENTS.md` with shipped `project doctor --deep` behavior and document current `agora open` browser-launch rules.
+- Expand `docs/automation.md` and `docs/llms.txt` with MCP transport/auth caveats, headless CI guidance, init/upgrade automation fields, and `agora env-help` discovery pointers.
+- Update agent quickstart rule and skills examples to include deterministic init (`--new-project`) defaults.
+- Document MCP progress notifications (`_meta.progressToken`) in `docs/automation.md`, `docs/llms.txt`, `agora mcp serve` help, and the skills catalog.
+- Document envelope versioning policy, login NDJSON parsing, raw `project env` hints, and boolean config flag syntax (`--flag=false`) in automation and troubleshooting docs.
+- Surface enterprise install paths for locked-down environments in `README.md` and `docs/install.md`.
+- Fix contributor clone path in `CONTRIBUTING.md` to match the canonical `git clone … && cd cli/` layout.
+- Align npm package `repository.directory` paths with the repo root layout and update the issue template docs link.
+- Document archive naming and upgrade migration in `docs/install.md` and `docs/troubleshooting.md`.
+- Add a GitHub Pages skip link for keyboard navigation.
+
 ## [0.2.0] - 2026-05-05
 
 ### Added
@@ -199,7 +260,8 @@ Earlier entries pre-date this convention and only carry their version's compare 
 - Support machine-readable JSON output for automation and agent workflows.
 - Ship automated release packaging through GoReleaser, including cross-platform archives, Linux packages, Homebrew, Scoop, npm wrapper packages, Docker images, and install scripts.
 
-[Unreleased]: https://github.com/AgoraIO/cli/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/AgoraIO/cli/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/AgoraIO/cli/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/AgoraIO/cli/compare/v0.1.9...v0.2.0
 [0.1.9]: https://github.com/AgoraIO/cli/compare/v0.1.8...v0.1.9
 [0.1.8]: https://github.com/AgoraIO/cli/compare/v0.1.7...v0.1.8

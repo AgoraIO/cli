@@ -288,7 +288,13 @@ func (a *App) quickstartCreate(template quickstartTemplate, targetDir, explicitP
 		boundProject = &target
 	}
 
-	repoURL := a.quickstartRepoURL(template)
+	repoURL, overrideKey, err := a.quickstartRepoURL(template)
+	if err != nil {
+		return nil, err
+	}
+	if overrideKey != "" {
+		progress.emit("clone:override", fmt.Sprintf("Using repo override from %s", overrideKey), map[string]any{"repoUrl": repoURL, "envVar": overrideKey})
+	}
 	progress.emit("clone:start", "Cloning quickstart repository", map[string]any{"repoUrl": repoURL, "targetPath": absTarget, "ref": ref})
 	if err := cloneQuickstartRepo(repoURL, absTarget, ref); err != nil {
 		return nil, err
@@ -401,31 +407,115 @@ func (a *App) quickstartEnvWrite(targetDir, templateID, explicitProject string) 
 	}, nil
 }
 
-func (a *App) quickstartRepoURL(template quickstartTemplate) string {
-	key := "AGORA_QUICKSTART_" + strings.ToUpper(strings.ReplaceAll(template.ID, "-", "_")) + "_REPO_URL"
+// quickstartRepoOverrideKey returns the env var name that overrides the
+// clone URL for a given template. Power users (workshops, internal forks,
+// CLI integration tests) set this; everyday users never do.
+func quickstartRepoOverrideKey(templateID string) string {
+	return "AGORA_QUICKSTART_" + strings.ToUpper(strings.ReplaceAll(templateID, "-", "_")) + "_REPO_URL"
+}
+
+// quickstartRepoURL resolves the clone URL for a template, honoring an
+// env override if present. Returns the URL, the env var name that
+// supplied the override (empty when none was used), and an error if the
+// override is set to a malformed value.
+func (a *App) quickstartRepoURL(template quickstartTemplate) (string, string, error) {
+	key := quickstartRepoOverrideKey(template.ID)
 	if override := strings.TrimSpace(a.env[key]); override != "" {
-		return override
+		if err := validateRepoOverrideURL(override); err != nil {
+			return "", "", &cliError{
+				Message: fmt.Sprintf("%s is set to an invalid value (%s): %v. Set it to an https://, ssh://, git://, file://, git@host:path, or absolute local path URL.", key, override, err),
+				Code:    "QUICKSTART_REPO_OVERRIDE_INVALID",
+			}
+		}
+		return override, key, nil
 	}
-	return template.RepoURL
+	return template.RepoURL, "", nil
 }
 
 func cloneQuickstartRepo(repoURL, targetDir, ref string) error {
-	args := []string{"clone", "--depth", "1"}
-	if strings.TrimSpace(ref) != "" {
-		args = append(args, "--branch", strings.TrimSpace(ref))
+	if err := validateGitRef(ref); err != nil {
+		return &cliError{
+			Message: fmt.Sprintf("--ref %q is invalid: %v.", ref, err),
+			Code:    "QUICKSTART_REF_INVALID",
+		}
 	}
-	args = append(args, repoURL, targetDir)
-	cmd := exec.Command("git", args...)
+	if _, err := exec.LookPath("git"); err != nil {
+		return &cliError{
+			Message: "git was not found on PATH. Install git from https://git-scm.com/downloads and retry.",
+			Code:    "QUICKSTART_GIT_MISSING",
+		}
+	}
+	// #nosec G204 -- git is invoked without a shell; repoURL and targetDir
+	// follow "--" so git cannot parse them as flags.
+	cmd := exec.Command("git", gitQuickstartCloneArgs(repoURL, targetDir, ref)...)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		trimmed := strings.TrimSpace(string(output))
-		hint := "Ensure git is installed and you have network access to GitHub."
+		hint := "Check network access to the host and that the ref exists."
 		if trimmed == "" {
 			return fmt.Errorf("git clone failed for %s. %s", repoURL, hint)
 		}
 		return fmt.Errorf("git clone failed for %s (%s). %s", repoURL, trimmed, hint)
 	}
 	return nil
+}
+
+// validateGitRef rejects ref values that would either confuse git's
+// option parser or are obviously malformed. Empty refs are allowed and
+// mean "default branch."
+func validateGitRef(ref string) error {
+	trimmed := strings.TrimSpace(ref)
+	if trimmed == "" {
+		return nil
+	}
+	if strings.HasPrefix(trimmed, "-") {
+		return fmt.Errorf("must not start with '-'")
+	}
+	for _, r := range trimmed {
+		if r == ' ' || r == '\t' || r < 0x20 || r == 0x7f {
+			return fmt.Errorf("must not contain whitespace or control characters")
+		}
+	}
+	return nil
+}
+
+// validateRepoOverrideURL accepts the URL forms git itself accepts for
+// remotes plus absolute local paths used by the integration tests. It
+// rejects values that begin with '-' to keep them from being parsed as
+// git options even before "--" terminates argv.
+func validateRepoOverrideURL(s string) error {
+	if s == "" {
+		return fmt.Errorf("must not be empty")
+	}
+	if strings.HasPrefix(s, "-") {
+		return fmt.Errorf("must not start with '-'")
+	}
+	for _, scheme := range []string{"http://", "https://", "ssh://", "git://", "file://"} {
+		if strings.HasPrefix(s, scheme) {
+			return nil
+		}
+	}
+	if at := strings.Index(s, "@"); at > 0 {
+		if strings.Contains(s[at+1:], ":") {
+			return nil
+		}
+	}
+	if filepath.IsAbs(s) {
+		return nil
+	}
+	return fmt.Errorf("unrecognized URL form")
+}
+
+func gitQuickstartCloneArgs(repoURL, targetDir, ref string) []string {
+	// Disable credential helpers for this invocation so non-TTY agent/CI runs
+	// do not consult macOS keychain for public HTTPS repos.
+	args := []string{"-c", "credential.helper=", "clone", "--depth", "1"}
+	if strings.TrimSpace(ref) != "" {
+		args = append(args, "--branch", strings.TrimSpace(ref))
+	}
+	// "--" stops git from treating repoURL/targetDir as flags if they start with "-".
+	args = append(args, "--", repoURL, targetDir)
+	return args
 }
 
 func (a *App) resolveOptionalProjectTarget(explicitProject, startPath string) (projectTarget, bool, error) {

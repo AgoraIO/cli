@@ -200,6 +200,7 @@ When adding a command:
 4. Add the command to the README command model
 5. Add a stable JSON result shape to `docs/automation.md`
 6. Call out breaking JSON or exit-code changes in `CHANGELOG.md` and migration notes in `docs/automation.md` when behavior is intentional.
+7. If the command is exposed through MCP, update `mcpTools()` and refresh the compact tool-surface summary in `docs/llms.txt`.
 
 ## CI and Release
 
@@ -209,7 +210,7 @@ When adding a command:
 | `release.yml` | `v*` tag | Builds cross-platform binaries, publishes GitHub release and package channels |
 | `apt-repo.yml` | published release | Updates the signed apt repository |
 
-Tagging `v0.2.0` (or any `v*` semver tag) triggers the release workflow automatically.
+Tagging `v0.2.1` (or any `v*` semver tag) triggers the release workflow automatically.
 
 ## Gotchas
 
@@ -219,7 +220,8 @@ Tagging `v0.2.0` (or any `v*` semver tag) triggers the release workflow automati
 | Headless OAuth | Use `--no-browser` to print a URL instead of opening a browser |
 | `quickstart env write` ≠ `project env write` | Template-aware paths and variable names vs generic dotenv block |
 | `add` namespace | Reserved and hidden; must behave as not-found from the user's perspective |
-| `doctor --deep` | Flag exists but deep checks are not fully implemented; don't document as stable yet |
+| `doctor --deep` | Stable workspace checks for `.agora` metadata and quickstart env consistency; prefer `--deep --json` in repo-bound automation. |
+| `open` browser launch | Auto-open happens only in interactive pretty TTY sessions outside CI. Use `--browser` to force opening or `--no-browser` for URL-only behavior. |
 | App certificate required | `quickstart env write` and `init` fail env injection if the project has no certificate |
 
 ## npm Distribution (Node Wrapper)
@@ -248,7 +250,7 @@ packaging/npm/
 3. If the platform package is missing, the shim prints a helpful error pointing to Homebrew or GitHub releases
 
 **Release flow (automated and active):** the `publish-npm` job in `release.yml`:
-1. Downloads release archives and `checksums.txt` from the GitHub release
+1. Downloads release archives (`agora-cli_v*`, v0.2.1+) and `checksums.txt` from the GitHub release
 2. Verifies SHA-256 of every archive against `checksums.txt`; fails the job on mismatch
 3. Extracts the binary for each platform into the corresponding package's `bin/`
 4. Stamps the tag version into all `package.json` files (wrapper + 6 platform packages, including `optionalDependencies` values)

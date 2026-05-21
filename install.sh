@@ -1187,7 +1187,7 @@ main() {
     die "VERSION cannot be empty." "$EXIT_USAGE"
   fi
 
-  FILENAME="agora-cli-go_v${VERSION}_${OS}_${ARCH}.${ARCHIVE_EXT}"
+  FILENAME="agora-cli_v${VERSION}_${OS}_${ARCH}.${ARCHIVE_EXT}"
   ARCHIVE_URL="${RELEASES_DOWNLOAD_BASE_URL%/}/v${VERSION}/${FILENAME}"
   CHECKSUMS_URL="${RELEASES_DOWNLOAD_BASE_URL%/}/v${VERSION}/checksums.txt"
   ARCHIVE_PATH="${TMP}/${FILENAME}"

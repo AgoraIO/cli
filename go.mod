@@ -1,4 +1,4 @@
-module github.com/agora/cli-workspace/agora-cli-go
+module github.com/AgoraIO/cli
 
 go 1.26.3
 
