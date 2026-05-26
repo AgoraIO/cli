@@ -15,6 +15,14 @@ Earlier entries pre-date this convention and only carry their version's compare 
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-05-26
+
+Python quickstart repository URL correction.
+
+### Fixed
+
+- Point the Python conversational AI quickstart clone URLs at `AgoraIO-Conversational-AI/agent-quickstart-python` instead of the retired `AgoraIO-Community` repository.
+
 ## [0.2.1] - 2026-05-20
 
 Automation hardening, quickstart reliability fixes, agent introspection and MCP progress improvements, and release-artifact rename.
@@ -260,7 +268,8 @@ Set `AGORA_ALLOW_UPGRADE_IN_CI=1` only when a CI job intentionally needs to muta
 - Support machine-readable JSON output for automation and agent workflows.
 - Ship automated release packaging through GoReleaser, including cross-platform archives, Linux packages, Homebrew, Scoop, npm wrapper packages, Docker images, and install scripts.
 
-[Unreleased]: https://github.com/AgoraIO/cli/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/AgoraIO/cli/compare/v0.2.2...HEAD
+[0.2.2]: https://github.com/AgoraIO/cli/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/AgoraIO/cli/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/AgoraIO/cli/compare/v0.1.9...v0.2.0
 [0.1.9]: https://github.com/AgoraIO/cli/compare/v0.1.8...v0.1.9
