@@ -79,7 +79,7 @@ jobs:
       # what keyless cosign needs to mint a Sigstore certificate from the
       # GitHub Actions OIDC provider.
       - name: Install Cosign
-        uses: sigstore/cosign-installer@v3.7.0
+        uses: sigstore/cosign-installer@v4.1.2
 
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v6
