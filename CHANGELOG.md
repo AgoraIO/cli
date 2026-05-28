@@ -17,6 +17,7 @@ Earlier entries pre-date this convention and only carry their version's compare 
 
 ### Fixed
 
+- Clarify that npm release publishing uses trusted publishing only and requires every npm package to exist before release automation runs.
 - Update GoReleaser Cosign signing to emit `checksums.txt.sigstore.json` with `--bundle`, matching Cosign's current bundle-based signing flow.
 
 ## [0.2.2] - 2026-05-26

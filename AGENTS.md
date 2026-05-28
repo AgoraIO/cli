@@ -258,6 +258,7 @@ packaging/npm/
 6. Smoke-tests the published wrapper with `npx --yes agoraio-cli@<tag> --version` (retry/backoff for registry propagation)
 
 **Prerequisites:**
+- npm package names already exist on the registry before relying on trusted publishing.
 - npm **Trusted Publisher** configured on each package (`agoraio-cli` and all `agoraio-cli-*`), pointing at repo `AgoraIO/cli` and workflow `release.yml`.
 - `id-token: write` workflow permission (already set in `release.yml`) — required for trusted publishing and provenance.
 
