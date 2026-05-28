@@ -25,7 +25,7 @@ The release workflow (`.github/workflows/release.yml`) then:
    - Publishes the six per-platform packages with `npm publish --provenance`
    - Publishes the wrapper package (`agoraio-cli`) with `npm publish --provenance`
    - Runs a post-publish smoke test: `npx --yes agoraio-cli@<tag> --version` with retry/backoff to handle registry propagation
-   - Authenticates via [npm trusted publishing](https://docs.npmjs.com/trusted-publishers/) (OIDC from GitHub Actions — no `NPM_TOKEN` secret)
+   - Authenticates only via [npm trusted publishing](https://docs.npmjs.com/trusted-publishers/) (OIDC from GitHub Actions)
    - Requires `id-token: write` workflow permission (already set in `release.yml`)
 
 3. **Apt repository** job (triggered by the published release):
@@ -63,6 +63,7 @@ The release workflow exposes a `workflow_dispatch` trigger that runs the npm pub
 
 Before tagging the first real release that ships npm, confirm:
 
+- [ ] Each npm package exists on npm. Trusted publishing can only be configured after the package exists.
 - [ ] Each npm package has a **Trusted Publisher** configured on [npmjs.com](https://www.npmjs.com) (Package → Settings → Trusted Publisher → GitHub Actions):
   - Repository: `AgoraIO/cli`
   - Workflow filename: `release.yml`
