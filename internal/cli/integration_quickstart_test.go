@@ -53,11 +53,14 @@ func TestCLIQuickstartListAndCreate(t *testing.T) {
 	if list.exitCode != 0 || !strings.Contains(list.stdout, `"id":"nextjs"`) || !strings.Contains(list.stdout, `"id":"python"`) || !strings.Contains(list.stdout, `"id":"go"`) {
 		t.Fatalf("unexpected quickstart list result: %+v", list)
 	}
+	if !strings.Contains(list.stdout, `"id":"android"`) {
+		t.Fatalf("expected android quickstart in list result: %+v", list)
+	}
 	listAll := runCLI(t, []string{"quickstart", "list", "--show-all", "--json"}, cliRunOptions{env: map[string]string{
 		"XDG_CONFIG_HOME": configHome,
 		"AGORA_LOG_LEVEL": "error",
 	}})
-	if listAll.exitCode != 0 || !strings.Contains(listAll.stdout, `"id":"go"`) {
+	if listAll.exitCode != 0 || !strings.Contains(listAll.stdout, `"id":"go"`) || !strings.Contains(listAll.stdout, `"id":"android"`) {
 		t.Fatalf("unexpected quickstart list --show-all result: %+v", listAll)
 	}
 

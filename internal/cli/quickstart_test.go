@@ -153,3 +153,27 @@ func TestQuickstartRepoURLOverride(t *testing.T) {
 		}
 	}
 }
+
+func TestQuickstartTemplatesIncludeAndroid(t *testing.T) {
+	var android quickstartTemplate
+	found := false
+	for _, tmpl := range quickstartTemplates() {
+		if tmpl.ID == "android" {
+			android = tmpl
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatal("expected android quickstart template to exist")
+	}
+	if android.RepoURL != "https://github.com/AgoraIO-Conversational-AI/agent-quickstart-android" {
+		t.Fatalf("unexpected android repo url: %q", android.RepoURL)
+	}
+	if android.Ref != "rest-api" {
+		t.Fatalf("unexpected android default ref: %q", android.Ref)
+	}
+	if !android.Available || android.SupportsInit {
+		t.Fatalf("unexpected android flags: available=%v supportsInit=%v", android.Available, android.SupportsInit)
+	}
+}

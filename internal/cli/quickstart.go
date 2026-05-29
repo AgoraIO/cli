@@ -18,6 +18,7 @@ type quickstartTemplate struct {
 	Description    string
 	Runtime        string
 	RepoURL        string
+	Ref            string
 	DocsURL        string
 	DetectPaths    []string
 	EnvExamplePath string
@@ -77,6 +78,21 @@ func quickstartTemplates() []quickstartTemplate {
 			RunCommand:     "make dev",
 			EnvDocsSummary: "Copies server-go/env.example to server-go/.env, then writes APP_ID and APP_CERTIFICATE.",
 			SupportsInit:   true,
+			Available:      true,
+		},
+		{
+			ID:             "android",
+			Title:          "Conversational AI Android Quickstart",
+			Description:    "Clone the official Android conversational AI quickstart.",
+			Runtime:        "android",
+			RepoURL:        "https://github.com/AgoraIO-Conversational-AI/agent-quickstart-android",
+			Ref:            "rest-api",
+			DocsURL:        "https://github.com/AgoraIO-Conversational-AI/agent-quickstart-android/tree/rest-api",
+			DetectPaths:    []string{"settings.gradle", "gradlew", "app/src/main/AndroidManifest.xml"},
+			InstallCommand: "Open in Android Studio",
+			RunCommand:     "Run from Android Studio or Gradle",
+			EnvDocsSummary: "Android quickstart template. Clone-only for now; env seeding is not yet wired into the CLI.",
+			SupportsInit:   false,
 			Available:      true,
 		},
 	}
@@ -292,11 +308,15 @@ func (a *App) quickstartCreate(template quickstartTemplate, targetDir, explicitP
 	if err != nil {
 		return nil, err
 	}
+	effectiveRef := strings.TrimSpace(ref)
+	if effectiveRef == "" {
+		effectiveRef = strings.TrimSpace(template.Ref)
+	}
 	if overrideKey != "" {
 		progress.emit("clone:override", fmt.Sprintf("Using repo override from %s", overrideKey), map[string]any{"repoUrl": repoURL, "envVar": overrideKey})
 	}
-	progress.emit("clone:start", "Cloning quickstart repository", map[string]any{"repoUrl": repoURL, "targetPath": absTarget, "ref": ref})
-	if err := cloneQuickstartRepo(repoURL, absTarget, ref); err != nil {
+	progress.emit("clone:start", "Cloning quickstart repository", map[string]any{"repoUrl": repoURL, "targetPath": absTarget, "ref": effectiveRef})
+	if err := cloneQuickstartRepo(repoURL, absTarget, effectiveRef); err != nil {
 		return nil, err
 	}
 	progress.emit("clone:complete", "Quickstart repository cloned", map[string]any{"targetPath": absTarget})
@@ -346,7 +366,7 @@ func (a *App) quickstartCreate(template quickstartTemplate, targetDir, explicitP
 		"title":        template.Title,
 		"written":      written,
 		"nextSteps":    initNextSteps(template, absTarget),
-		"ref":          ref,
+		"ref":          effectiveRef,
 	}
 	if boundProject != nil {
 		result["projectId"] = boundProject.project.ProjectID

@@ -19,6 +19,7 @@ agora init my-nextjs-demo --template nextjs
 | Next.js video app | `agora init my-nextjs-demo --template nextjs` | A cloned Next.js quickstart, project binding, and `.env.local` |
 | Python voice agent | `agora init my-python-demo --template python` | A Python quickstart with Agora credentials written for the backend |
 | Go token service | `agora init my-go-demo --template go` | A Go server quickstart with project metadata and env wiring |
+| Android conversational AI app | `agora quickstart create my-android-demo --template android` | A cloned Android quickstart on the `rest-api` branch |
 
 ## Install
 
