@@ -105,6 +105,8 @@ If your PowerShell execution policy blocks inline scripts, download `install.ps1
 --list-versions         Print recent published versions and exit.
 --force                 Reinstall even if the requested version is present, or
                         proceed past an existing managed install warning.
+--replace-npm           If an existing npm-managed agora is detected, uninstall
+                        agoraio-cli with npm before installing this binary.
 
 # Shell integration (auto-on; pass an opt-out flag to disable)
 --no-path               Don't append the install directory to your shell rc file.
@@ -137,7 +139,7 @@ If your PowerShell execution policy blocks inline scripts, download `install.ps1
 -SkipShell              Umbrella for -NoPath -NoCompletion.
 ```
 
-If another managed `agora` install is detected, the installer refuses by default to avoid creating two installs that shadow each other on PATH. Pass `--force` to install alongside it.
+If another managed `agora` install is detected, the installer refuses by default to avoid creating two installs that shadow each other on PATH. Uninstall the existing package first, then re-run the standalone installer. For global npm installs, `--replace-npm` can perform that migration for you. Pass `--force` only when you intentionally want a side-by-side install.
 
 ## Uninstall
 
@@ -317,7 +319,14 @@ $env:VERSION = "0.2.1"
 The shell installer refuses to install over an existing managed `agora` to avoid creating two installs that shadow each other on PATH. Either:
 
 - Keep using the existing install, or
-- Re-run the installer with `--force` to install alongside it.
+- Uninstall the existing package, then re-run the standalone installer:
+
+  ```bash
+  curl -fsSL https://raw.githubusercontent.com/AgoraIO/cli/main/install.sh | sh
+  ```
+
+- If it is npm-managed, re-run the installer with `--replace-npm` to run `npm uninstall -g agoraio-cli` before installing the standalone binary.
+- Re-run the installer with `--force` only if you intentionally want a side-by-side install.
 
 ### PATH issues
 

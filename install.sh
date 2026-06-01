@@ -45,6 +45,7 @@ NO_COLOR_ENV="${NO_COLOR:-}"
 # ---- Mode flags ------------------------------------------------------------
 DRY_RUN=0
 FORCE=0
+REPLACE_NPM=0
 LIST_VERSIONS=0
 PRERELEASE=0
 QUIET=0
@@ -192,6 +193,8 @@ ${BOLD}Options:${RESET}
   --list-versions         Print recent published versions and exit.
   --force                 Reinstall even if the requested version is already present,
                           or proceed past a Homebrew/npm-managed install warning.
+  --replace-npm           If an existing npm-managed agora is detected, uninstall
+                          agoraio-cli with npm before installing this binary.
 
 ${BOLD}Shell integration${RESET} ${DIM}(auto-on; pass an opt-out flag to disable)${RESET}
   --no-path               Don't append the install directory to your shell rc file.
@@ -279,6 +282,10 @@ parse_args() {
         ;;
       --force)
         FORCE=1
+        shift
+        ;;
+      --replace-npm)
+        REPLACE_NPM=1
         shift
         ;;
       --no-path)
@@ -755,6 +762,25 @@ guard_managed_install() {
     return 0
   fi
 
+  if [ "$MANAGED_INSTALL" = "npm" ] && [ "$REPLACE_NPM" = "1" ]; then
+    say_step "Replacing npm-managed Agora CLI at ${MANAGED_PATH}"
+    if [ "$DRY_RUN" = "1" ]; then
+      say "  [dry-run] Would run: npm uninstall -g agoraio-cli"
+      return 0
+    fi
+    if ! npm uninstall -g agoraio-cli; then
+      die "Could not uninstall npm-managed agoraio-cli. Run ${MANAGED_UPGRADE_CMD} or uninstall it manually, then retry." "$EXIT_INSTALL"
+    fi
+    hash -r 2>/dev/null || true
+    if current_path=$(command -v agora 2>/dev/null); then
+      if [ "$current_path" = "$MANAGED_PATH" ]; then
+        die "npm uninstall completed, but agora is still present at ${MANAGED_PATH}. Remove it manually or run with --force to install alongside it." "$EXIT_INSTALL"
+      fi
+    fi
+    say_ok "Removed npm package agoraio-cli."
+    return 0
+  fi
+
   if [ "$FORCE" = "1" ]; then
     warn "Detected ${MANAGED_INSTALL}-managed install at ${MANAGED_PATH}. Continuing because --force is set."
     return 0
@@ -762,6 +788,15 @@ guard_managed_install() {
 
   err "Detected ${MANAGED_INSTALL}-managed install at ${MANAGED_PATH}."
   say "  Recommended: ${BOLD}${MANAGED_UPGRADE_CMD}${RESET}"
+  if [ "$MANAGED_INSTALL" = "npm" ]; then
+    say "  To switch to the standalone installer manually:"
+    say "    ${GREEN}npm uninstall -g agoraio-cli${RESET}"
+    say "    ${GREEN}curl -fsSL https://raw.githubusercontent.com/${GITHUB_REPO}/main/install.sh | sh${RESET}"
+    say "  Or re-run with ${BOLD}--replace-npm${RESET} to uninstall the npm package and install this binary."
+  else
+    say "  To switch to the standalone installer, uninstall the ${MANAGED_INSTALL} package first, then re-run:"
+    say "    ${GREEN}curl -fsSL https://raw.githubusercontent.com/${GITHUB_REPO}/main/install.sh | sh${RESET}"
+  fi
   say "  Or re-run with ${BOLD}--force${RESET} to install alongside (may shadow the ${MANAGED_INSTALL} install on PATH)."
   exit "$EXIT_INSTALL"
 }
