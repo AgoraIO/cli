@@ -44,7 +44,7 @@ agora --help
 Alternative install paths:
 
 ```bash
-# npm (Node 18+, signed with npm provenance)
+# npm (Node 18+, wrapper signed with npm provenance)
 npm install -g agoraio-cli
 
 # Windows PowerShell

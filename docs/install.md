@@ -261,7 +261,7 @@ go build -o agora .
 
 ### npm wrapper
 
-The `agoraio-cli` npm package is a thin Node.js shim that resolves the right native binary for your platform via `optionalDependencies`. The platform binary itself is the same artifact published to GitHub Releases. Each release is published with [npm provenance](https://docs.npmjs.com/generating-provenance-statements) so consumers can verify the package was built from this repository's release workflow.
+The `agoraio-cli` npm package is a thin Node.js shim that resolves the right native binary for your platform via `optionalDependencies`. The platform binary itself is the same artifact published to GitHub Releases. The wrapper package is published with [npm provenance](https://docs.npmjs.com/generating-provenance-statements) so consumers can verify it was built from this repository's release workflow.
 
 ```bash
 # Install globally
