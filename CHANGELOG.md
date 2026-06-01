@@ -15,6 +15,10 @@ Earlier entries pre-date this convention and only carry their version's compare 
 
 ## [Unreleased]
 
+### Changed
+
+- Split npm release authentication: `agoraio-cli` continues to use npm trusted publishing with provenance, while the six native platform packages publish with `NPM_TOKEN`.
+
 ## [0.2.5] - 2026-06-01
 
 Installer migration improvements.
