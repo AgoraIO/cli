@@ -65,6 +65,23 @@ where.exe agora    # Windows PowerShell
 Reorder `PATH` so the installer's directory comes first, or remove the
 older binary.
 
+If the older binary came from a global npm install and you want to switch
+to the standalone installer, either migrate in one installer run:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/AgoraIO/cli/main/install.sh | sh -s -- --replace-npm
+```
+
+Or uninstall npm first and then run the standalone installer:
+
+```bash
+npm uninstall -g agoraio-cli
+curl -fsSL https://raw.githubusercontent.com/AgoraIO/cli/main/install.sh | sh
+```
+
+Use `--force` only when you intentionally want two installs and understand
+that the first `agora` on `PATH` wins.
+
 ## `agora init` or `agora quickstart create` fails on `git clone`
 
 The CLI shells out to `git clone` for quickstarts. Most failures map to a stable error code:

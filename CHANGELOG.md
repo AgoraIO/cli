@@ -26,6 +26,7 @@ Installer migration improvements.
 ### Changed
 
 - Improve managed-install errors with explicit uninstall-and-reinstall guidance so users can switch to the standalone installer without relying on side-by-side PATH shadowing.
+- Update website install and troubleshooting docs with npm-to-standalone migration steps and clearer PATH shadowing guidance.
 
 ## [0.2.4] - 2026-06-01
 

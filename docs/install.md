@@ -192,7 +192,7 @@ Both `install.sh` and `install.ps1` use the same stable exit-code contract for s
 | 4    | unsupported platform / architecture                                                                                            |
 | 5    | network or download failure                                                                                                    |
 | 6    | checksum verification failed                                                                                                   |
-| 7    | install or permission failure (non-writable dir, sudo, or refused to overwrite a managed install without `--force` / `-Force`) |
+| 7    | install or permission failure (non-writable dir, sudo, or refused to overwrite a managed install)                              |
 | 8    | post-install verification failed                                                                                               |
 
 ### Idempotent re-runs
@@ -201,7 +201,7 @@ Both installers short-circuit with exit `0` when the target install path already
 
 ### Managed-install detection
 
-Both installers refuse to overwrite an `agora` binary that came from a package manager and exit `7` with a recommended upgrade command. Override with `--force` / `-Force`.
+Both installers refuse to overwrite an `agora` binary that came from a package manager and exit `7` with a recommended upgrade command. Uninstall the package-manager version before switching to the standalone installer. For global npm installs on Unix shells, `--replace-npm` can run `npm uninstall -g agoraio-cli` before installing the standalone binary. Use `--force` / `-Force` only for intentional side-by-side installs.
 
 | Manager                | Detected by                                                  | Recommended upgrade         |
 | ---------------------- | ------------------------------------------------------------ | --------------------------- |
