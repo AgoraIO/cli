@@ -18,7 +18,7 @@ on:
 permissions:
   contents: write   # create GitHub release artifacts for installers
   packages: write   # push to GitHub Container Registry (Docker)
-  id-token: write   # required for npm trusted publishing and provenance (OIDC)
+  id-token: write   # required for agoraio-cli trusted publishing (OIDC)
 
 jobs:
   goreleaser:
@@ -258,7 +258,7 @@ jobs:
           ' packaging/npm/agoraio-cli/package.json > "$tmp"
           mv "$tmp" packaging/npm/agoraio-cli/package.json
 
-      - name: Prepare npm for trusted publishing
+      - name: Prepare npm CLI
         if: steps.mode.outputs.mode == 'publish'
         shell: bash
         run: |
@@ -266,18 +266,22 @@ jobs:
           # Trusted publishing requires npm CLI 11.5.1+.
           npm install -g npm@latest
           npm --version
-          # setup-node writes an empty _authToken placeholder when registry-url is set
-          # without NODE_AUTH_TOKEN; remove it so npm uses OIDC trusted publishing.
-          if [ -n "${NPM_CONFIG_USERCONFIG:-}" ] && [ -f "$NPM_CONFIG_USERCONFIG" ]; then
-            sed -i '/^\/\/registry\.npmjs\.org\/:_authToken=/d' "$NPM_CONFIG_USERCONFIG"
-          fi
 
       - name: Publish platform packages
         shell: bash
         env:
           PUBLISH_ARGS: ${{ steps.mode.outputs.publish_args }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           set -euo pipefail
+          if [ -z "$PUBLISH_ARGS" ]; then
+            if [ -z "${NODE_AUTH_TOKEN:-}" ]; then
+              echo "::error::NPM_TOKEN is required to publish platform packages."
+              exit 1
+            fi
+            npm config set //registry.npmjs.org/:_authToken "${NODE_AUTH_TOKEN}"
+          fi
+
           for pkg in \
             packaging/npm/agoraio-cli-darwin-arm64 \
             packaging/npm/agoraio-cli-darwin-x64 \
@@ -292,14 +296,22 @@ jobs:
               continue
             fi
             echo "Publishing $pkg ${PUBLISH_ARGS}"
-            # Authenticates via npm trusted publishing (OIDC) when not in dry-run mode.
-            # --provenance is honored by publishConfig.provenance; passing here for clarity.
             if [ -n "$PUBLISH_ARGS" ]; then
               npm publish "$pkg" --access public $PUBLISH_ARGS
             else
-              npm publish "$pkg" --access public --provenance
+              npm publish "$pkg" --access public
             fi
           done
+
+      - name: Prepare npm for trusted publishing
+        if: steps.mode.outputs.mode == 'publish'
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Remove token auth so npm uses OIDC trusted publishing for the wrapper.
+          if [ -n "${NPM_CONFIG_USERCONFIG:-}" ] && [ -f "$NPM_CONFIG_USERCONFIG" ]; then
+            sed -i '/^\/\/registry\.npmjs\.org\/:_authToken=/d' "$NPM_CONFIG_USERCONFIG"
+          fi
 
       - name: Publish wrapper package
         shell: bash

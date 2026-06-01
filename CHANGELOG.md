@@ -15,6 +15,10 @@ Earlier entries pre-date this convention and only carry their version's compare 
 
 ## [Unreleased]
 
+### Changed
+
+- Split npm release authentication: `agoraio-cli` continues to use npm trusted publishing with provenance, while the six native platform packages publish with `NPM_TOKEN`.
+
 ### Fixed
 
 - Update GoReleaser Cosign signing to emit `checksums.txt.sigstore.json` with `--bundle`, matching Cosign's current bundle-based signing flow.
