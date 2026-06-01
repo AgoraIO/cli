@@ -15,6 +15,26 @@ Earlier entries pre-date this convention and only carry their version's compare 
 
 ## [Unreleased]
 
+## [0.2.5] - 2026-06-01
+
+Installer migration improvements.
+
+### Added
+
+- Add `install.sh --replace-npm` to migrate from a global npm-managed `agoraio-cli` install to the standalone installer by running `npm uninstall -g agoraio-cli` before installing the binary.
+
+### Changed
+
+- Improve managed-install errors with explicit uninstall-and-reinstall guidance so users can switch to the standalone installer without relying on side-by-side PATH shadowing.
+
+## [0.2.4] - 2026-06-01
+
+npm release workflow trigger tag for the v0.2.3 Cosign bundle signing fix.
+
+## [0.2.3] - 2026-06-01
+
+Release signing fix.
+
 ### Fixed
 
 - Update GoReleaser Cosign signing to emit `checksums.txt.sigstore.json` with `--bundle`, matching Cosign's current bundle-based signing flow.
@@ -272,7 +292,10 @@ Set `AGORA_ALLOW_UPGRADE_IN_CI=1` only when a CI job intentionally needs to muta
 - Support machine-readable JSON output for automation and agent workflows.
 - Ship automated release packaging through GoReleaser, including cross-platform archives, Linux packages, Homebrew, Scoop, npm wrapper packages, Docker images, and install scripts.
 
-[Unreleased]: https://github.com/AgoraIO/cli/compare/v0.2.2...HEAD
+[Unreleased]: https://github.com/AgoraIO/cli/compare/v0.2.5...HEAD
+[0.2.5]: https://github.com/AgoraIO/cli/compare/v0.2.4...v0.2.5
+[0.2.4]: https://github.com/AgoraIO/cli/compare/v0.2.3...v0.2.4
+[0.2.3]: https://github.com/AgoraIO/cli/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/AgoraIO/cli/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/AgoraIO/cli/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/AgoraIO/cli/compare/v0.1.9...v0.2.0

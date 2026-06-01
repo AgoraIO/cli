@@ -310,7 +310,7 @@ GitHub Actions are configured for:
 
 Release workflow behavior:
 
-- a pushed tag matching `v*` (for example `v0.2.2`) triggers the release workflow
+- a pushed tag matching `v*` (for example `v0.2.5`) triggers the release workflow
 - the workflow runs tests, builds release binaries, packages them, and publishes a GitHub release automatically
 - release artifacts include checksums
 
