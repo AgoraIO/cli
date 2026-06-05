@@ -32,6 +32,10 @@ Installer migration, quickstart scaffold cleanup, and onboarding doc refresh.
 - Restructure README quick start, command routing tables, env workflows, and documentation index.
 - Document CI and release workflow expectations in CONTRIBUTING.md.
 
+### Fixed
+
+- Bump the pinned Go toolchain to 1.26.4 so release builds include stdlib fixes for GO-2026-5037 and GO-2026-5039.
+
 ## [0.2.4] - 2026-06-01
 
 npm release workflow trigger tag for the v0.2.3 Cosign bundle signing fix.
