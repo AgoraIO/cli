@@ -15,6 +15,10 @@ Earlier entries pre-date this convention and only carry their version's compare 
 
 ## [Unreleased]
 
+### Changed
+
+- Remove upstream `.git` metadata after quickstart scaffolds are cloned so demos start without the template repository's history.
+
 ## [0.2.5] - 2026-06-01
 
 Installer migration improvements.

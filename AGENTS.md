@@ -104,7 +104,7 @@ agora
 
 **Design rules — do not break these:**
 - `project` = remote Agora control-plane resource; it never scaffolds local files
-- `quickstart` = local repo clone; requires `git` on the PATH
+- `quickstart` = local repo clone; requires `git` on the PATH; upstream `.git` is removed after clone so demos start without template history
 - `init` = the only command that composes both
 - The `add` namespace is reserved; keep it hidden and return a command-not-found error if invoked
 
