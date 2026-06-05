@@ -15,18 +15,26 @@ Earlier entries pre-date this convention and only carry their version's compare 
 
 ## [Unreleased]
 
-## [0.2.5] - 2026-06-01
+## [0.2.5] - 2026-06-05
 
-Installer migration improvements.
+Installer migration, quickstart scaffold cleanup, and onboarding doc refresh.
 
 ### Added
 
 - Add `install.sh --replace-npm` to migrate from a global npm-managed `agoraio-cli` install to the standalone installer by running `npm uninstall -g agoraio-cli` before installing the binary.
+- Emit a `clone:strip-git` progress event after removing upstream template git metadata during quickstart scaffolds.
 
 ### Changed
 
+- Remove upstream `.git` metadata after quickstart scaffolds are cloned so demos start without the template repository's history.
 - Improve managed-install errors with explicit uninstall-and-reinstall guidance so users can switch to the standalone installer without relying on side-by-side PATH shadowing.
 - Update website install and troubleshooting docs with npm-to-standalone migration steps and clearer PATH shadowing guidance.
+- Restructure README quick start, command routing tables, env workflows, and documentation index.
+- Document CI and release workflow expectations in CONTRIBUTING.md.
+
+### Fixed
+
+- Bump the pinned Go toolchain to 1.26.4 so release builds include stdlib fixes for GO-2026-5037 and GO-2026-5039.
 
 ## [0.2.4] - 2026-06-01
 

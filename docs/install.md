@@ -38,7 +38,7 @@ agora --help
 Install a pinned version:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/AgoraIO/cli/main/install.sh | sh -s -- --version 0.2.1
+curl -fsSL https://raw.githubusercontent.com/AgoraIO/cli/main/install.sh | sh -s -- --version 0.2.5
 agora --help
 ```
 
@@ -80,7 +80,7 @@ agora --help
 Install a pinned version:
 
 ```powershell
-$env:VERSION = "0.2.1"
+$env:VERSION = "0.2.5"
 irm https://raw.githubusercontent.com/AgoraIO/cli/main/install.ps1 | iex
 agora --help
 ```
@@ -162,7 +162,7 @@ Uninstall removes the binary and `agora.install.json` receipt from the install d
 Both direct installers support these core overrides:
 
 - `GITHUB_REPO`: install from a fork or alternate repository.
-- `VERSION`: install a specific version. Both `0.2.1` and `v0.2.1` are accepted.
+- `VERSION`: install a specific version. Both `0.2.5` and `v0.2.5` are accepted.
 - `INSTALL_DIR`: install to a custom directory.
 - `GITHUB_TOKEN` or `GH_TOKEN`: optional GitHub token to avoid API rate limits when resolving the latest release.
 
@@ -272,7 +272,7 @@ agora --help
 npx agoraio-cli --help
 
 # Pin a specific version
-npm install -g agoraio-cli@0.2.1
+npm install -g agoraio-cli@0.2.5
 
 # Update to the latest published version
 npm update -g agoraio-cli
@@ -297,15 +297,22 @@ For one-off shell sessions, source the generated script according to your shell'
 
 ### GitHub API rate limits
 
-If latest-version resolution fails, retry with a pinned version or provide `GITHUB_TOKEN` / `GH_TOKEN`:
+The direct installers call the GitHub REST API only when resolving the latest release. The binary download itself uses public release URLs and does not require authentication.
+
+If latest-version resolution fails, pin `VERSION` first — that skips the API lookup entirely:
 
 ```bash
-GITHUB_TOKEN=your-token-here VERSION=0.2.1 sh install.sh
+curl -fsSL https://raw.githubusercontent.com/AgoraIO/cli/main/install.sh | sh -s -- --version 0.2.5
+```
+
+If you must resolve latest from a shared IP (for example CI) and hit GitHub's unauthenticated API rate limit, optionally provide `GITHUB_TOKEN` or `GH_TOKEN`:
+
+```bash
+GITHUB_TOKEN=your-token-here sh install.sh
 ```
 
 ```powershell
 $env:GITHUB_TOKEN = "your-token-here"
-$env:VERSION = "0.2.1"
 & ([scriptblock]::Create((irm https://raw.githubusercontent.com/AgoraIO/cli/main/install.ps1)))
 ```
 
@@ -380,8 +387,8 @@ cosign verify "ghcr.io/agoraio/agora-cli:${TAG#v}" \
   --certificate-oidc-issuer 'https://token.actions.githubusercontent.com'
 ```
 
-To audit dependencies, download the `*.spdx.json` SBOM that ships next to each archive (e.g. `agora-cli_v0.2.1_linux_amd64.tar.gz.spdx.json`) and feed it to a scanner such as [Grype](https://github.com/anchore/grype):
+To audit dependencies, download the `*.spdx.json` SBOM that ships next to each archive (e.g. `agora-cli_v0.2.5_linux_amd64.tar.gz.spdx.json`) and feed it to a scanner such as [Grype](https://github.com/anchore/grype):
 
 ```bash
-grype sbom:agora-cli_v0.2.1_linux_amd64.tar.gz.spdx.json
+grype sbom:agora-cli_v0.2.5_linux_amd64.tar.gz.spdx.json
 ```

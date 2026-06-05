@@ -35,7 +35,7 @@ The release workflow (`.github/workflows/release.yml`) then:
 
 ## Release notes
 
-Before tagging, ensure [CHANGELOG.md](CHANGELOG.md) has the version section finalized, including any migration or upgrade notes. GoReleaser publishes auto-generated release notes from commits; paste highlights from the CHANGELOG section into the GitHub release description if you want a curated summary.
+Before tagging, ensure [CHANGELOG.md](CHANGELOG.md) has the version section finalized (empty `[Unreleased]`, dated release heading, updated compare links), including any migration or upgrade notes. GoReleaser publishes auto-generated release notes from commits; paste highlights from the CHANGELOG section into the GitHub release description if you want a curated summary.
 
 ## Local Verification
 
