@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -595,6 +596,7 @@ These commands do not clone local application code. Use "agora quickstart" for s
 	cmd.AddCommand(a.buildProjectShow())
 	cmd.AddCommand(a.buildProjectEnv())
 	cmd.AddCommand(a.buildProjectFeature())
+	cmd.AddCommand(a.buildProjectWebhook())
 	cmd.AddCommand(a.buildProjectDoctor())
 	return cmd
 }
@@ -979,6 +981,181 @@ func (a *App) buildProjectFeature() *cobra.Command {
 		ValidArgsFunction: a.completeFeatureThenProject,
 	})
 	return cmd
+}
+
+func (a *App) buildProjectWebhook() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "webhook",
+		Short: "Manage project webhook configurations",
+		Long:  "List webhook events and manage webhook endpoint configurations for a project feature.",
+		Example: example(`
+  agora project webhook events --feature rtc
+  agora project webhook list --feature rtc --project my-app
+  agora project webhook create --feature rtc --url https://example.com/webhook --event channel-created --project my-app
+  agora project webhook update 42 --feature rtc --disabled --project my-app
+  agora project webhook delete 42 --feature rtc --project my-app --yes
+`),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if len(args) > 0 {
+				return fmt.Errorf("unknown command %q for %q", args[0], cmd.CommandPath())
+			}
+			return cmd.Help()
+		},
+	}
+
+	eventsFeature := ""
+	events := &cobra.Command{
+		Use:   "events",
+		Short: "List available webhook events for a feature",
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			data, err := a.projectWebhookEvents(eventsFeature)
+			if err != nil {
+				return err
+			}
+			return renderResult(cmd, "project webhook events", data)
+		},
+	}
+	events.Flags().StringVar(&eventsFeature, "feature", "", "project feature whose webhook events should be listed")
+	cmd.AddCommand(events)
+
+	listFeature := ""
+	listProject := ""
+	list := &cobra.Command{
+		Use:   "list",
+		Short: "List webhook configurations for a project feature",
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			data, err := a.projectWebhookList(listFeature, listProject, false)
+			if err != nil {
+				return err
+			}
+			return renderResult(cmd, "project webhook list", data)
+		},
+	}
+	list.Flags().StringVar(&listFeature, "feature", "", "project feature whose webhook configurations should be listed")
+	list.Flags().StringVar(&listProject, "project", "", "project ID or exact project name; defaults to the current project context")
+	cmd.AddCommand(list)
+
+	showFeature := ""
+	showProject := ""
+	showWithSecret := false
+	show := &cobra.Command{
+		Use:   "show <config-id>",
+		Short: "Show one webhook configuration",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			configID, err := parseWebhookConfigIDArg(args)
+			if err != nil {
+				return err
+			}
+			data, err := a.projectWebhookShow(configID, showFeature, showProject, showWithSecret)
+			if err != nil {
+				return err
+			}
+			return renderResult(cmd, "project webhook show", data)
+		},
+	}
+	show.Flags().StringVar(&showFeature, "feature", "", "project feature for the webhook configuration")
+	show.Flags().StringVar(&showProject, "project", "", "project ID or exact project name; defaults to the current project context")
+	show.Flags().BoolVar(&showWithSecret, "with-secret", false, "include the webhook secret in the response")
+	cmd.AddCommand(show)
+
+	createOpts := webhookCreateOptions{}
+	create := &cobra.Command{
+		Use:   "create",
+		Short: "Create a webhook configuration",
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			data, err := a.projectWebhookCreate(createOpts)
+			if err != nil {
+				return err
+			}
+			return renderResult(cmd, "project webhook create", data)
+		},
+	}
+	create.Flags().StringVar(&createOpts.Feature, "feature", "", "project feature for the webhook configuration")
+	create.Flags().StringVar(&createOpts.Project, "project", "", "project ID or exact project name; defaults to the current project context")
+	create.Flags().StringVar(&createOpts.URL, "url", "", "webhook endpoint URL")
+	create.Flags().StringArrayVar(&createOpts.EventInputs, "event", nil, "webhook event key, display name, or numeric ID; repeat to subscribe to multiple events")
+	create.Flags().StringVar(&createOpts.Secret, "secret", "", "webhook signing secret; generated when omitted")
+	create.Flags().StringVar(&createOpts.DeliveryRegion, "delivery-region", "", "webhook delivery region: cn, sea, na, or eu")
+	cmd.AddCommand(create)
+
+	updateOpts := webhookUpdateOptions{}
+	updateEnabled := false
+	updateDisabled := false
+	update := &cobra.Command{
+		Use:   "update <config-id>",
+		Short: "Update a webhook configuration",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			configID, err := parseWebhookConfigIDArg(args)
+			if err != nil {
+				return err
+			}
+			if cmd.Flags().Changed("enabled") && cmd.Flags().Changed("disabled") {
+				return &cliError{Message: "--enabled and --disabled cannot be used together", Code: "WEBHOOK_ENABLED_FLAG_CONFLICT"}
+			}
+			updateOpts.ConfigID = configID
+			if cmd.Flags().Changed("enabled") {
+				enabled := updateEnabled
+				updateOpts.Enabled = &enabled
+			}
+			if cmd.Flags().Changed("disabled") {
+				enabled := !updateDisabled
+				updateOpts.Enabled = &enabled
+			}
+			data, err := a.projectWebhookUpdate(updateOpts)
+			if err != nil {
+				return err
+			}
+			return renderResult(cmd, "project webhook update", data)
+		},
+	}
+	update.Flags().StringVar(&updateOpts.Feature, "feature", "", "project feature for the webhook configuration")
+	update.Flags().StringVar(&updateOpts.Project, "project", "", "project ID or exact project name; defaults to the current project context")
+	update.Flags().StringVar(&updateOpts.URL, "url", "", "new webhook endpoint URL")
+	update.Flags().StringArrayVar(&updateOpts.EventInputs, "event", nil, "replacement webhook event key, display name, or numeric ID; repeat to subscribe to multiple events")
+	update.Flags().StringVar(&updateOpts.DeliveryRegion, "delivery-region", "", "new webhook delivery region: cn, sea, na, or eu")
+	update.Flags().BoolVar(&updateEnabled, "enabled", false, "enable the webhook configuration")
+	update.Flags().BoolVar(&updateDisabled, "disabled", false, "disable the webhook configuration")
+	cmd.AddCommand(update)
+
+	deleteFeature := ""
+	deleteProject := ""
+	deleteCmd := &cobra.Command{
+		Use:   "delete <config-id>",
+		Short: "Delete a webhook configuration",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			configID, err := parseWebhookConfigIDArg(args)
+			if err != nil {
+				return err
+			}
+			if !a.rootYes {
+				return &cliError{Message: "confirmation required; pass --yes to delete this webhook configuration", Code: "CONFIRMATION_REQUIRED"}
+			}
+			data, err := a.projectWebhookDelete(configID, deleteFeature, deleteProject)
+			if err != nil {
+				return err
+			}
+			return renderResult(cmd, "project webhook delete", data)
+		},
+	}
+	deleteCmd.Flags().StringVar(&deleteFeature, "feature", "", "project feature for the webhook configuration")
+	deleteCmd.Flags().StringVar(&deleteProject, "project", "", "project ID or exact project name; defaults to the current project context")
+	cmd.AddCommand(deleteCmd)
+
+	return cmd
+}
+
+func parseWebhookConfigIDArg(args []string) (int, error) {
+	if len(args) != 1 {
+		return 0, &cliError{Message: "webhook config ID is required", Code: "WEBHOOK_CONFIG_ID_REQUIRED"}
+	}
+	configID, err := strconv.Atoi(strings.TrimSpace(args[0]))
+	if err != nil {
+		return 0, &cliError{Message: "webhook config ID is required", Code: "WEBHOOK_CONFIG_ID_REQUIRED"}
+	}
+	if err := validateWebhookConfigID(configID); err != nil {
+		return 0, err
+	}
+	return configID, nil
 }
 
 func (a *App) buildProjectDoctor() *cobra.Command {

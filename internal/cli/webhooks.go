@@ -35,6 +35,25 @@ type webhookConfig struct {
 	Secret         string         `json:"secret,omitempty"`
 }
 
+type webhookCreateOptions struct {
+	Feature        string
+	Project        string
+	URL            string
+	EventInputs    []string
+	Secret         string
+	DeliveryRegion string
+}
+
+type webhookUpdateOptions struct {
+	ConfigID       int
+	Feature        string
+	Project        string
+	URL            string
+	EventInputs    []string
+	DeliveryRegion string
+	Enabled        *bool
+}
+
 type ncsEventListResponse struct {
 	Items []ncsEvent `json:"items"`
 }
@@ -194,11 +213,245 @@ func (a *App) deleteWebhookConfig(projectID, feature string, configID int) error
 	return a.apiRequest("DELETE", "/api/cli/v1/projects/"+projectID+"/ncs-configs/"+feature+"/"+strconv.Itoa(configID), nil, nil, &out)
 }
 
+func (a *App) projectWebhookEvents(feature string) (map[string]any, error) {
+	events, err := a.listWebhookEvents(feature)
+	if err != nil {
+		return nil, err
+	}
+	return map[string]any{
+		"action":  "webhook-events",
+		"feature": strings.TrimSpace(feature),
+		"items":   events,
+	}, nil
+}
+
+func (a *App) projectWebhookList(feature, project string, revealSecrets bool) (map[string]any, error) {
+	if err := validateWebhookFeature(feature); err != nil {
+		return nil, err
+	}
+	target, err := a.resolveProjectTarget(project)
+	if err != nil {
+		return nil, err
+	}
+	events, err := a.listWebhookEvents(feature)
+	if err != nil {
+		return nil, err
+	}
+	configs, err := a.listWebhookConfigs(target.project.ProjectID, strings.TrimSpace(feature))
+	if err != nil {
+		return nil, err
+	}
+	items := make([]webhookConfig, 0, len(configs.Items))
+	for _, item := range configs.Items {
+		cfg := normalizeWebhookConfig(item, events)
+		items = append(items, redactWebhookConfigSecret(cfg, revealSecrets))
+	}
+	return map[string]any{
+		"action":      "webhook-list",
+		"events":      events,
+		"feature":     strings.TrimSpace(feature),
+		"items":       items,
+		"projectId":   target.project.ProjectID,
+		"projectName": target.project.Name,
+	}, nil
+}
+
+func (a *App) projectWebhookShow(configID int, feature, project string, withSecret bool) (map[string]any, error) {
+	if err := validateWebhookConfigID(configID); err != nil {
+		return nil, err
+	}
+	if err := validateWebhookFeature(feature); err != nil {
+		return nil, err
+	}
+	target, err := a.resolveProjectTarget(project)
+	if err != nil {
+		return nil, err
+	}
+	events, err := a.listWebhookEvents(feature)
+	if err != nil {
+		return nil, err
+	}
+	configs, err := a.listWebhookConfigs(target.project.ProjectID, strings.TrimSpace(feature))
+	if err != nil {
+		return nil, err
+	}
+	item, err := findNCSConfigByID(configs.Items, configID)
+	if err != nil {
+		return nil, err
+	}
+	cfg := redactWebhookConfigSecret(normalizeWebhookConfig(item, events), withSecret)
+	return webhookConfigResult("webhook-show", target, strings.TrimSpace(feature), cfg), nil
+}
+
+func (a *App) projectWebhookCreate(opts webhookCreateOptions) (map[string]any, error) {
+	if err := validateWebhookFeature(opts.Feature); err != nil {
+		return nil, err
+	}
+	url := strings.TrimSpace(opts.URL)
+	if url == "" {
+		return nil, &cliError{Message: "webhook URL is required", Code: "WEBHOOK_URL_REQUIRED"}
+	}
+	eventInputs := nonEmptyWebhookEventInputs(opts.EventInputs)
+	if len(eventInputs) == 0 {
+		return nil, &cliError{Message: "at least one webhook event is required", Code: "WEBHOOK_EVENTS_REQUIRED"}
+	}
+	target, err := a.resolveProjectTarget(opts.Project)
+	if err != nil {
+		return nil, err
+	}
+	events, err := a.listWebhookEvents(opts.Feature)
+	if err != nil {
+		return nil, err
+	}
+	eventIDs, err := resolveWebhookEventIDs(events, eventInputs, opts.Feature)
+	if err != nil {
+		return nil, err
+	}
+	secret := strings.TrimSpace(opts.Secret)
+	if secret == "" {
+		secret, err = generateWebhookSecret()
+		if err != nil {
+			return nil, err
+		}
+	}
+	if err := validateWebhookSecret(secret); err != nil {
+		return nil, err
+	}
+	urlRegion := ""
+	if strings.TrimSpace(opts.DeliveryRegion) != "" {
+		urlRegion, err = normalizeWebhookDeliveryRegion(opts.DeliveryRegion)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		urlRegion = defaultWebhookDeliveryRegion(target.region)
+	}
+	body := map[string]any{
+		"enabled":        true,
+		"eventIds":       eventIDs,
+		"secret":         secret,
+		"url":            url,
+		"urlRegion":      urlRegion,
+		"useIpWhitelist": false,
+	}
+	resp, err := a.createWebhookConfig(target.project.ProjectID, strings.TrimSpace(opts.Feature), body)
+	if err != nil {
+		return nil, err
+	}
+	item, err := selectCreatedWebhookConfig(resp, url, urlRegion, eventIDs, secret)
+	if err != nil {
+		return nil, err
+	}
+	cfg := normalizeWebhookConfig(item, events)
+	return webhookConfigResult("webhook-create", target, strings.TrimSpace(opts.Feature), cfg), nil
+}
+
+func (a *App) projectWebhookUpdate(opts webhookUpdateOptions) (map[string]any, error) {
+	if err := validateWebhookConfigID(opts.ConfigID); err != nil {
+		return nil, err
+	}
+	if err := validateWebhookFeature(opts.Feature); err != nil {
+		return nil, err
+	}
+	target, err := a.resolveProjectTarget(opts.Project)
+	if err != nil {
+		return nil, err
+	}
+	events, err := a.listWebhookEvents(opts.Feature)
+	if err != nil {
+		return nil, err
+	}
+	configs, err := a.listWebhookConfigs(target.project.ProjectID, strings.TrimSpace(opts.Feature))
+	if err != nil {
+		return nil, err
+	}
+	existing, err := findNCSConfigByID(configs.Items, opts.ConfigID)
+	if err != nil {
+		return nil, err
+	}
+
+	url := existing.URL
+	if strings.TrimSpace(opts.URL) != "" {
+		url = strings.TrimSpace(opts.URL)
+	}
+	urlRegion := existing.URLRegion
+	if strings.TrimSpace(opts.DeliveryRegion) != "" {
+		urlRegion, err = normalizeWebhookDeliveryRegion(opts.DeliveryRegion)
+		if err != nil {
+			return nil, err
+		}
+	}
+	enabled := existing.Enabled
+	if opts.Enabled != nil {
+		enabled = *opts.Enabled
+	}
+	eventIDs := append([]int(nil), existing.EventIDs...)
+	if len(opts.EventInputs) > 0 {
+		eventInputs := nonEmptyWebhookEventInputs(opts.EventInputs)
+		if len(eventInputs) == 0 {
+			return nil, &cliError{Message: "at least one webhook event is required", Code: "WEBHOOK_EVENTS_REQUIRED"}
+		}
+		eventIDs, err = resolveWebhookEventIDs(events, eventInputs, opts.Feature)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	body := map[string]any{
+		"enabled":        enabled,
+		"eventIds":       eventIDs,
+		"url":            url,
+		"urlRegion":      urlRegion,
+		"useIpWhitelist": existing.UseIPWhitelist,
+	}
+	resp, err := a.updateWebhookConfig(target.project.ProjectID, strings.TrimSpace(opts.Feature), opts.ConfigID, body)
+	if err != nil {
+		return nil, err
+	}
+	item, err := findNCSConfigByID(resp.Items, opts.ConfigID)
+	if err != nil {
+		return nil, err
+	}
+	cfg := redactWebhookConfigSecret(normalizeWebhookConfig(item, events), false)
+	return webhookConfigResult("webhook-update", target, strings.TrimSpace(opts.Feature), cfg), nil
+}
+
+func (a *App) projectWebhookDelete(configID int, feature, project string) (map[string]any, error) {
+	if err := validateWebhookConfigID(configID); err != nil {
+		return nil, err
+	}
+	if err := validateWebhookFeature(feature); err != nil {
+		return nil, err
+	}
+	target, err := a.resolveProjectTarget(project)
+	if err != nil {
+		return nil, err
+	}
+	if err := a.deleteWebhookConfig(target.project.ProjectID, strings.TrimSpace(feature), configID); err != nil {
+		return nil, err
+	}
+	return map[string]any{
+		"action":      "webhook-delete",
+		"configId":    configID,
+		"deleted":     true,
+		"feature":     strings.TrimSpace(feature),
+		"projectId":   target.project.ProjectID,
+		"projectName": target.project.Name,
+	}, nil
+}
+
 func validateWebhookFeature(feature string) error {
 	if strings.TrimSpace(feature) == "" {
 		return &cliError{Message: "webhook feature is required", Code: "WEBHOOK_FEATURE_REQUIRED"}
 	}
 	return validateFeatureID(feature)
+}
+
+func validateWebhookConfigID(configID int) error {
+	if configID <= 0 {
+		return &cliError{Message: "webhook config ID is required", Code: "WEBHOOK_CONFIG_ID_REQUIRED"}
+	}
+	return nil
 }
 
 func normalizeWebhookDeliveryRegion(value string) (string, error) {
@@ -337,5 +590,46 @@ func unknownWebhookEventError(input string, feature string) error {
 	return &cliError{
 		Message: fmt.Sprintf("unknown webhook event %q. Run `agora project webhook events --feature %s` to see available events.", input, strings.TrimSpace(feature)),
 		Code:    "WEBHOOK_EVENT_UNKNOWN",
+	}
+}
+
+func findNCSConfigByID(items []ncsConfig, configID int) (ncsConfig, error) {
+	for _, item := range items {
+		if item.ConfigID == configID {
+			return item, nil
+		}
+	}
+	return ncsConfig{}, &cliError{
+		Message: fmt.Sprintf("webhook config %d was not found.", configID),
+		Code:    "WEBHOOK_CONFIG_NOT_FOUND",
+	}
+}
+
+func nonEmptyWebhookEventInputs(inputs []string) []string {
+	out := make([]string, 0, len(inputs))
+	for _, input := range inputs {
+		if trimmed := strings.TrimSpace(input); trimmed != "" {
+			out = append(out, trimmed)
+		}
+	}
+	return out
+}
+
+func webhookConfigResult(action string, target projectTarget, feature string, cfg webhookConfig) map[string]any {
+	return map[string]any{
+		"action":         action,
+		"config":         cfg,
+		"configId":       cfg.ConfigID,
+		"enabled":        cfg.Enabled,
+		"eventIds":       cfg.EventIDs,
+		"events":         cfg.Events,
+		"feature":        feature,
+		"projectId":      target.project.ProjectID,
+		"projectName":    target.project.Name,
+		"retry":          cfg.Retry,
+		"secret":         cfg.Secret,
+		"url":            cfg.URL,
+		"urlRegion":      cfg.URLRegion,
+		"useIpWhitelist": cfg.UseIPWhitelist,
 	}
 }
