@@ -39,20 +39,22 @@ Backend `productKey` is an internal implementation detail. For v1, supported pub
 Add the command group under `project`:
 
 ```bash
-agora project webhook events <feature>
-agora project webhook list <feature> [project]
+agora project webhook events --feature <feature>
+agora project webhook list --feature <feature> [--project <project>]
 agora project webhook show <config-id> --feature <feature> [--project <project>] [--with-secret]
 agora project webhook create --feature <feature> --url <url> --event <key-or-id>... [--secret <value>] [--delivery-region <region>] [--project <project>]
 agora project webhook update <config-id> --feature <feature> [--url <url>] [--event <key-or-id>...] [--delivery-region <region>] [--enabled | --disabled] [--project <project>]
 agora project webhook delete <config-id> --feature <feature> [--project <project>] [--yes]
 ```
 
-`events <feature>` is a discovery command. It fetches available webhook events for the feature and displays CLI event keys, backend event IDs, backend event types, display names, Chinese display names, and payload examples so developers do not need to guess backend event IDs.
+`feature` and `project` are flags on every webhook command, matching `project create` and `project doctor`. The webhook/config is the command subject, so it stays positional (`<config-id>`), while `feature` is a required scope flag and `project` is an optional scope flag. This differs from `project feature status <feature>`, where the feature itself is the subject and is therefore positional. `events` is feature-global (`GET /ncs-events/{feature}` has no `projectId`), so it takes `--feature` but not `--project`.
+
+`events --feature <feature>` is a discovery command. It fetches available webhook events for the feature so developers do not need to guess backend event IDs. Pretty output shows a focused table — CLI event key, event ID, and display name. The remaining metadata (event type and payload example) is included in `--json` output only, since raw payload JSON would break terminal table alignment.
 
 Example flow:
 
 ```bash
-agora project webhook events rtc
+agora project webhook events --feature rtc
 agora project webhook create \
   --feature rtc \
   --url https://example.com/webhook \
@@ -67,7 +69,7 @@ Event input rules:
 - Exact backend `displayName` values are accepted for compatibility, including values with spaces when shell-quoted.
 - `create` requires at least one event.
 - `update` only replaces event selections when at least one `--event` is provided.
-- Unknown event keys return a helpful error suggesting `agora project webhook events <feature>`.
+- Unknown event keys return a helpful error suggesting `agora project webhook events --feature <feature>`.
 
 The CLI event key is generated from backend `displayName` by lowercasing it, replacing non-alphanumeric runs with `-`, and trimming leading/trailing separators. For example, `Channel Created` becomes `channel-created`. If two events generate the same key, the key is ambiguous and the user must pass the numeric event ID.
 
@@ -101,6 +103,7 @@ Secret output rules:
 - `list` redacts secrets by default.
 - `show` redacts secrets by default.
 - `show --with-secret` reveals the secret if the backend returns it.
+- `update` redacts the secret by default. The PUT response is an `NcsConfigListResponse` that includes `secret`, but `update` has no `--with-secret` flag, so the rendered config and JSON output mask it.
 - Webhook secret rotation is not supported by the update endpoint. Users who need a new secret must create a replacement webhook and delete the old one.
 
 Empty webhook secrets are not supported in v1.
@@ -116,7 +119,6 @@ type webhookEvent struct {
     ID            int    `json:"id"`
     Key           string `json:"key"`
     DisplayName   string `json:"displayName"`
-    DisplayNameCn string `json:"displayNameCn,omitempty"`
     EventType     int    `json:"eventType"`
     Payload       string `json:"payload,omitempty"`
 }
@@ -142,7 +144,7 @@ The backend response may include additional fields such as `appId`, `productId`,
 
 `retry` is read-only in v1. The CLI includes `retry` in output when the backend returns it, but create and update requests do not send a `retry` field and do not expose a retry flag.
 
-The event API returns an `items` array. Each backend event has `eventId`, `displayName`, `displayNameCn`, `eventType`, and `payload`. The CLI uses `eventId` for config `eventIds`; `eventType` is retained only as event metadata for now because the config create/update schema labels `eventIds` as `event.id`. The implementation must not send `eventType` in config bodies. Before coding against production, confirm with the backend owner that config `eventIds` must be populated from `eventId`, not `eventType`.
+The event API returns an `items` array. Each backend event has `eventId`, `displayName`, `displayNameCn`, `eventType`, and `payload`. The CLI ignores `displayNameCn` and does not surface it in any output. The CLI uses `eventId` for config `eventIds`; `eventType` is retained only as event metadata for now because the config create/update schema labels `eventIds` as `event.id`. The implementation must not send `eventType` in config bodies. Before coding against production, confirm with the backend owner that config `eventIds` must be populated from `eventId`, not `eventType`.
 
 Create requests send all backend-required fields:
 
@@ -206,7 +208,6 @@ Example create data:
       "id": 1001,
       "key": "channel-created",
       "displayName": "Channel Created",
-      "displayNameCn": "频道创建",
       "eventType": 1,
       "payload": "{...}"
     }
@@ -234,8 +235,8 @@ Use existing envelope behavior and classify errors where the CLI can provide sta
 | --- | --- |
 | Missing URL on create | `WEBHOOK_URL_REQUIRED` |
 | Missing events on create | `WEBHOOK_EVENTS_REQUIRED` |
-| Unknown event name | `WEBHOOK_EVENT_UNKNOWN` |
-| Duplicate or ambiguous event name | `WEBHOOK_EVENT_AMBIGUOUS` |
+| Unknown event key | `WEBHOOK_EVENT_UNKNOWN` |
+| Duplicate or ambiguous event key | `WEBHOOK_EVENT_AMBIGUOUS` |
 | Invalid delivery region | `WEBHOOK_DELIVERY_REGION_INVALID` |
 | Invalid secret format | `WEBHOOK_SECRET_INVALID` |
 | Missing config ID | `WEBHOOK_CONFIG_ID_REQUIRED` |
@@ -289,6 +290,12 @@ Add MCP tools for agent workflows because existing project feature/env/init comm
 
 MCP inputs use feature names, event keys or event IDs, config IDs, URL, delivery region, and project. Secrets follow the same redaction and explicit reveal rules as CLI JSON output.
 
+MCP tool calls have no TTY, so the interactive delete prompt cannot apply. `agora.project.webhook.delete` is the first destructive tool in the MCP surface, so it must carry its own confirmation contract:
+
+- The tool exposes a required `confirm` boolean input.
+- The deletion proceeds only when `confirm` is `true`. This is the MCP equivalent of `--yes`.
+- When `confirm` is absent or `false`, the tool fails fast with a stable error and does not delete, mirroring the non-TTY CLI behavior.
+
 ## Implementation Plan Outline
 
 1. Add webhook constants and validation helpers:
@@ -297,7 +304,7 @@ MCP inputs use feature names, event keys or event IDs, config IDs, URL, delivery
    - secure secret generation
    - secret pattern validation
    - event key generation
-   - event name/ID resolution
+   - event key/ID resolution
    - explicit backend confirmation that config `eventIds` uses event `eventId`, not `eventType`
 2. Add typed API helpers in `internal/cli/webhooks.go`.
 3. Register `project webhook` commands in `commands.go`.
@@ -311,7 +318,7 @@ MCP inputs use feature names, event keys or event IDs, config IDs, URL, delivery
 
 Integration tests should cover:
 
-- `webhook events rtc --json` returns event keys plus backend event metadata.
+- `webhook events --feature rtc --json` returns event keys plus backend event metadata.
 - `webhook create` with event keys resolves IDs and generates a backend-valid secret.
 - `webhook create --secret` forwards explicit secret.
 - `webhook create --secret` rejects values that do not match `^[A-Za-z0-9_-]{7,32}$`.
