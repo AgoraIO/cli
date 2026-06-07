@@ -1011,7 +1011,8 @@ Delete is destructive and requires confirmation. Pass `--yes` (or `-y`) in CLI a
 
 Safe branch fields by command shape:
 - Event discovery: `feature`, `items[].id`, `items[].key`
-- List/show/create/update: `projectId`, `feature`, `configId` when present, `enabled`, `eventIds`, `urlRegion`
+- List: `projectId`, `feature`, `items[].configId`, `items[].enabled`, `items[].eventIds`, `items[].urlRegion`
+- Show/create/update: `projectId`, `feature`, `configId`, `enabled`, `eventIds`, `urlRegion`
 - Delete: `projectId`, `feature`, `configId`, `deleted`
 
 ### `config path`
