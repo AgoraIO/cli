@@ -1009,14 +1009,10 @@ Optional config fields:
 
 Delete is destructive and requires confirmation. Pass `--yes` (or `-y`) in CLI automation; the MCP delete tool requires `confirm: true`.
 
-Safe branch fields:
-- `projectId`
-- `feature`
-- `configId`
-- `enabled`
-- `deleted`
-- `eventIds`
-- `urlRegion`
+Safe branch fields by command shape:
+- Event discovery: `feature`, `items[].id`, `items[].key`
+- List/show/create/update: `projectId`, `feature`, `configId` when present, `enabled`, `eventIds`, `urlRegion`
+- Delete: `projectId`, `feature`, `configId`, `deleted`
 
 ### `config path`
 

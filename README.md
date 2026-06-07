@@ -114,14 +114,7 @@ The command model is intentionally layered:
 agora init <name>                    # recommended: project + clone + env
 ├── project
 │   ├── env                          Print project env values (no file write)
-│   ├── env write <path>             Generic dotenv block (AGORA_* or NEXT_*)
-│   └── webhook
-│       ├── events --feature <feature>       List available webhook event keys and IDs
-│       ├── list --feature <feature>         List project webhook configs
-│       ├── show <config-id> --feature ...   Show one webhook config
-│       ├── create --feature ...             Create a webhook config
-│       ├── update <config-id> --feature ... Update a webhook config
-│       └── delete <config-id> --feature ... Delete a webhook config
+│   └── env write <path>             Generic dotenv block (AGORA_* or NEXT_*)
 └── quickstart
     └── env write [dir]              Template-specific env file and key names
 ```
