@@ -32,6 +32,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -360,6 +361,19 @@ type fakeProject struct {
 	Vid          int     `json:"vid"`
 }
 
+type fakeNCSConfig struct {
+	ConfigID       int    `json:"configId"`
+	URL            string `json:"url"`
+	URLRegion      string `json:"urlRegion"`
+	Enabled        bool   `json:"enabled"`
+	EventIDs       []int  `json:"eventIds"`
+	Retry          *bool  `json:"retry,omitempty"`
+	UseIPWhitelist bool   `json:"useIpWhitelist,omitempty"`
+	Secret         string `json:"secret,omitempty"`
+	CreatedAt      string `json:"createdAt,omitempty"`
+	UpdatedAt      string `json:"updatedAt,omitempty"`
+}
+
 func buildFakeProject(name, projectID, appID, region string) fakeProject {
 	signKey := "4854d28b48a9439c9f2546e2216fc07a"
 	useCase := "education"
@@ -388,11 +402,13 @@ func buildFakeProject(name, projectID, appID, region string) fakeProject {
 // rtm2-config (RTM) feature flag toggles. Every request is captured under
 // `requests` so tests can assert headers (e.g. AGORA_AGENT propagation).
 type fakeCLIBFF struct {
-	server   *http.Server
-	baseURL  string
-	mu       sync.Mutex
-	projects map[string]*fakeProject
-	requests []struct {
+	server     *http.Server
+	baseURL    string
+	mu         sync.Mutex
+	projects   map[string]*fakeProject
+	ncsConfigs map[string][]fakeNCSConfig
+	ncsBodies  []map[string]any
+	requests   []struct {
 		Method        string
 		Pathname      string
 		Authorization string
@@ -401,7 +417,7 @@ type fakeCLIBFF struct {
 }
 
 func newFakeCLIBFF() *fakeCLIBFF {
-	api := &fakeCLIBFF{projects: map[string]*fakeProject{}}
+	api := &fakeCLIBFF{projects: map[string]*fakeProject{}, ncsConfigs: map[string][]fakeNCSConfig{}}
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		api.mu.Lock()
 		api.requests = append(api.requests, struct {
@@ -418,6 +434,25 @@ func newFakeCLIBFF() *fakeCLIBFF {
 		api.mu.Unlock()
 
 		switch {
+		case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/api/cli/v1/ncs-events/"):
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"items": []map[string]any{
+					{
+						"eventId":       1001,
+						"displayName":   "Channel Created",
+						"displayNameCn": "频道创建",
+						"eventType":     1,
+						"payload":       `{"event":"created"}`,
+					},
+					{
+						"eventId":       1002,
+						"displayName":   "Channel Destroyed",
+						"displayNameCn": "频道销毁",
+						"eventType":     2,
+						"payload":       `{"event":"destroyed"}`,
+					},
+				},
+			})
 		case r.Method == http.MethodGet && r.URL.Path == "/api/cli/v1/projects":
 			keyword := strings.ToLower(r.URL.Query().Get("keyword"))
 			items := []map[string]any{}
@@ -455,6 +490,8 @@ func newFakeCLIBFF() *fakeCLIBFF {
 			project := buildFakeProject(name, projectID, appID, "global")
 			api.projects[projectID] = &project
 			_ = json.NewEncoder(w).Encode(project)
+		case strings.HasPrefix(r.URL.Path, "/api/cli/v1/projects/") && strings.Contains(r.URL.Path, "/ncs-configs/"):
+			api.handleFakeNCSConfigs(w, r)
 		case strings.HasPrefix(r.URL.Path, "/api/cli/v1/projects/") && !strings.Contains(r.URL.Path, "/uap-configs/") && !strings.HasSuffix(r.URL.Path, "/rtm2-config"):
 			projectID := strings.TrimPrefix(r.URL.Path, "/api/cli/v1/projects/")
 			project, ok := api.projects[projectID]
@@ -523,6 +560,131 @@ func newFakeCLIBFF() *fakeCLIBFF {
 	return api
 }
 
+func (api *fakeCLIBFF) handleFakeNCSConfigs(w http.ResponseWriter, r *http.Request) {
+	parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
+	if len(parts) < 7 {
+		http.NotFound(w, r)
+		return
+	}
+	projectID := parts[4]
+	feature := parts[6]
+	key := projectID + "/" + feature
+
+	switch r.Method {
+	case http.MethodGet:
+		_ = json.NewEncoder(w).Encode(map[string]any{"items": api.ncsConfigs[key]})
+	case http.MethodPost:
+		var body map[string]any
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		api.mu.Lock()
+		api.ncsBodies = append(api.ncsBodies, body)
+		api.mu.Unlock()
+		config := fakeNCSConfig{
+			ConfigID:       42 + len(api.ncsConfigs[key]),
+			URL:            stringFromBody(body, "url"),
+			URLRegion:      stringFromBody(body, "urlRegion"),
+			Enabled:        boolFromBody(body, "enabled"),
+			EventIDs:       fakeEventIDsFromValue(body["eventIds"]),
+			Retry:          fakeBoolPtr(true),
+			UseIPWhitelist: boolFromBody(body, "useIpWhitelist"),
+			Secret:         stringFromBody(body, "secret"),
+			CreatedAt:      "2026-06-07T00:00:01Z",
+			UpdatedAt:      "2026-06-07T00:00:01Z",
+		}
+		api.ncsConfigs[key] = append(api.ncsConfigs[key], config)
+		_ = json.NewEncoder(w).Encode(map[string]any{"items": api.ncsConfigs[key]})
+	case http.MethodPut:
+		if len(parts) < 8 {
+			http.NotFound(w, r)
+			return
+		}
+		configID, _ := strconv.Atoi(parts[7])
+		var body map[string]any
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		api.mu.Lock()
+		api.ncsBodies = append(api.ncsBodies, body)
+		api.mu.Unlock()
+		for i := range api.ncsConfigs[key] {
+			if api.ncsConfigs[key][i].ConfigID != configID {
+				continue
+			}
+			if value, ok := body["url"].(string); ok {
+				api.ncsConfigs[key][i].URL = value
+			}
+			if value, ok := body["urlRegion"].(string); ok {
+				api.ncsConfigs[key][i].URLRegion = value
+			}
+			if value, ok := body["enabled"].(bool); ok {
+				api.ncsConfigs[key][i].Enabled = value
+			}
+			if value, ok := body["eventIds"]; ok {
+				api.ncsConfigs[key][i].EventIDs = fakeEventIDsFromValue(value)
+			}
+			if value, ok := body["useIpWhitelist"].(bool); ok {
+				api.ncsConfigs[key][i].UseIPWhitelist = value
+			}
+			api.ncsConfigs[key][i].UpdatedAt = "2026-06-07T00:00:02Z"
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"items": api.ncsConfigs[key]})
+	case http.MethodDelete:
+		if len(parts) < 8 {
+			http.NotFound(w, r)
+			return
+		}
+		configID, _ := strconv.Atoi(parts[7])
+		next := []fakeNCSConfig{}
+		for _, item := range api.ncsConfigs[key] {
+			if item.ConfigID != configID {
+				next = append(next, item)
+			}
+		}
+		api.ncsConfigs[key] = next
+		_ = json.NewEncoder(w).Encode(map[string]any{"ok": true})
+	default:
+		http.NotFound(w, r)
+	}
+}
+
+func fakeBoolPtr(value bool) *bool {
+	return &value
+}
+
+func stringFromBody(body map[string]any, key string) string {
+	value, _ := body[key].(string)
+	return value
+}
+
+func boolFromBody(body map[string]any, key string) bool {
+	value, _ := body[key].(bool)
+	return value
+}
+
+func fakeEventIDsFromValue(value any) []int {
+	switch values := value.(type) {
+	case []int:
+		return append([]int(nil), values...)
+	case []float64:
+		out := make([]int, 0, len(values))
+		for _, item := range values {
+			out = append(out, int(item))
+		}
+		return out
+	case []any:
+		out := make([]int, 0, len(values))
+		for _, item := range values {
+			switch typed := item.(type) {
+			case float64:
+				out = append(out, int(typed))
+			case int:
+				out = append(out, typed)
+			}
+		}
+		return out
+	default:
+		return nil
+	}
+}
+
 // persistSessionForIntegration writes a fresh, valid-for-an-hour session
 // into the test's config home so tests do not need to walk through the
 // OAuth flow each time.
@@ -550,4 +712,203 @@ func parseAuthURL(stderr string) string {
 		return match[1]
 	}
 	return ""
+}
+
+func TestProjectWebhookEventsJSON(t *testing.T) {
+	configHome := t.TempDir()
+	api := newFakeCLIBFF()
+	defer api.server.Close()
+	persistSessionForIntegration(t, configHome)
+
+	result := runCLI(t, []string{"project", "webhook", "events", "--feature", "rtc", "--json"}, cliRunOptions{env: webhookTestEnv(configHome, api.baseURL)})
+	if result.exitCode != 0 || !strings.Contains(result.stdout, `"command":"project webhook events"`) || !strings.Contains(result.stdout, `"key":"channel-created"`) || !strings.Contains(result.stdout, `"id":1001`) || strings.Contains(result.stdout, "displayNameCn") || strings.Contains(result.stdout, "频道创建") {
+		t.Fatalf("unexpected webhook events result: exit=%d stdout=%s stderr=%s", result.exitCode, result.stdout, result.stderr)
+	}
+}
+
+func TestProjectWebhookCreateJSON(t *testing.T) {
+	configHome := t.TempDir()
+	api := newFakeCLIBFF()
+	defer api.server.Close()
+	project := buildFakeProject("demo", "prj_0001", "app_0001", "global")
+	api.projects[project.ProjectID] = &project
+	persistSessionForIntegration(t, configHome)
+
+	result := runCLI(t, []string{"project", "webhook", "create", "--project", "demo", "--feature", "rtc", "--url", "https://example.com/webhook", "--event", "channel-created", "--json"}, cliRunOptions{env: webhookTestEnv(configHome, api.baseURL)})
+	if result.exitCode != 0 || !strings.Contains(result.stdout, `"command":"project webhook create"`) || !strings.Contains(result.stdout, `"configId":42`) || !strings.Contains(result.stdout, `"urlRegion":"na"`) || !strings.Contains(result.stdout, `"enabled":true`) || !strings.Contains(result.stdout, `"secret":"`) || strings.Contains(result.stdout, "displayNameCn") {
+		t.Fatalf("unexpected webhook create result: exit=%d stdout=%s stderr=%s", result.exitCode, result.stdout, result.stderr)
+	}
+	if len(api.ncsBodies) != 1 {
+		t.Fatalf("expected one create body, got %#v", api.ncsBodies)
+	}
+	body := api.ncsBodies[0]
+	if body["url"] != "https://example.com/webhook" || body["urlRegion"] != "na" || body["enabled"] != true || body["useIpWhitelist"] != false {
+		t.Fatalf("unexpected create body: %#v", body)
+	}
+	if got := fakeEventIDsFromValue(body["eventIds"]); !webhookIntSlicesEqual(got, []int{1001}) {
+		t.Fatalf("expected create body to use eventId 1001, got %#v", body["eventIds"])
+	}
+	secret, _ := body["secret"].(string)
+	if !webhookSecretPattern.MatchString(secret) {
+		t.Fatalf("expected generated secret matching backend pattern, got %#v", body)
+	}
+}
+
+func TestProjectWebhookUpdateReadMergePut(t *testing.T) {
+	configHome := t.TempDir()
+	api := newFakeCLIBFF()
+	defer api.server.Close()
+	project := buildFakeProject("demo", "prj_0001", "app_0001", "global")
+	api.projects[project.ProjectID] = &project
+	api.ncsConfigs["prj_0001/rtc"] = []fakeNCSConfig{{
+		ConfigID:       42,
+		URL:            "https://old.example/webhook",
+		URLRegion:      "eu",
+		Enabled:        true,
+		EventIDs:       []int{1001},
+		Retry:          fakeBoolPtr(true),
+		UseIPWhitelist: false,
+		Secret:         "secret_123",
+		CreatedAt:      "2026-06-07T00:00:01Z",
+		UpdatedAt:      "2026-06-07T00:00:01Z",
+	}}
+	persistSessionForIntegration(t, configHome)
+
+	result := runCLI(t, []string{"project", "webhook", "update", "42", "--project", "demo", "--feature", "rtc", "--url", "https://new.example/webhook", "--json"}, cliRunOptions{env: webhookTestEnv(configHome, api.baseURL)})
+	if result.exitCode != 0 || strings.Contains(result.stdout, "secret_123") || !strings.Contains(result.stdout, `"secret":"********"`) || strings.Contains(result.stdout, "displayNameCn") {
+		t.Fatalf("unexpected webhook update result: exit=%d stdout=%s stderr=%s", result.exitCode, result.stdout, result.stderr)
+	}
+	if len(api.ncsBodies) != 1 {
+		t.Fatalf("expected one PUT body, got %#v", api.ncsBodies)
+	}
+	last := api.ncsBodies[len(api.ncsBodies)-1]
+	if last["url"] != "https://new.example/webhook" || last["urlRegion"] != "eu" || last["enabled"] != true || last["useIpWhitelist"] != false {
+		t.Fatalf("PUT body did not preserve existing fields: %#v", last)
+	}
+	if _, ok := last["secret"]; ok {
+		t.Fatalf("PUT body must not include secret: %#v", last)
+	}
+	if got := fakeEventIDsFromValue(last["eventIds"]); !webhookIntSlicesEqual(got, []int{1001}) {
+		t.Fatalf("PUT body did not preserve event IDs: %#v", last)
+	}
+	stored := api.ncsConfigs["prj_0001/rtc"][0]
+	if stored.Secret != "secret_123" || stored.URL != "https://new.example/webhook" {
+		t.Fatalf("fake PUT should preserve secret and update request fields, got %#v", stored)
+	}
+}
+
+func TestProjectWebhookDeleteRequiresYesInJSON(t *testing.T) {
+	configHome := t.TempDir()
+	api := newFakeCLIBFF()
+	defer api.server.Close()
+	project := buildFakeProject("demo", "prj_0001", "app_0001", "global")
+	api.projects[project.ProjectID] = &project
+	api.ncsConfigs["prj_0001/rtc"] = []fakeNCSConfig{{ConfigID: 42, URL: "https://example.com/webhook", URLRegion: "na", Enabled: true, EventIDs: []int{1001}, Secret: "secret_123"}}
+	persistSessionForIntegration(t, configHome)
+
+	result := runCLI(t, []string{"project", "webhook", "delete", "42", "--project", "demo", "--feature", "rtc", "--json"}, cliRunOptions{env: webhookTestEnv(configHome, api.baseURL)})
+	if result.exitCode == 0 || !strings.Contains(result.stdout, `"code":"CONFIRMATION_REQUIRED"`) || result.stderr != "" {
+		t.Fatalf("expected confirmation error, got exit=%d stdout=%s stderr=%s", result.exitCode, result.stdout, result.stderr)
+	}
+	if len(api.ncsConfigs["prj_0001/rtc"]) != 1 {
+		t.Fatalf("delete without --yes should not remove config: %#v", api.ncsConfigs["prj_0001/rtc"])
+	}
+
+	confirmed := runCLI(t, []string{"project", "webhook", "delete", "42", "--project", "demo", "--feature", "rtc", "--yes", "--json"}, cliRunOptions{env: webhookTestEnv(configHome, api.baseURL)})
+	if confirmed.exitCode != 0 || !strings.Contains(confirmed.stdout, `"command":"project webhook delete"`) || !strings.Contains(confirmed.stdout, `"deleted":true`) {
+		t.Fatalf("unexpected confirmed delete result: exit=%d stdout=%s stderr=%s", confirmed.exitCode, confirmed.stdout, confirmed.stderr)
+	}
+	if len(api.ncsConfigs["prj_0001/rtc"]) != 0 {
+		t.Fatalf("expected confirmed delete to remove config: %#v", api.ncsConfigs["prj_0001/rtc"])
+	}
+}
+
+func TestProjectWebhookCreateExplicitSecretAndRejectInvalidSecret(t *testing.T) {
+	configHome := t.TempDir()
+	api := newFakeCLIBFF()
+	defer api.server.Close()
+	project := buildFakeProject("demo", "prj_0001", "app_0001", "global")
+	api.projects[project.ProjectID] = &project
+	persistSessionForIntegration(t, configHome)
+
+	ok := runCLI(t, []string{"project", "webhook", "create", "--project", "demo", "--feature", "rtc", "--url", "https://example.com/webhook", "--event", "1001", "--secret", "secret_123", "--json"}, cliRunOptions{env: webhookTestEnv(configHome, api.baseURL)})
+	if ok.exitCode != 0 || !strings.Contains(ok.stdout, `"secret":"secret_123"`) || strings.Contains(ok.stdout, "displayNameCn") {
+		t.Fatalf("expected explicit secret success, got exit=%d stdout=%s stderr=%s", ok.exitCode, ok.stdout, ok.stderr)
+	}
+
+	bad := runCLI(t, []string{"project", "webhook", "create", "--project", "demo", "--feature", "rtc", "--url", "https://example.com/webhook", "--event", "1001", "--secret", "this-secret-is-too-long-for-the-backend-pattern", "--json"}, cliRunOptions{env: webhookTestEnv(configHome, api.baseURL)})
+	if bad.exitCode == 0 || !strings.Contains(bad.stdout, `"code":"WEBHOOK_SECRET_INVALID"`) || bad.stderr != "" {
+		t.Fatalf("expected invalid secret error, got exit=%d stdout=%s stderr=%s", bad.exitCode, bad.stdout, bad.stderr)
+	}
+	if len(api.ncsBodies) != 1 {
+		t.Fatalf("invalid secret should be rejected before POST, got bodies %#v", api.ncsBodies)
+	}
+}
+
+func TestProjectWebhookCreateDefaultsCNDeliveryRegion(t *testing.T) {
+	configHome := t.TempDir()
+	api := newFakeCLIBFF()
+	defer api.server.Close()
+	project := buildFakeProject("demo-cn", "prj_cn", "app_cn", "cn")
+	api.projects[project.ProjectID] = &project
+	persistSessionForIntegration(t, configHome)
+
+	result := runCLI(t, []string{"project", "webhook", "create", "--project", "demo-cn", "--feature", "rtc", "--url", "https://example.cn/webhook", "--event", "channel-created", "--json"}, cliRunOptions{env: webhookTestEnv(configHome, api.baseURL)})
+	if result.exitCode != 0 || !strings.Contains(result.stdout, `"urlRegion":"cn"`) || strings.Contains(result.stdout, "displayNameCn") {
+		t.Fatalf("expected cn default region, got exit=%d stdout=%s stderr=%s", result.exitCode, result.stdout, result.stderr)
+	}
+	if len(api.ncsBodies) != 1 || api.ncsBodies[0]["urlRegion"] != "cn" {
+		t.Fatalf("expected create body to default to cn delivery region, got %#v", api.ncsBodies)
+	}
+}
+
+func TestProjectWebhookListRedactsAndShowWithSecretReveals(t *testing.T) {
+	configHome := t.TempDir()
+	api := newFakeCLIBFF()
+	defer api.server.Close()
+	project := buildFakeProject("demo", "prj_0001", "app_0001", "global")
+	api.projects[project.ProjectID] = &project
+	api.ncsConfigs["prj_0001/rtc"] = []fakeNCSConfig{{
+		ConfigID:       42,
+		URL:            "https://example.com/webhook",
+		URLRegion:      "na",
+		Enabled:        true,
+		EventIDs:       []int{1001},
+		Retry:          fakeBoolPtr(true),
+		UseIPWhitelist: false,
+		Secret:         "secret_123",
+		CreatedAt:      "2026-06-07T00:00:01Z",
+		UpdatedAt:      "2026-06-07T00:00:01Z",
+	}}
+	persistSessionForIntegration(t, configHome)
+
+	list := runCLI(t, []string{"project", "webhook", "list", "--project", "demo", "--feature", "rtc", "--json"}, cliRunOptions{env: webhookTestEnv(configHome, api.baseURL)})
+	if list.exitCode != 0 || strings.Contains(list.stdout, "secret_123") || !strings.Contains(list.stdout, `"secret":"********"`) || strings.Contains(list.stdout, "displayNameCn") {
+		t.Fatalf("expected list redaction, got exit=%d stdout=%s stderr=%s", list.exitCode, list.stdout, list.stderr)
+	}
+
+	show := runCLI(t, []string{"project", "webhook", "show", "42", "--project", "demo", "--feature", "rtc", "--with-secret", "--json"}, cliRunOptions{env: webhookTestEnv(configHome, api.baseURL)})
+	if show.exitCode != 0 || !strings.Contains(show.stdout, `"secret":"secret_123"`) || strings.Contains(show.stdout, "displayNameCn") {
+		t.Fatalf("expected show --with-secret reveal, got exit=%d stdout=%s stderr=%s", show.exitCode, show.stdout, show.stderr)
+	}
+}
+
+func TestProjectWebhookUpdateSecretFlagRejected(t *testing.T) {
+	configHome := t.TempDir()
+	api := newFakeCLIBFF()
+	defer api.server.Close()
+	persistSessionForIntegration(t, configHome)
+
+	result := runCLI(t, []string{"project", "webhook", "update", "42", "--feature", "rtc", "--secret", "secret_123", "--json"}, cliRunOptions{env: webhookTestEnv(configHome, api.baseURL)})
+	if result.exitCode == 0 || !strings.Contains(result.stderr, "unknown flag: --secret") {
+		t.Fatalf("expected unknown --secret flag, got exit=%d stdout=%s stderr=%s", result.exitCode, result.stdout, result.stderr)
+	}
+}
+
+func webhookTestEnv(configHome, apiBaseURL string) map[string]string {
+	return map[string]string{
+		"XDG_CONFIG_HOME":    configHome,
+		"AGORA_API_BASE_URL": apiBaseURL,
+		"AGORA_LOG_LEVEL":    "error",
+	}
 }
