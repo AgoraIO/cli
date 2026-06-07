@@ -220,6 +220,68 @@ func runCLI(t *testing.T, args []string, options cliRunOptions) cliResult {
 	}
 }
 
+func runExistingCLIApp(t *testing.T, app *App, args []string) cliResult {
+	t.Helper()
+
+	originalArgs := os.Args
+	originalStdout := os.Stdout
+	originalStderr := os.Stderr
+	defer func() {
+		os.Args = originalArgs
+		os.Stdout = originalStdout
+		os.Stderr = originalStderr
+	}()
+
+	stdoutReader, stdoutWriter, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	stderrReader, stderrWriter, err := os.Pipe()
+	if err != nil {
+		_ = stdoutReader.Close()
+		_ = stdoutWriter.Close()
+		t.Fatal(err)
+	}
+	os.Stdout = stdoutWriter
+	os.Stderr = stderrWriter
+	defer func() {
+		_ = stdoutReader.Close()
+		_ = stderrReader.Close()
+	}()
+
+	var stdoutBuf bytes.Buffer
+	var stderrBuf bytes.Buffer
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		_, _ = io.Copy(&stdoutBuf, stdoutReader)
+	}()
+	go func() {
+		defer wg.Done()
+		_, _ = io.Copy(&stderrBuf, stderrReader)
+	}()
+
+	os.Args = append([]string{"agora"}, args...)
+	app.root.SetArgs(args)
+	code := 0
+	if err := app.Execute(); err != nil {
+		if exitCode, ok := ExitCode(err); ok {
+			code = exitCode
+		} else if ErrorRendered(err) {
+			code = 1
+		} else {
+			code = 1
+			fmt.Fprintln(os.Stderr, err.Error())
+		}
+	}
+	_ = stdoutWriter.Close()
+	_ = stderrWriter.Close()
+	wg.Wait()
+
+	return cliResult{exitCode: code, stdout: stdoutBuf.String(), stderr: stderrBuf.String()}
+}
+
 func restoreProcessEnv(env []string) {
 	os.Clearenv()
 	for _, item := range env {
@@ -848,6 +910,18 @@ func TestProjectWebhookEventsJSON(t *testing.T) {
 	}
 }
 
+func TestProjectWebhookEventsInvalidFeatureJSON(t *testing.T) {
+	configHome := t.TempDir()
+	api := newFakeCLIBFF()
+	defer api.server.Close()
+	persistSessionForIntegration(t, configHome)
+
+	result := runCLI(t, []string{"project", "webhook", "events", "--feature", "bogus", "--json"}, cliRunOptions{env: webhookTestEnv(configHome, api.baseURL)})
+	if result.exitCode == 0 || !strings.Contains(result.stdout, `"code":"WEBHOOK_FEATURE_INVALID"`) || result.stderr != "" {
+		t.Fatalf("expected invalid webhook feature error, got exit=%d stdout=%s stderr=%s", result.exitCode, result.stdout, result.stderr)
+	}
+}
+
 func TestProjectWebhookCreateJSON(t *testing.T) {
 	configHome := t.TempDir()
 	api := newFakeCLIBFF()
@@ -916,6 +990,86 @@ func TestProjectWebhookUpdateReadMergePut(t *testing.T) {
 	stored := api.ncsConfigs["prj_0001/rtc"][0]
 	if stored.Secret != "secret_123" || stored.URL != "https://new.example/webhook" {
 		t.Fatalf("fake PUT should preserve secret and update request fields, got %#v", stored)
+	}
+}
+
+func TestProjectWebhookUpdateDoesNotReuseEnabledFlagAcrossExecutions(t *testing.T) {
+	cliRunMu.Lock()
+	defer cliRunMu.Unlock()
+
+	configHome := t.TempDir()
+	api := newFakeCLIBFF()
+	defer api.server.Close()
+	project := buildFakeProject("demo", "prj_0001", "app_0001", "global")
+	api.projects[project.ProjectID] = &project
+	api.ncsConfigs["prj_0001/rtc"] = []fakeNCSConfig{
+		{
+			ConfigID:       42,
+			URL:            "https://first.example/webhook",
+			URLRegion:      "na",
+			Enabled:        true,
+			EventIDs:       []int{1001},
+			Retry:          fakeBoolPtr(true),
+			UseIPWhitelist: false,
+			Secret:         "secret_123",
+			CreatedAt:      "2026-06-07T00:00:01Z",
+			UpdatedAt:      "2026-06-07T00:00:01Z",
+		},
+		{
+			ConfigID:       43,
+			URL:            "https://second.example/webhook",
+			URLRegion:      "eu",
+			Enabled:        true,
+			EventIDs:       []int{1002},
+			Retry:          fakeBoolPtr(false),
+			UseIPWhitelist: false,
+			Secret:         "secret_456",
+			CreatedAt:      "2026-06-07T00:00:01Z",
+			UpdatedAt:      "2026-06-07T00:00:01Z",
+		},
+	}
+	persistSessionForIntegration(t, configHome)
+
+	originalEnv := os.Environ()
+	defer restoreProcessEnv(originalEnv)
+	runEnv := helperEnv(os.Environ(), map[string]string{"AGORA_DISABLE_CI_DETECT": "1"})
+	for key, value := range webhookTestEnv(configHome, api.baseURL) {
+		runEnv = helperEnv(runEnv, map[string]string{key: value})
+	}
+	restoreProcessEnv(runEnv)
+
+	app, err := NewApp()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	first := runExistingCLIApp(t, app, []string{"project", "webhook", "update", "42", "--project", "demo", "--feature", "rtc", "--disabled", "--json"})
+	if first.exitCode != 0 {
+		t.Fatalf("first update failed: exit=%d stdout=%s stderr=%s", first.exitCode, first.stdout, first.stderr)
+	}
+	if len(api.ncsBodies) != 1 {
+		t.Fatalf("expected one PUT body after first update, got %#v", api.ncsBodies)
+	}
+	if api.ncsBodies[0]["enabled"] != false {
+		t.Fatalf("expected first update body to disable config 42, got %#v", api.ncsBodies[0])
+	}
+	if _, ok := api.ncsBodies[0]["retry"]; ok {
+		t.Fatalf("PUT body must not include retry: %#v", api.ncsBodies[0])
+	}
+
+	second := runExistingCLIApp(t, app, []string{"project", "webhook", "update", "43", "--project", "demo", "--feature", "rtc", "--url", "https://second-new.example/webhook", "--json"})
+	if second.exitCode != 0 {
+		t.Fatalf("second update failed: exit=%d stdout=%s stderr=%s", second.exitCode, second.stdout, second.stderr)
+	}
+	if len(api.ncsBodies) != 2 {
+		t.Fatalf("expected two PUT bodies after second update, got %#v", api.ncsBodies)
+	}
+	secondBody := api.ncsBodies[1]
+	if secondBody["enabled"] != true {
+		t.Fatalf("expected second update to preserve existing enabled=true, got %#v", secondBody)
+	}
+	if _, ok := secondBody["retry"]; ok {
+		t.Fatalf("PUT body must not include retry: %#v", secondBody)
 	}
 }
 

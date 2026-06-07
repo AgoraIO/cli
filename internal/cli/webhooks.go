@@ -441,10 +441,17 @@ func (a *App) projectWebhookDelete(configID int, feature, project string) (map[s
 }
 
 func validateWebhookFeature(feature string) error {
-	if strings.TrimSpace(feature) == "" {
+	feature = strings.TrimSpace(feature)
+	if feature == "" {
 		return &cliError{Message: "webhook feature is required", Code: "WEBHOOK_FEATURE_REQUIRED"}
 	}
-	return validateFeatureID(feature)
+	if !isKnownFeature(feature) {
+		return &cliError{
+			Message: fmt.Sprintf("invalid webhook feature %q. Choose one of: %s.", feature, featureListString()),
+			Code:    "WEBHOOK_FEATURE_INVALID",
+		}
+	}
+	return nil
 }
 
 func validateWebhookConfigID(configID int) error {
