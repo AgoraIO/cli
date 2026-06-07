@@ -941,7 +941,7 @@ func TestProjectWebhookHelpShowsFeatureAndExamples(t *testing.T) {
 	}
 
 	create := runCLI(t, []string{"project", "webhook", "create", "--help"}, cliRunOptions{})
-	if create.exitCode != 0 || !strings.Contains(create.stdout, "agora project webhook create --feature rtc") || !strings.Contains(create.stdout, "agora project webhook --feature rtc create") {
+	if create.exitCode != 0 || !strings.Contains(create.stdout, "agora project webhook create --feature rtc") || !strings.Contains(create.stdout, "agora project webhook --feature rtc create") || !strings.Contains(create.stdout, "--event 1001 --event 1002") {
 		t.Fatalf("unexpected project webhook create help: exit=%d stdout=%s stderr=%s", create.exitCode, create.stdout, create.stderr)
 	}
 }

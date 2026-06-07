@@ -273,7 +273,7 @@ Create a webhook configuration
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
 | `--delivery-region` | `string` | — | webhook delivery region: cn, sea, na, or eu |
-| `--event` | `stringArray` | `[]` | webhook event key, display name, or numeric ID; repeat to subscribe to multiple events |
+| `--event` | `stringArray` | `[]` | webhook event key, display name, or numeric ID; repeat --event for multiple events |
 | `--project` | `string` | — | project ID or exact project name; defaults to the current project context |
 | `--secret` | `string` | — | webhook signing secret; generated when omitted |
 | `--url` | `string` | — | webhook endpoint URL |
@@ -318,7 +318,7 @@ Update a webhook configuration
 | `--delivery-region` | `string` | — | new webhook delivery region: cn, sea, na, or eu |
 | `--disabled` | `bool` | — | disable the webhook configuration |
 | `--enabled` | `bool` | — | enable the webhook configuration |
-| `--event` | `stringArray` | `[]` | replacement webhook event key, display name, or numeric ID; repeat to subscribe to multiple events |
+| `--event` | `stringArray` | `[]` | replacement webhook event key, display name, or numeric ID; repeat --event for multiple events |
 | `--project` | `string` | — | project ID or exact project name; defaults to the current project context |
 | `--url` | `string` | — | new webhook endpoint URL |
 

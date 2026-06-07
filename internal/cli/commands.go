@@ -1092,7 +1092,7 @@ func (a *App) buildProjectWebhook() *cobra.Command {
 		Short: "Create a webhook configuration",
 		Example: example(`
   agora project webhook create --feature rtc --project my-app --url https://example.com/webhook --event channel-created
-  agora project webhook --feature rtc create --project prj_123 --url https://example.com/webhook --event 1001 --delivery-region na --json
+  agora project webhook --feature rtc create --project prj_123 --url https://example.com/webhook --event 1001 --event 1002 --delivery-region na --json
 `),
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			defer func() {
@@ -1121,7 +1121,7 @@ func (a *App) buildProjectWebhook() *cobra.Command {
 	}
 	create.Flags().StringVar(&createProject, "project", "", "project ID or exact project name; defaults to the current project context")
 	create.Flags().StringVar(&createURL, "url", "", "webhook endpoint URL")
-	create.Flags().StringArrayVar(&createEvents, "event", nil, "webhook event key, display name, or numeric ID; repeat to subscribe to multiple events")
+	create.Flags().StringArrayVar(&createEvents, "event", nil, "webhook event key, display name, or numeric ID; repeat --event for multiple events")
 	create.Flags().StringVar(&createSecret, "secret", "", "webhook signing secret; generated when omitted")
 	create.Flags().StringVar(&createDeliveryRegion, "delivery-region", "", "webhook delivery region: cn, sea, na, or eu")
 	cmd.AddCommand(create)
@@ -1137,7 +1137,7 @@ func (a *App) buildProjectWebhook() *cobra.Command {
 		Short: "Update a webhook configuration",
 		Example: example(`
   agora project webhook update 42 --feature rtc --project my-app --url https://example.com/webhook2
-  agora project webhook --feature rtc update 42 --project prj_123 --event 1001 --enabled --json
+  agora project webhook --feature rtc update 42 --project prj_123 --event 1001 --event 1002 --enabled --json
 `),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			defer func() {
@@ -1184,7 +1184,7 @@ func (a *App) buildProjectWebhook() *cobra.Command {
 	}
 	update.Flags().StringVar(&updateProject, "project", "", "project ID or exact project name; defaults to the current project context")
 	update.Flags().StringVar(&updateURL, "url", "", "new webhook endpoint URL")
-	update.Flags().StringArrayVar(&updateEvents, "event", nil, "replacement webhook event key, display name, or numeric ID; repeat to subscribe to multiple events")
+	update.Flags().StringArrayVar(&updateEvents, "event", nil, "replacement webhook event key, display name, or numeric ID; repeat --event for multiple events")
 	update.Flags().StringVar(&updateDeliveryRegion, "delivery-region", "", "new webhook delivery region: cn, sea, na, or eu")
 	update.Flags().BoolVar(&updateEnabled, "enabled", false, "enable the webhook configuration")
 	update.Flags().BoolVar(&updateDisabled, "disabled", false, "disable the webhook configuration")
