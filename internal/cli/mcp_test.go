@@ -3,6 +3,7 @@ package cli
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -124,6 +125,12 @@ func TestMCPToolsListCoversFullSurface(t *testing.T) {
 		"agora.project.list",
 		"agora.project.show",
 		"agora.project.use",
+		"agora.project.webhook.create",
+		"agora.project.webhook.delete",
+		"agora.project.webhook.events",
+		"agora.project.webhook.list",
+		"agora.project.webhook.show",
+		"agora.project.webhook.update",
 		"agora.quickstart.create",
 		"agora.quickstart.env_write",
 		"agora.quickstart.list",
@@ -158,6 +165,26 @@ func TestMCPToolsListCoversFullSurface(t *testing.T) {
 		if len(extra) > 0 {
 			t.Errorf("unexpected MCP tools (update test or remove): %v", extra)
 		}
+	}
+}
+
+func TestMCPProjectWebhookDeleteRequiresConfirm(t *testing.T) {
+	a := newTestApp(t)
+	_, err := a.callMCPTool("agora.project.webhook.delete", map[string]any{
+		"configId": float64(42),
+		"feature":  "rtc",
+		"project":  "demo",
+		"confirm":  false,
+	}, nil)
+	if err == nil {
+		t.Fatal("expected confirmation error")
+	}
+	var cliErr *cliError
+	if !errors.As(err, &cliErr) {
+		t.Fatalf("expected *cliError, got %T: %v", err, err)
+	}
+	if cliErr.Code != "CONFIRMATION_REQUIRED" {
+		t.Fatalf("code = %q, want CONFIRMATION_REQUIRED", cliErr.Code)
 	}
 }
 

@@ -206,6 +206,39 @@ func mcpTools() []map[string]any {
 		mcpTool("agora.project.feature.status", "Show one feature status", map[string]string{"feature": "string", "project": "string"}),
 		mcpTool("agora.project.feature.enable", "Enable one feature for a project", map[string]string{"feature": "string", "project": "string"}),
 
+		// Project webhooks
+		mcpTool("agora.project.webhook.events", "List available webhook events for a feature", map[string]string{"feature": "string"}),
+		mcpTool("agora.project.webhook.list", "List webhook configurations for a project feature", map[string]string{"feature": "string", "project": "string"}),
+		mcpTool("agora.project.webhook.show", "Show one webhook configuration", map[string]string{
+			"configId":   "number",
+			"feature":    "string",
+			"project":    "string",
+			"withSecret": "boolean",
+		}),
+		mcpTool("agora.project.webhook.create", "Create a webhook configuration", map[string]string{
+			"feature":        "string",
+			"project":        "string",
+			"url":            "string",
+			"events":         "array",
+			"secret":         "string",
+			"deliveryRegion": "string",
+		}),
+		mcpTool("agora.project.webhook.update", "Update a webhook configuration", map[string]string{
+			"configId":       "number",
+			"feature":        "string",
+			"project":        "string",
+			"url":            "string",
+			"events":         "array",
+			"deliveryRegion": "string",
+			"enabled":        "boolean",
+		}),
+		mcpTool("agora.project.webhook.delete", "Delete a webhook configuration", map[string]string{
+			"configId": "number",
+			"feature":  "string",
+			"project":  "string",
+			"confirm":  "boolean",
+		}),
+
 		// Quickstart
 		mcpTool("agora.quickstart.list", "List quickstart templates", nil),
 		mcpTool("agora.quickstart.create", "Clone a quickstart and optionally bind a project", map[string]string{
@@ -416,6 +449,51 @@ func (a *App) callMCPTool(name string, args map[string]any, progress progressEmi
 		}
 		return a.projectFeatureEnable(feature, stringArg(args, "project"))
 
+	case "agora.project.webhook.events":
+		return a.projectWebhookEvents(stringArg(args, "feature"))
+
+	case "agora.project.webhook.list":
+		return a.projectWebhookList(stringArg(args, "feature"), stringArg(args, "project"), false)
+
+	case "agora.project.webhook.show":
+		return a.projectWebhookShow(
+			intArg(args, "configId", 0),
+			stringArg(args, "feature"),
+			stringArg(args, "project"),
+			boolArg(args, "withSecret", false),
+		)
+
+	case "agora.project.webhook.create":
+		return a.projectWebhookCreate(webhookCreateOptions{
+			Feature:        stringArg(args, "feature"),
+			Project:        stringArg(args, "project"),
+			URL:            stringArg(args, "url"),
+			EventInputs:    stringSliceArg(args, "events"),
+			Secret:         stringArg(args, "secret"),
+			DeliveryRegion: stringArg(args, "deliveryRegion"),
+		})
+
+	case "agora.project.webhook.update":
+		return a.projectWebhookUpdate(webhookUpdateOptions{
+			ConfigID:       intArg(args, "configId", 0),
+			Feature:        stringArg(args, "feature"),
+			Project:        stringArg(args, "project"),
+			URL:            stringArg(args, "url"),
+			EventInputs:    stringSliceArg(args, "events"),
+			DeliveryRegion: stringArg(args, "deliveryRegion"),
+			Enabled:        optionalBoolArg(args, "enabled"),
+		})
+
+	case "agora.project.webhook.delete":
+		if !boolArg(args, "confirm", false) {
+			return nil, &cliError{Message: "confirmation required; pass confirm:true to delete this webhook configuration", Code: "CONFIRMATION_REQUIRED"}
+		}
+		return a.projectWebhookDelete(
+			intArg(args, "configId", 0),
+			stringArg(args, "feature"),
+			stringArg(args, "project"),
+		)
+
 	case "agora.quickstart.list":
 		items := []map[string]any{}
 		for _, template := range quickstartTemplates() {
@@ -498,6 +576,13 @@ func boolArg(args map[string]any, key string, fallback bool) bool {
 		return value
 	}
 	return fallback
+}
+
+func optionalBoolArg(args map[string]any, key string) *bool {
+	if value, ok := args[key].(bool); ok {
+		return &value
+	}
+	return nil
 }
 
 // stringSliceArg coerces an "array of string" MCP argument into a Go
