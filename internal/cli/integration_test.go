@@ -678,7 +678,7 @@ func (api *fakeCLIBFF) handleFakeNCSConfigs(w http.ResponseWriter, r *http.Reque
 }
 
 func fakePathParts(path string) []string {
-	return strings.Split(strings.Trim(path, "/"), "/")
+	return strings.Split(strings.TrimLeft(path, "/"), "/")
 }
 
 func isFakeNCSEventsPath(path string) bool {
@@ -778,6 +778,62 @@ func parseAuthURL(stderr string) string {
 		return match[1]
 	}
 	return ""
+}
+
+func TestFakeWebhookRouteMatchersRejectTrailingSlash(t *testing.T) {
+	tests := []struct {
+		name        string
+		path        string
+		wantEvents  bool
+		wantConfigs bool
+	}{
+		{
+			name:       "events exact",
+			path:       "/api/cli/v1/ncs-events/rtc",
+			wantEvents: true,
+		},
+		{
+			name: "events trailing slash",
+			path: "/api/cli/v1/ncs-events/rtc/",
+		},
+		{
+			name: "events extra segment",
+			path: "/api/cli/v1/ncs-events/rtc/extra",
+		},
+		{
+			name:        "config list exact",
+			path:        "/api/cli/v1/projects/prj_0001/ncs-configs/rtc",
+			wantConfigs: true,
+		},
+		{
+			name: "config list trailing slash",
+			path: "/api/cli/v1/projects/prj_0001/ncs-configs/rtc/",
+		},
+		{
+			name:        "config item exact",
+			path:        "/api/cli/v1/projects/prj_0001/ncs-configs/rtc/42",
+			wantConfigs: true,
+		},
+		{
+			name: "config item trailing slash",
+			path: "/api/cli/v1/projects/prj_0001/ncs-configs/rtc/42/",
+		},
+		{
+			name: "config item extra segment",
+			path: "/api/cli/v1/projects/prj_0001/ncs-configs/rtc/42/extra",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := isFakeNCSEventsPath(tt.path); got != tt.wantEvents {
+				t.Fatalf("isFakeNCSEventsPath(%q) = %t, want %t", tt.path, got, tt.wantEvents)
+			}
+			if got := isFakeNCSConfigsPath(tt.path); got != tt.wantConfigs {
+				t.Fatalf("isFakeNCSConfigsPath(%q) = %t, want %t", tt.path, got, tt.wantConfigs)
+			}
+		})
+	}
 }
 
 func TestProjectWebhookEventsJSON(t *testing.T) {
