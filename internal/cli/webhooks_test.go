@@ -56,7 +56,7 @@ func TestResolveWebhookEventInputsRejectsUnknownAndAmbiguous(t *testing.T) {
 	events := []webhookEvent{
 		{ID: 10, Key: "channel-user-joined", DisplayName: "Channel User Joined"},
 		{ID: 20, Key: "recording-started", DisplayName: "Recording Started"},
-		{ID: 30, Key: "", DisplayName: "Recording Started!"},
+		{ID: 30, Key: "recording-started", DisplayName: "Recording Started Duplicate"},
 	}
 
 	_, err := resolveWebhookEventIDs(events, []string{"not-real"}, "rtc")
@@ -73,6 +73,41 @@ func TestResolveWebhookEventInputsRejectsUnknownAndAmbiguous(t *testing.T) {
 	}
 	if !strings.Contains(strings.ToLower(err.Error()), "numeric event id") {
 		t.Fatalf("expected numeric event ID guidance, got %q", err.Error())
+	}
+}
+
+func TestWebhookResolveEventInputsIgnoresEmptyValues(t *testing.T) {
+	events := []webhookEvent{
+		{ID: 10, Key: "channel-user-joined", DisplayName: "Channel User Joined"},
+	}
+
+	got, err := resolveWebhookEventIDs(events, []string{"", "  ", "channel-user-joined"}, "rtc")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []int{10}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("resolved event IDs = %v, want %v", got, want)
+	}
+}
+
+func TestWebhookResolveEventInputsDoesNotUseGeneratedDisplayNameKey(t *testing.T) {
+	events := []webhookEvent{
+		{ID: 10, Key: "backend-event-key", DisplayName: "Display Name"},
+	}
+
+	_, err := resolveWebhookEventIDs(events, []string{"display-name"}, "rtc")
+	if !hasCLIErrorCode(err, "WEBHOOK_EVENT_UNKNOWN") {
+		t.Fatalf("expected WEBHOOK_EVENT_UNKNOWN, got %T %v", err, err)
+	}
+
+	got, err := resolveWebhookEventIDs(events, []string{"Display Name"}, "rtc")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []int{10}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("resolved event IDs = %v, want %v", got, want)
 	}
 }
 

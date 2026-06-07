@@ -107,10 +107,6 @@ func resolveWebhookEventIDs(events []webhookEvent, inputs []string, feature stri
 		if event.Key != "" {
 			byKey[event.Key] = append(byKey[event.Key], event)
 		}
-		generatedKey := webhookEventKey(event.DisplayName)
-		if generatedKey != "" {
-			byKey[generatedKey] = append(byKey[generatedKey], event)
-		}
 		byDisplayName[event.DisplayName] = event
 	}
 
@@ -118,7 +114,7 @@ func resolveWebhookEventIDs(events []webhookEvent, inputs []string, feature stri
 	for _, input := range inputs {
 		value := strings.TrimSpace(input)
 		if value == "" {
-			return nil, unknownWebhookEventError(input, feature)
+			continue
 		}
 		if id, err := strconv.Atoi(value); err == nil {
 			if _, ok := byID[id]; !ok {
