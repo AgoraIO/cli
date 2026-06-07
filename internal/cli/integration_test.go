@@ -910,6 +910,18 @@ func TestProjectWebhookEventsJSON(t *testing.T) {
 	}
 }
 
+func TestProjectWebhookEventsPrettyOmitsPayload(t *testing.T) {
+	configHome := t.TempDir()
+	api := newFakeCLIBFF()
+	defer api.server.Close()
+	persistSessionForIntegration(t, configHome)
+
+	result := runCLI(t, []string{"project", "webhook", "events", "--feature", "rtc"}, cliRunOptions{env: webhookTestEnv(configHome, api.baseURL)})
+	if result.exitCode != 0 || !strings.Contains(result.stdout, "channel-created") || !strings.Contains(result.stdout, "1001") || !strings.Contains(result.stdout, "Channel Created") || strings.Contains(result.stdout, `{"event":"created"}`) || strings.Contains(result.stdout, "payload") || strings.Contains(result.stdout, "eventType") {
+		t.Fatalf("unexpected webhook events pretty result: exit=%d stdout=%s stderr=%s", result.exitCode, result.stdout, result.stderr)
+	}
+}
+
 func TestProjectWebhookEventsInvalidFeatureJSON(t *testing.T) {
 	configHome := t.TempDir()
 	api := newFakeCLIBFF()
