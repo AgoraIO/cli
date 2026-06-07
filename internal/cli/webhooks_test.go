@@ -111,6 +111,21 @@ func TestWebhookResolveEventInputsDoesNotUseGeneratedDisplayNameKey(t *testing.T
 	}
 }
 
+func TestWebhookResolveEventInputsRejectsAmbiguousDisplayName(t *testing.T) {
+	events := []webhookEvent{
+		{ID: 10, Key: "first-key", DisplayName: "Recording Finished"},
+		{ID: 20, Key: "second-key", DisplayName: "Recording Finished"},
+	}
+
+	_, err := resolveWebhookEventIDs(events, []string{"Recording Finished"}, "rtc")
+	if !hasCLIErrorCode(err, "WEBHOOK_EVENT_AMBIGUOUS") {
+		t.Fatalf("expected WEBHOOK_EVENT_AMBIGUOUS, got %T %v", err, err)
+	}
+	if !strings.Contains(strings.ToLower(err.Error()), "numeric event id") {
+		t.Fatalf("expected numeric event ID guidance, got %q", err.Error())
+	}
+}
+
 func TestGenerateWebhookSecretMatchesBackendPattern(t *testing.T) {
 	secret, err := generateWebhookSecret()
 	if err != nil {

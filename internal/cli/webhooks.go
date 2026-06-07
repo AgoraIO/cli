@@ -101,13 +101,13 @@ func webhookIntSlicesEqual(a, b []int) bool {
 func resolveWebhookEventIDs(events []webhookEvent, inputs []string, feature string) ([]int, error) {
 	byID := make(map[int]webhookEvent, len(events))
 	byKey := make(map[string][]webhookEvent, len(events))
-	byDisplayName := make(map[string]webhookEvent, len(events))
+	byDisplayName := make(map[string][]webhookEvent, len(events))
 	for _, event := range events {
 		byID[event.ID] = event
 		if event.Key != "" {
 			byKey[event.Key] = append(byKey[event.Key], event)
 		}
-		byDisplayName[event.DisplayName] = event
+		byDisplayName[event.DisplayName] = append(byDisplayName[event.DisplayName], event)
 	}
 
 	selected := make(map[int]struct{}, len(inputs))
@@ -134,8 +134,15 @@ func resolveWebhookEventIDs(events []webhookEvent, inputs []string, feature stri
 			selected[ids[0]] = struct{}{}
 			continue
 		}
-		if event, ok := byDisplayName[value]; ok {
-			selected[event.ID] = struct{}{}
+		if matches := byDisplayName[value]; len(matches) > 0 {
+			ids := uniqueWebhookEventIDs(matches)
+			if len(ids) > 1 {
+				return nil, &cliError{
+					Message: fmt.Sprintf("webhook event %q is ambiguous. Use the numeric event ID instead.", input),
+					Code:    "WEBHOOK_EVENT_AMBIGUOUS",
+				}
+			}
+			selected[ids[0]] = struct{}{}
 			continue
 		}
 		return nil, unknownWebhookEventError(input, feature)
