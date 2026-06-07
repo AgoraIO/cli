@@ -179,11 +179,12 @@ func bestWebhookConfigCandidate(items []ncsConfig, matches func(ncsConfig) bool)
 }
 
 func (a *App) listWebhookEvents(feature string) ([]webhookEvent, error) {
-	if err := validateWebhookFeature(feature); err != nil {
+	feature, err := normalizeWebhookFeature(feature)
+	if err != nil {
 		return nil, err
 	}
 	var out ncsEventListResponse
-	err := a.apiRequest("GET", "/api/cli/v1/ncs-events/"+feature, nil, nil, &out)
+	err = a.apiRequest("GET", "/api/cli/v1/ncs-events/"+feature, nil, nil, &out)
 	if err != nil {
 		return nil, err
 	}
@@ -214,19 +215,24 @@ func (a *App) deleteWebhookConfig(projectID, feature string, configID int) error
 }
 
 func (a *App) projectWebhookEvents(feature string) (map[string]any, error) {
+	feature, err := normalizeWebhookFeature(feature)
+	if err != nil {
+		return nil, err
+	}
 	events, err := a.listWebhookEvents(feature)
 	if err != nil {
 		return nil, err
 	}
 	return map[string]any{
 		"action":  "webhook-events",
-		"feature": strings.TrimSpace(feature),
+		"feature": feature,
 		"items":   events,
 	}, nil
 }
 
 func (a *App) projectWebhookList(feature, project string, revealSecrets bool) (map[string]any, error) {
-	if err := validateWebhookFeature(feature); err != nil {
+	feature, err := normalizeWebhookFeature(feature)
+	if err != nil {
 		return nil, err
 	}
 	target, err := a.resolveProjectTarget(project)
@@ -237,7 +243,7 @@ func (a *App) projectWebhookList(feature, project string, revealSecrets bool) (m
 	if err != nil {
 		return nil, err
 	}
-	configs, err := a.listWebhookConfigs(target.project.ProjectID, strings.TrimSpace(feature))
+	configs, err := a.listWebhookConfigs(target.project.ProjectID, feature)
 	if err != nil {
 		return nil, err
 	}
@@ -249,7 +255,7 @@ func (a *App) projectWebhookList(feature, project string, revealSecrets bool) (m
 	return map[string]any{
 		"action":      "webhook-list",
 		"events":      events,
-		"feature":     strings.TrimSpace(feature),
+		"feature":     feature,
 		"items":       items,
 		"projectId":   target.project.ProjectID,
 		"projectName": target.project.Name,
@@ -260,7 +266,8 @@ func (a *App) projectWebhookShow(configID int, feature, project string, withSecr
 	if err := validateWebhookConfigID(configID); err != nil {
 		return nil, err
 	}
-	if err := validateWebhookFeature(feature); err != nil {
+	feature, err := normalizeWebhookFeature(feature)
+	if err != nil {
 		return nil, err
 	}
 	target, err := a.resolveProjectTarget(project)
@@ -271,7 +278,7 @@ func (a *App) projectWebhookShow(configID int, feature, project string, withSecr
 	if err != nil {
 		return nil, err
 	}
-	configs, err := a.listWebhookConfigs(target.project.ProjectID, strings.TrimSpace(feature))
+	configs, err := a.listWebhookConfigs(target.project.ProjectID, feature)
 	if err != nil {
 		return nil, err
 	}
@@ -280,11 +287,12 @@ func (a *App) projectWebhookShow(configID int, feature, project string, withSecr
 		return nil, err
 	}
 	cfg := redactWebhookConfigSecret(normalizeWebhookConfig(item, events), withSecret)
-	return webhookConfigResult("webhook-show", target, strings.TrimSpace(feature), cfg), nil
+	return webhookConfigResult("webhook-show", target, feature, cfg), nil
 }
 
 func (a *App) projectWebhookCreate(opts webhookCreateOptions) (map[string]any, error) {
-	if err := validateWebhookFeature(opts.Feature); err != nil {
+	feature, err := normalizeWebhookFeature(opts.Feature)
+	if err != nil {
 		return nil, err
 	}
 	url := strings.TrimSpace(opts.URL)
@@ -299,11 +307,11 @@ func (a *App) projectWebhookCreate(opts webhookCreateOptions) (map[string]any, e
 	if err != nil {
 		return nil, err
 	}
-	events, err := a.listWebhookEvents(opts.Feature)
+	events, err := a.listWebhookEvents(feature)
 	if err != nil {
 		return nil, err
 	}
-	eventIDs, err := resolveWebhookEventIDs(events, eventInputs, opts.Feature)
+	eventIDs, err := resolveWebhookEventIDs(events, eventInputs, feature)
 	if err != nil {
 		return nil, err
 	}
@@ -334,7 +342,7 @@ func (a *App) projectWebhookCreate(opts webhookCreateOptions) (map[string]any, e
 		"urlRegion":      urlRegion,
 		"useIpWhitelist": false,
 	}
-	resp, err := a.createWebhookConfig(target.project.ProjectID, strings.TrimSpace(opts.Feature), body)
+	resp, err := a.createWebhookConfig(target.project.ProjectID, feature, body)
 	if err != nil {
 		return nil, err
 	}
@@ -343,25 +351,26 @@ func (a *App) projectWebhookCreate(opts webhookCreateOptions) (map[string]any, e
 		return nil, err
 	}
 	cfg := normalizeWebhookConfig(item, events)
-	return webhookConfigResult("webhook-create", target, strings.TrimSpace(opts.Feature), cfg), nil
+	return webhookConfigResult("webhook-create", target, feature, cfg), nil
 }
 
 func (a *App) projectWebhookUpdate(opts webhookUpdateOptions) (map[string]any, error) {
 	if err := validateWebhookConfigID(opts.ConfigID); err != nil {
 		return nil, err
 	}
-	if err := validateWebhookFeature(opts.Feature); err != nil {
+	feature, err := normalizeWebhookFeature(opts.Feature)
+	if err != nil {
 		return nil, err
 	}
 	target, err := a.resolveProjectTarget(opts.Project)
 	if err != nil {
 		return nil, err
 	}
-	events, err := a.listWebhookEvents(opts.Feature)
+	events, err := a.listWebhookEvents(feature)
 	if err != nil {
 		return nil, err
 	}
-	configs, err := a.listWebhookConfigs(target.project.ProjectID, strings.TrimSpace(opts.Feature))
+	configs, err := a.listWebhookConfigs(target.project.ProjectID, feature)
 	if err != nil {
 		return nil, err
 	}
@@ -391,7 +400,7 @@ func (a *App) projectWebhookUpdate(opts webhookUpdateOptions) (map[string]any, e
 		if len(eventInputs) == 0 {
 			return nil, &cliError{Message: "at least one webhook event is required", Code: "WEBHOOK_EVENTS_REQUIRED"}
 		}
-		eventIDs, err = resolveWebhookEventIDs(events, eventInputs, opts.Feature)
+		eventIDs, err = resolveWebhookEventIDs(events, eventInputs, feature)
 		if err != nil {
 			return nil, err
 		}
@@ -404,7 +413,7 @@ func (a *App) projectWebhookUpdate(opts webhookUpdateOptions) (map[string]any, e
 		"urlRegion":      urlRegion,
 		"useIpWhitelist": existing.UseIPWhitelist,
 	}
-	resp, err := a.updateWebhookConfig(target.project.ProjectID, strings.TrimSpace(opts.Feature), opts.ConfigID, body)
+	resp, err := a.updateWebhookConfig(target.project.ProjectID, feature, opts.ConfigID, body)
 	if err != nil {
 		return nil, err
 	}
@@ -413,45 +422,51 @@ func (a *App) projectWebhookUpdate(opts webhookUpdateOptions) (map[string]any, e
 		return nil, err
 	}
 	cfg := redactWebhookConfigSecret(normalizeWebhookConfig(item, events), false)
-	return webhookConfigResult("webhook-update", target, strings.TrimSpace(opts.Feature), cfg), nil
+	return webhookConfigResult("webhook-update", target, feature, cfg), nil
 }
 
 func (a *App) projectWebhookDelete(configID int, feature, project string) (map[string]any, error) {
 	if err := validateWebhookConfigID(configID); err != nil {
 		return nil, err
 	}
-	if err := validateWebhookFeature(feature); err != nil {
+	feature, err := normalizeWebhookFeature(feature)
+	if err != nil {
 		return nil, err
 	}
 	target, err := a.resolveProjectTarget(project)
 	if err != nil {
 		return nil, err
 	}
-	if err := a.deleteWebhookConfig(target.project.ProjectID, strings.TrimSpace(feature), configID); err != nil {
+	if err := a.deleteWebhookConfig(target.project.ProjectID, feature, configID); err != nil {
 		return nil, err
 	}
 	return map[string]any{
 		"action":      "webhook-delete",
 		"configId":    configID,
 		"deleted":     true,
-		"feature":     strings.TrimSpace(feature),
+		"feature":     feature,
 		"projectId":   target.project.ProjectID,
 		"projectName": target.project.Name,
 	}, nil
 }
 
 func validateWebhookFeature(feature string) error {
+	_, err := normalizeWebhookFeature(feature)
+	return err
+}
+
+func normalizeWebhookFeature(feature string) (string, error) {
 	feature = strings.TrimSpace(feature)
 	if feature == "" {
-		return &cliError{Message: "webhook feature is required", Code: "WEBHOOK_FEATURE_REQUIRED"}
+		return "", &cliError{Message: "webhook feature is required", Code: "WEBHOOK_FEATURE_REQUIRED"}
 	}
 	if !isKnownFeature(feature) {
-		return &cliError{
+		return "", &cliError{
 			Message: fmt.Sprintf("invalid webhook feature %q. Choose one of: %s.", feature, featureListString()),
 			Code:    "WEBHOOK_FEATURE_INVALID",
 		}
 	}
-	return nil
+	return feature, nil
 }
 
 func validateWebhookConfigID(configID int) error {

@@ -910,6 +910,18 @@ func TestProjectWebhookEventsJSON(t *testing.T) {
 	}
 }
 
+func TestProjectWebhookEventsTrimsFeatureBeforeAPIRequest(t *testing.T) {
+	configHome := t.TempDir()
+	api := newFakeCLIBFF()
+	defer api.server.Close()
+	persistSessionForIntegration(t, configHome)
+
+	result := runCLI(t, []string{"project", "webhook", "events", "--feature", " rtc ", "--json"}, cliRunOptions{env: webhookTestEnv(configHome, api.baseURL)})
+	if result.exitCode != 0 || !strings.Contains(result.stdout, `"feature":"rtc"`) || !strings.Contains(result.stdout, `"key":"channel-created"`) {
+		t.Fatalf("unexpected webhook events result for padded feature: exit=%d stdout=%s stderr=%s", result.exitCode, result.stdout, result.stderr)
+	}
+}
+
 func TestProjectWebhookEventsPrettyOmitsPayload(t *testing.T) {
 	configHome := t.TempDir()
 	api := newFakeCLIBFF()
