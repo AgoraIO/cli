@@ -10,7 +10,7 @@ Relevant backend endpoints from the Apifox NCS docs:
 
 | CLI need | Backend endpoint |
 | --- | --- |
-| List webhook events | `GET /api/cli/v1/ncs-events/?productKey={feature}` |
+| List webhook events | `GET /api/cli/v1/ncs-events/{feature}` |
 | List webhook configs | `GET /api/cli/v1/projects/{projectId}/ncs-configs/{feature}` |
 | Create webhook config | `POST /api/cli/v1/projects/{projectId}/ncs-configs/{feature}` |
 | Update webhook config | `PUT /api/cli/v1/projects/{projectId}/ncs-configs/{feature}/{configId}` |
@@ -21,7 +21,7 @@ Backend `productKey` is an internal implementation detail. For v1, supported pub
 ## Goals
 
 - Add `agora project webhook` commands for event discovery, list, show, create, update, and delete.
-- Let developers select webhook events by readable event names instead of requiring numeric event IDs.
+- Let developers select webhook events by readable CLI event keys instead of requiring numeric event IDs.
 - Reuse existing project resolution and feature validation.
 - Generate a secure webhook secret by default while allowing explicit override.
 - Keep sensitive secrets redacted except when intentionally revealed.
@@ -42,12 +42,12 @@ Add the command group under `project`:
 agora project webhook events <feature>
 agora project webhook list <feature> [project]
 agora project webhook show <config-id> --feature <feature> [--project <project>] [--with-secret]
-agora project webhook create --feature <feature> --url <url> --event <name-or-id>... [--secret <value>] [--delivery-region <region>] [--project <project>]
-agora project webhook update <config-id> --feature <feature> [--url <url>] [--event <name-or-id>...] [--secret <value>] [--delivery-region <region>] [--enabled | --disabled] [--project <project>]
+agora project webhook create --feature <feature> --url <url> --event <key-or-id>... [--secret <value>] [--delivery-region <region>] [--project <project>]
+agora project webhook update <config-id> --feature <feature> [--url <url>] [--event <key-or-id>...] [--delivery-region <region>] [--enabled | --disabled] [--project <project>]
 agora project webhook delete <config-id> --feature <feature> [--project <project>] [--yes]
 ```
 
-`events <feature>` is a discovery command. It fetches available webhook events for the feature and displays event names, IDs, and descriptions so developers do not need to guess backend event IDs.
+`events <feature>` is a discovery command. It fetches available webhook events for the feature and displays CLI event keys, backend event IDs, backend event types, display names, Chinese display names, and payload examples so developers do not need to guess backend event IDs.
 
 Example flow:
 
@@ -56,17 +56,20 @@ agora project webhook events rtc
 agora project webhook create \
   --feature rtc \
   --url https://example.com/webhook \
-  --event channel.created \
-  --event channel.destroyed
+  --event channel-created \
+  --event channel-destroyed
 ```
 
 Event input rules:
 
-- `--event` accepts event names as the preferred path.
+- `--event` accepts CLI event keys as the preferred path.
 - Numeric event IDs are accepted as an escape hatch.
+- Exact backend `displayName` values are accepted for compatibility, including values with spaces when shell-quoted.
 - `create` requires at least one event.
 - `update` only replaces event selections when at least one `--event` is provided.
-- Unknown event names return a helpful error suggesting `agora project webhook events <feature>`.
+- Unknown event keys return a helpful error suggesting `agora project webhook events <feature>`.
+
+The CLI event key is generated from backend `displayName` by lowercasing it, replacing non-alphanumeric runs with `-`, and trimming leading/trailing separators. For example, `Channel Created` becomes `channel-created`. If two events generate the same key, the key is ambiguous and the user must pass the numeric event ID.
 
 ## Delivery Region
 
@@ -90,7 +93,7 @@ Pretty output labels this field `Delivery Region`. JSON output uses `urlRegion` 
 
 ## Secret Handling
 
-`create` generates a secure random secret when `--secret` is omitted. The generated value uses the prefix `whsec_` followed by 32 random bytes encoded with base64url without padding. `--secret <value>` overrides the generated value.
+Backend webhook secrets must match `^[A-Za-z0-9_-]{7,32}$`. `create` generates a secure random secret when `--secret` is omitted. The generated value is 32 base64url characters without padding, produced from 24 random bytes. `--secret <value>` overrides the generated value and is validated against the backend pattern before the request is sent.
 
 Secret output rules:
 
@@ -98,7 +101,7 @@ Secret output rules:
 - `list` redacts secrets by default.
 - `show` redacts secrets by default.
 - `show --with-secret` reveals the secret if the backend returns it.
-- `update --secret <value>` reports `secretUpdated: true` and does not echo the value by default.
+- Webhook secret rotation is not supported by the update endpoint. Users who need a new secret must create a replacement webhook and delete the old one.
 
 Empty webhook secrets are not supported in v1.
 
@@ -110,9 +113,12 @@ Normalized CLI event shape:
 
 ```go
 type webhookEvent struct {
-    ID          int    `json:"id"`
-    Name        string `json:"name"`
-    Description string `json:"description,omitempty"`
+    ID            int    `json:"id"`
+    Key           string `json:"key"`
+    DisplayName   string `json:"displayName"`
+    DisplayNameCn string `json:"displayNameCn,omitempty"`
+    EventType     int    `json:"eventType"`
+    Payload       string `json:"payload,omitempty"`
 }
 ```
 
@@ -136,7 +142,38 @@ The backend response may include additional fields such as `appId`, `productId`,
 
 `retry` is read-only in v1. The CLI includes `retry` in output when the backend returns it, but create and update requests do not send a `retry` field and do not expose a retry flag.
 
-The event API adapter normalizes backend events into `id`, `name`, and optional `description`. The CLI contract is these normalized names, not the raw backend field names.
+The event API returns an `items` array. Each backend event has `eventId`, `displayName`, `displayNameCn`, `eventType`, and `payload`. The CLI uses `eventId` for config `eventIds`; `eventType` is retained only as event metadata for now because the config create/update schema labels `eventIds` as `event.id`. The implementation must not send `eventType` in config bodies.
+
+Create requests send all backend-required fields:
+
+```json
+{
+  "enabled": true,
+  "eventIds": [1],
+  "secret": "generated-or-user-provided",
+  "url": "https://example.com/webhook",
+  "urlRegion": "na",
+  "useIpWhitelist": false
+}
+```
+
+Create defaults are `enabled: true` and `useIpWhitelist: false`.
+
+Update requests also send every backend-required PUT field: `enabled`, `eventIds`, `url`, `urlRegion`, and `useIpWhitelist`. Because users may update only one flag, update must do read-modify-write:
+
+1. List existing configs for the feature.
+2. Select the config with the requested `configId`.
+3. Merge provided flags onto the existing config.
+4. Send the complete PUT body.
+
+The update endpoint has no `secret` field. `update` must not expose `--secret`.
+
+List, create, and update responses are `NcsConfigListResponse` objects with an `items` array, not single config objects. The adapter extracts the relevant config:
+
+- `list` returns all normalized items.
+- `show` lists configs and selects the requested `configId`.
+- `update` selects the requested `configId` from the PUT response.
+- `create` selects the item matching the requested URL, delivery region, event IDs, and secret. If multiple items match, choose the newest item by `updatedAt` when present, otherwise the highest `configId`.
 
 ## JSON Contract
 
@@ -165,13 +202,16 @@ Example create data:
   "events": [
     {
       "id": 1001,
-      "name": "channel.created",
-      "description": "Fired when an RTC channel is created"
+      "key": "channel-created",
+      "displayName": "Channel Created",
+      "displayNameCn": "频道创建",
+      "eventType": 1,
+      "payload": "{...}"
     }
   ],
   "retry": true,
   "useIpWhitelist": false,
-  "secret": "whsec_example"
+  "secret": "pUkA4FzTdI8iGtLA6m3o2qR9x_Nb7sYc"
 }
 ```
 
@@ -195,6 +235,7 @@ Use existing envelope behavior and classify errors where the CLI can provide sta
 | Unknown event name | `WEBHOOK_EVENT_UNKNOWN` |
 | Duplicate or ambiguous event name | `WEBHOOK_EVENT_AMBIGUOUS` |
 | Invalid delivery region | `WEBHOOK_DELIVERY_REGION_INVALID` |
+| Invalid secret format | `WEBHOOK_SECRET_INVALID` |
 | Missing config ID | `WEBHOOK_CONFIG_ID_REQUIRED` |
 | Config not found when classifiable | `WEBHOOK_CONFIG_NOT_FOUND` |
 
@@ -218,11 +259,11 @@ Webhook
   Feature          rtc
   Config ID        42
   URL              https://example.com/webhook
-  Events           channel.created, channel.destroyed
+  Events           channel-created, channel-destroyed
   Delivery Region  North America (na)
   Enabled          true
   Retry            true
-  Secret           whsec_...
+  Secret           pUkA4FzTdI8iGtLA6m3o2qR9x_Nb7sYc
 ```
 
 For create, print a short note after the block:
@@ -244,7 +285,7 @@ Add MCP tools for agent workflows because existing project feature/env/init comm
 - `agora.project.webhook.update`
 - `agora.project.webhook.delete`
 
-MCP inputs use feature names, event names, config IDs, URL, delivery region, and project. Secrets follow the same redaction and explicit reveal rules as CLI JSON output.
+MCP inputs use feature names, event keys or event IDs, config IDs, URL, delivery region, and project. Secrets follow the same redaction and explicit reveal rules as CLI JSON output.
 
 ## Implementation Plan Outline
 
@@ -252,6 +293,8 @@ MCP inputs use feature names, event names, config IDs, URL, delivery region, and
    - supported delivery regions
    - control-plane to delivery-region default mapping
    - secure secret generation
+   - secret pattern validation
+   - event key generation
    - event name/ID resolution
 2. Add typed API helpers in `internal/cli/webhooks.go`.
 3. Register `project webhook` commands in `commands.go`.
@@ -265,14 +308,18 @@ MCP inputs use feature names, event names, config IDs, URL, delivery region, and
 
 Integration tests should cover:
 
-- `webhook events rtc --json` returns named events.
-- `webhook create` with event names resolves IDs and generates a secret.
+- `webhook events rtc --json` returns event keys plus backend event metadata.
+- `webhook create` with event keys resolves IDs and generates a backend-valid secret.
 - `webhook create --secret` forwards explicit secret.
+- `webhook create --secret` rejects values that do not match `^[A-Za-z0-9_-]{7,32}$`.
 - `webhook create` defaults delivery region to `na` for `global` project context.
 - `webhook create` defaults delivery region to `cn` for `cn` project context.
+- `webhook create` sends `enabled: true` and `useIpWhitelist: false`.
 - `webhook list` redacts secret by default.
 - `webhook show --with-secret` reveals secret when backend returns it.
-- `webhook update` updates URL, events, delivery region, enabled state, and secret.
+- `webhook update` performs list-merge-put and preserves omitted required fields.
+- `webhook update` updates URL, events, delivery region, and enabled state.
+- `webhook update --secret` is rejected as an unknown flag.
 - `webhook delete` requires `--yes` in JSON/non-TTY runs.
 - Auth errors continue to return exit code `3` with `AUTH_UNAUTHENTICATED`.
 
@@ -280,6 +327,7 @@ Unit tests should cover:
 
 - delivery-region validation and defaulting
 - feature validation reuse
-- event-name resolution, unknown event suggestions, and ambiguous names
-- generated secret format and entropy length
+- event key generation, event ID resolution, unknown event suggestions, and ambiguous keys
+- eventId versus eventType mapping for config `eventIds`
+- generated secret format, backend pattern compliance, and entropy length
 - redaction behavior
