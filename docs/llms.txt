@@ -49,6 +49,7 @@ Check project health: agora project doctor --json
 - **MCP transport**: `agora mcp serve` uses stdio JSON-RPC.
 - **Auth prerequisite**: `agora.auth.login` is intentionally not exposed over MCP. Run `agora login` on the host first.
 - **Progress over MCP**: Long-running tools emit `notifications/progress` when the MCP `tools/call` params include `_meta.progressToken`.
+- **Project webhooks**: MCP exposes `agora.project.webhook.{events,list,show,create,update,delete}` for feature-scoped webhook automation; delete requires `confirm: true`.
 - **When shelling out**: run commands like `agora init ... --json` and parse stdout line-by-line (progress events + final envelope).
 - **Capability discovery**: prefer `agora --help --all --json` or `agora introspect --json`.
 - **Environment catalog**: use `agora env-help --json` to enumerate all supported `AGORA_*` controls.
@@ -85,6 +86,14 @@ agora init my-app --template go --project <project-id> --json
 agora project doctor
 agora project doctor --json
 agora project doctor --quiet
+```
+
+### Project Webhooks
+```
+agora project webhook events --feature rtc --json
+agora project webhook create --project <project-id> --feature rtc --url https://example.com/webhook --event channel-created --json
+agora project webhook list --project <project-id> --feature rtc --json
+agora project webhook delete <config-id> --project <project-id> --feature rtc --yes --json
 ```
 
 ### Configuration Management

@@ -258,6 +258,75 @@ Set the current project context
 
 _No local flags. Inherited global flags still apply (see [Global Flags](#global-flags))._
 
+### `agora project webhook`
+
+Manage project webhook configurations
+
+_No local flags. Inherited global flags still apply (see [Global Flags](#global-flags))._
+
+### `agora project webhook create`
+
+Create a webhook configuration
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--delivery-region` | `string` | — | webhook delivery region: cn, sea, na, or eu |
+| `--event` | `stringArray` | `[]` | webhook event key, display name, or numeric ID; repeat to subscribe to multiple events |
+| `--feature` | `string` | — | project feature for the webhook configuration |
+| `--project` | `string` | — | project ID or exact project name; defaults to the current project context |
+| `--secret` | `string` | — | webhook signing secret; generated when omitted |
+| `--url` | `string` | — | webhook endpoint URL |
+
+### `agora project webhook delete`
+
+Delete a webhook configuration
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--feature` | `string` | — | project feature for the webhook configuration |
+| `--project` | `string` | — | project ID or exact project name; defaults to the current project context |
+
+### `agora project webhook events`
+
+List available webhook events for a feature
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--feature` | `string` | — | project feature whose webhook events should be listed |
+
+### `agora project webhook list`
+
+List webhook configurations for a project feature
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--feature` | `string` | — | project feature whose webhook configurations should be listed |
+| `--project` | `string` | — | project ID or exact project name; defaults to the current project context |
+
+### `agora project webhook show`
+
+Show one webhook configuration
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--feature` | `string` | — | project feature for the webhook configuration |
+| `--project` | `string` | — | project ID or exact project name; defaults to the current project context |
+| `--with-secret` | `bool` | — | include the webhook secret in the response |
+
+### `agora project webhook update`
+
+Update a webhook configuration
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--delivery-region` | `string` | — | new webhook delivery region: cn, sea, na, or eu |
+| `--disabled` | `bool` | — | disable the webhook configuration |
+| `--enabled` | `bool` | — | enable the webhook configuration |
+| `--event` | `stringArray` | `[]` | replacement webhook event key, display name, or numeric ID; repeat to subscribe to multiple events |
+| `--feature` | `string` | — | project feature for the webhook configuration |
+| `--project` | `string` | — | project ID or exact project name; defaults to the current project context |
+| `--url` | `string` | — | new webhook endpoint URL |
+
 ### `agora quickstart`
 
 Clone official standalone Agora quickstarts
