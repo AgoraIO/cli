@@ -753,11 +753,13 @@ When authenticated, this command returns a success envelope with these required 
 - `authenticated`
 - `status`
   `authenticated`.
+- `region`
 - `expiresAt`
 - `scope`
 
 Safe branch fields:
 - `authenticated`
+- `region`
 - `status`
 - `expiresAt`
 
@@ -801,10 +803,12 @@ Required `data` fields:
   Always `login`.
 - `status`
   Currently `authenticated`.
+- `region`
 - `scope`
 - `expiresAt`
 
 Safe branch fields:
+- `region`
 - `status`
 - `expiresAt`
 

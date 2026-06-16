@@ -97,7 +97,7 @@ func (a *App) login(noBrowser bool, region string, progress progressEmitter) (ma
 	if err := saveContext(a.env, ctx); err != nil {
 		return nil, err
 	}
-	return map[string]any{"action": "login", "expiresAt": token.ExpiresAt, "scope": token.Scope, "status": "authenticated"}, nil
+	return map[string]any{"action": "login", "expiresAt": token.ExpiresAt, "region": nextRegion, "scope": token.Scope, "status": "authenticated"}, nil
 }
 
 func (a *App) logout() (map[string]any, error) {
@@ -123,7 +123,28 @@ func (a *App) authStatus() (map[string]any, error) {
 	if s == nil {
 		return map[string]any{"action": "status", "authenticated": false, "expiresAt": nil, "scope": nil, "status": "unauthenticated"}, nil
 	}
-	return map[string]any{"action": "status", "authenticated": true, "expiresAt": s.ExpiresAt, "scope": s.Scope, "status": "authenticated"}, nil
+	return map[string]any{
+		"action":        "status",
+		"authenticated": true,
+		"expiresAt":     s.ExpiresAt,
+		"region":        a.authRegion(),
+		"scope":         s.Scope,
+		"status":        "authenticated",
+	}, nil
+}
+
+func (a *App) authRegion() string {
+	ctx, err := loadContext(a.env)
+	if err != nil {
+		return "global"
+	}
+	if strings.TrimSpace(ctx.CurrentRegion) != "" {
+		return ctx.CurrentRegion
+	}
+	if strings.TrimSpace(ctx.PreferredRegion) != "" {
+		return ctx.PreferredRegion
+	}
+	return "global"
 }
 
 type oauthConfig struct {

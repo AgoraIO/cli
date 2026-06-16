@@ -36,13 +36,13 @@ func renderResult(cmd *cobra.Command, command string, data any) error {
 	switch command {
 	case "login":
 		m := data.(map[string]any)
-		printBlock(out, "Login", [][2]string{{"Status", asString(m["status"])}, {"Scope", asString(m["scope"])}, {"Expires At", asString(m["expiresAt"])}})
+		printBlock(out, "Login", [][2]string{{"Status", asString(m["status"])}, {"Region", asString(m["region"])}, {"Scope", asString(m["scope"])}, {"Expires At", asString(m["expiresAt"])}})
 	case "logout":
 		m := data.(map[string]any)
 		printBlock(out, "Logout", [][2]string{{"Status", asString(m["status"])}, {"Session Cleared", asString(m["clearedSession"])}})
 	case "auth status":
 		m := data.(map[string]any)
-		printBlock(out, "Auth", [][2]string{{"Status", asString(m["status"])}, {"Authenticated", asString(m["authenticated"])}, {"Scope", asString(m["scope"])}, {"Expires At", asString(m["expiresAt"])}})
+		printBlock(out, "Auth", [][2]string{{"Status", asString(m["status"])}, {"Authenticated", asString(m["authenticated"])}, {"Region", asString(m["region"])}, {"Scope", asString(m["scope"])}, {"Expires At", asString(m["expiresAt"])}})
 	case "project create":
 		m := data.(map[string]any)
 		features := "-"
