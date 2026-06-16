@@ -7,6 +7,80 @@ import (
 	"testing"
 )
 
+func TestOAuthConfigForRegion(t *testing.T) {
+	app := &App{
+		cfg: defaultConfig(),
+		env: map[string]string{
+			"AGORA_OAUTH_CLIENT_ID": "test-client",
+			"AGORA_OAUTH_SCOPE":     "basic_info,console",
+		},
+	}
+
+	t.Run("cn region uses shengwang sso by default", func(t *testing.T) {
+		cfg := app.oauthConfigForRegion("cn")
+		if cfg.AuthorizeURL != cnOAuthBaseURL+"/api/v0/oauth/authorize" {
+			t.Fatalf("unexpected authorize url: %s", cfg.AuthorizeURL)
+		}
+		if cfg.TokenURL != cnOAuthBaseURL+"/api/v0/oauth/token" {
+			t.Fatalf("unexpected token url: %s", cfg.TokenURL)
+		}
+	})
+
+	t.Run("global uses default agora sso", func(t *testing.T) {
+		cfg := app.oauthConfigForRegion("global")
+		if cfg.AuthorizeURL != globalOAuthBaseURL+"/api/v0/oauth/authorize" {
+			t.Fatalf("unexpected authorize url: %s", cfg.AuthorizeURL)
+		}
+		if cfg.TokenURL != globalOAuthBaseURL+"/api/v0/oauth/token" {
+			t.Fatalf("unexpected token url: %s", cfg.TokenURL)
+		}
+	})
+
+	t.Run("env override wins over region default", func(t *testing.T) {
+		app.env["AGORA_OAUTH_BASE_URL"] = "https://auth.example.com"
+		cfg := app.oauthConfigForRegion("cn")
+		if cfg.AuthorizeURL != "https://auth.example.com/api/v0/oauth/authorize" {
+			t.Fatalf("unexpected authorize url: %s", cfg.AuthorizeURL)
+		}
+		if cfg.TokenURL != "https://auth.example.com/api/v0/oauth/token" {
+			t.Fatalf("unexpected token url: %s", cfg.TokenURL)
+		}
+	})
+}
+
+func TestAPIBaseURLForRegion(t *testing.T) {
+	app := &App{
+		cfg: defaultConfig(),
+	}
+
+	t.Run("cn region uses cn cli api by default", func(t *testing.T) {
+		if got := app.apiBaseURLForRegion("cn"); got != cnAPIBaseURL {
+			t.Fatalf("unexpected api base url: %s", got)
+		}
+	})
+
+	t.Run("global uses default cli api", func(t *testing.T) {
+		if got := app.apiBaseURLForRegion("global"); got != globalAPIBaseURL {
+			t.Fatalf("unexpected api base url: %s", got)
+		}
+	})
+
+	t.Run("env override wins over region default", func(t *testing.T) {
+		app.osEnv = map[string]string{"AGORA_API_BASE_URL": "https://api.example.com"}
+		if got := app.apiBaseURLForRegion("cn"); got != "https://api.example.com" {
+			t.Fatalf("unexpected api base url: %s", got)
+		}
+		app.osEnv = nil
+	})
+
+	t.Run("config override wins over region default", func(t *testing.T) {
+		app.cfg.APIBaseURL = "https://staging-api.example.com"
+		if got := app.apiBaseURLForRegion("cn"); got != "https://staging-api.example.com" {
+			t.Fatalf("unexpected api base url: %s", got)
+		}
+	})
+}
+
 func TestReadConfirmYesDefaultAcceptsEnterAndRepromptsInvalidInput(t *testing.T) {
 	t.Run("enter defaults to yes", func(t *testing.T) {
 		var out bytes.Buffer

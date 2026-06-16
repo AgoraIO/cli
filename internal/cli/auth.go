@@ -21,8 +21,15 @@ import (
 	"time"
 )
 
+const (
+	globalAPIBaseURL   = "https://agora-cli.agora.io"
+	cnAPIBaseURL       = "https://cli-cn.agora.io"
+	globalOAuthBaseURL = "https://sso2.agora.io"
+	cnOAuthBaseURL     = "https://sso.shengwang.cn"
+)
+
 func (a *App) login(noBrowser bool, region string, progress progressEmitter) (map[string]any, error) {
-	config := a.oauthConfig()
+	config := a.oauthConfigForRegion(region)
 	pair, err := generatePKCE()
 	if err != nil {
 		return nil, err
@@ -126,14 +133,84 @@ type oauthConfig struct {
 	Scope        string
 }
 
-func (a *App) oauthConfig() oauthConfig {
-	base := strings.TrimRight(a.env["AGORA_OAUTH_BASE_URL"], "/")
+func (a *App) oauthConfigForRegion(region string) oauthConfig {
+	base := strings.TrimRight(a.oauthBaseURLForRegion(region), "/")
 	return oauthConfig{
 		AuthorizeURL: base + "/api/v0/oauth/authorize",
 		TokenURL:     base + "/api/v0/oauth/token",
 		ClientID:     a.env["AGORA_OAUTH_CLIENT_ID"],
 		Scope:        a.env["AGORA_OAUTH_SCOPE"],
 	}
+}
+
+// oauthBaseURLForRegion resolves the OAuth / SSO base URL for the requested
+// region. Resolution order is:
+//
+//  1. an explicit process-env override (AGORA_OAUTH_BASE_URL),
+//  2. a persisted non-default config override,
+//  3. the built-in region default (cn vs global).
+//
+// As with apiBaseURLForRegion, the explicit-env check must look at the
+// original process environment rather than a.env. applyConfigToEnv injects
+// default values into a.env after startup, and treating those injected
+// defaults as explicit overrides would prevent region-aware fallback from
+// selecting the correct cn/global SSO host.
+func (a *App) oauthBaseURLForRegion(region string) string {
+	if override := strings.TrimSpace(a.explicitEnvValue("AGORA_OAUTH_BASE_URL")); override != "" {
+		return override
+	}
+	if strings.TrimSpace(a.cfg.OAuthBaseURL) != "" && a.cfg.OAuthBaseURL != globalOAuthBaseURL {
+		return a.cfg.OAuthBaseURL
+	}
+	if region == "cn" {
+		return cnOAuthBaseURL
+	}
+	return globalOAuthBaseURL
+}
+
+// apiBaseURLForRegion resolves the control-plane API base URL for the
+// requested region. Resolution order is:
+//
+//  1. an explicit process-env override (AGORA_API_BASE_URL),
+//  2. a persisted non-default config override,
+//  3. the built-in region default (cn vs global).
+//
+// The explicit-env check intentionally uses explicitEnvValue rather than
+// a.env because applyConfigToEnv injects defaults into a.env after startup.
+// Reading only a.env would make those injected global defaults look like
+// user-pinned overrides, which would break region-aware host switching.
+func (a *App) apiBaseURLForRegion(region string) string {
+	if override := strings.TrimSpace(a.explicitEnvValue("AGORA_API_BASE_URL")); override != "" {
+		return override
+	}
+	if strings.TrimSpace(a.cfg.APIBaseURL) != "" && a.cfg.APIBaseURL != globalAPIBaseURL {
+		return a.cfg.APIBaseURL
+	}
+	if region == "cn" {
+		return cnAPIBaseURL
+	}
+	return globalAPIBaseURL
+}
+
+// explicitEnvValue returns the value the user explicitly supplied in the
+// process environment before the CLI applied config-derived defaults.
+// Prefer this over a.env when the code needs to distinguish:
+//
+//  1. a real user override such as `AGORA_API_BASE_URL=... agora ...`, from
+//  2. a default value injected later by applyConfigToEnv().
+//
+// That distinction matters for region-aware endpoint selection: reading from
+// a.env alone would treat injected global defaults as if the user had pinned
+// them intentionally, preventing the cn/global fallback logic from switching
+// hosts.
+func (a *App) explicitEnvValue(key string) string {
+	if a.osEnv != nil {
+		return a.osEnv[key]
+	}
+	if a.env != nil {
+		return a.env[key]
+	}
+	return ""
 }
 
 type pkcePair struct {
@@ -308,7 +385,7 @@ func (a *App) exchangeAuthorizationCode(tokenURL, clientID, code, codeVerifier, 
 }
 
 func (a *App) refreshAccessToken(refreshToken string) (session, error) {
-	cfg := a.oauthConfig()
+	cfg := a.oauthConfigForRegion(a.authRegionFromContext())
 	values := url.Values{
 		"client_id":     []string{cfg.ClientID},
 		"grant_type":    []string{"refresh_token"},
@@ -471,6 +548,10 @@ func readConfirmYesDefault(in io.Reader, out io.Writer, prompt string) (bool, er
 }
 
 func (a *App) loginPromptRegion() string {
+	return a.authRegionFromContext()
+}
+
+func (a *App) authRegionFromContext() string {
 	ctx, err := loadContext(a.env)
 	if err != nil {
 		return ""
@@ -550,7 +631,7 @@ func (a *App) apiRequest(method, pathname string, query map[string]string, body 
 		return err
 	}
 	makeReq := func(token *session) (*http.Request, error) {
-		base := strings.TrimRight(a.env["AGORA_API_BASE_URL"], "/")
+		base := strings.TrimRight(a.apiBaseURLForRegion(a.authRegionFromContext()), "/")
 		u, err := url.Parse(base + pathname)
 		if err != nil {
 			return nil, err
