@@ -162,20 +162,26 @@ func TestQuickstartRepoURLOverride(t *testing.T) {
 		RepoURL:   "https://default.example/repo",
 		RepoURLCN: "https://cn.example/repo",
 	}
-	app := &App{env: map[string]string{}}
+	app := &App{env: map[string]string{"XDG_CONFIG_HOME": t.TempDir()}}
 
 	url, override, err := app.quickstartRepoURL(tmpl)
 	if err != nil || override != "" || url != tmpl.RepoURL {
 		t.Fatalf("default path: url=%q override=%q err=%v", url, override, err)
 	}
 
-	app.env = map[string]string{"AGORA_QUICKSTART_NEXTJS_REPO_URL": "https://fork.example/repo"}
+	app.env = map[string]string{
+		"AGORA_QUICKSTART_NEXTJS_REPO_URL": "https://fork.example/repo",
+		"XDG_CONFIG_HOME":                  t.TempDir(),
+	}
 	url, override, err = app.quickstartRepoURL(tmpl)
 	if err != nil || override != "AGORA_QUICKSTART_NEXTJS_REPO_URL" || url != "https://fork.example/repo" {
 		t.Fatalf("override path: url=%q override=%q err=%v", url, override, err)
 	}
 
-	app.env = map[string]string{"AGORA_QUICKSTART_NEXTJS_REPO_URL": "-fexploit"}
+	app.env = map[string]string{
+		"AGORA_QUICKSTART_NEXTJS_REPO_URL": "-fexploit",
+		"XDG_CONFIG_HOME":                  t.TempDir(),
+	}
 	if _, _, err := app.quickstartRepoURL(tmpl); err == nil {
 		t.Fatal("expected error for invalid override")
 	} else {

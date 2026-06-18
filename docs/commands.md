@@ -203,6 +203,7 @@ Write project environment variables to a dotenv file
 |------|------|---------|-------------|
 | `--append` | `bool` | — | append Agora App ID and App Certificate values when no existing values are present |
 | `--overwrite` | `bool` | — | replace the target file with only Agora App ID and App Certificate values |
+| `--project` | `string` | — | project ID or exact project name; defaults to the current project context |
 | `--template` | `string` | — | credential key layout: nextjs or standard; if omitted, detect Next.js from the workspace |
 
 ### `agora project feature`
