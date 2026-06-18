@@ -301,7 +301,7 @@ func (a *App) buildOpenCommand() *cobra.Command {
   agora open --target docs --browser
 `),
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			url, err := resolveOpenTarget(target, a.osEnv)
+			url, err := resolveOpenTarget(target, a.authRegion(), a.osEnv)
 			if err != nil {
 				return err
 			}
