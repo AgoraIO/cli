@@ -108,7 +108,7 @@ func loadContext(env map[string]string) (projectContext, error) {
 	if err != nil {
 		return projectContext{}, err
 	}
-	ctx := projectContext{CurrentRegion: "global"}
+	ctx := projectContext{CurrentRegion: regionGlobal}
 	data, err := os.ReadFile(path)
 	if errors.Is(err, os.ErrNotExist) {
 		return ctx, nil
@@ -119,9 +119,7 @@ func loadContext(env map[string]string) (projectContext, error) {
 	if err := json.Unmarshal(data, &ctx); err != nil {
 		return projectContext{}, err
 	}
-	if ctx.CurrentRegion == "" {
-		ctx.CurrentRegion = "global"
-	}
+	ctx.CurrentRegion = currentRegionFromContext(ctx)
 	return ctx, nil
 }
 

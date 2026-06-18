@@ -324,10 +324,7 @@ func (a *App) resolveInitProject(ctx projectContext, item projectSummary) (proje
 	if err != nil {
 		return projectTarget{}, err
 	}
-	region := ctx.CurrentRegion
-	if region == "" {
-		region = "global"
-	}
+	region := currentRegionFromContext(ctx)
 	if item.Region != nil && *item.Region != "" {
 		region = *item.Region
 	}

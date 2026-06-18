@@ -81,38 +81,6 @@ func TestAPIBaseURLForRegion(t *testing.T) {
 	})
 }
 
-func TestNormalizeLoginRegion(t *testing.T) {
-	cases := []struct {
-		name    string
-		input   string
-		want    string
-		wantErr bool
-	}{
-		{name: "empty defaults to global", input: "", want: "global"},
-		{name: "global stays global", input: "global", want: "global"},
-		{name: "cn stays cn", input: "cn", want: "cn"},
-		{name: "trim and lowercase", input: " CN ", want: "cn"},
-		{name: "invalid rejected", input: "test", wantErr: true},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			got, err := normalizeLoginRegion(tc.input)
-			if tc.wantErr {
-				if err == nil {
-					t.Fatalf("expected error for %q", tc.input)
-				}
-				return
-			}
-			if err != nil {
-				t.Fatalf("unexpected error for %q: %v", tc.input, err)
-			}
-			if got != tc.want {
-				t.Fatalf("normalizeLoginRegion(%q) = %q, want %q", tc.input, got, tc.want)
-			}
-		})
-	}
-}
-
 func TestReadConfirmYesDefaultAcceptsEnterAndRepromptsInvalidInput(t *testing.T) {
 	t.Run("enter defaults to yes", func(t *testing.T) {
 		var out bytes.Buffer

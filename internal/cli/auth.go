@@ -92,17 +92,6 @@ func (a *App) login(noBrowser bool, region string, progress progressEmitter) (ma
 	return map[string]any{"action": "login", "expiresAt": token.ExpiresAt, "region": loginRegion, "scope": token.Scope, "status": "authenticated"}, nil
 }
 
-func normalizeLoginRegion(region string) (string, error) {
-	switch strings.ToLower(strings.TrimSpace(region)) {
-	case "", "global":
-		return "global", nil
-	case "cn":
-		return "cn", nil
-	default:
-		return "", fmt.Errorf("--region must be one of: global, cn")
-	}
-}
-
 func (a *App) resetSessionRuntimeState(loginRegion string) error {
 	// Rebuild the session-scoped runtime context from scratch using the
 	// region resolved at login time (the same value that selected the OAuth
@@ -158,17 +147,6 @@ func (a *App) authStatus() (map[string]any, error) {
 	}, nil
 }
 
-func (a *App) authRegion() string {
-	ctx, err := loadContext(a.env)
-	if err != nil {
-		return "global"
-	}
-	if strings.TrimSpace(ctx.CurrentRegion) != "" {
-		return ctx.CurrentRegion
-	}
-	return "global"
-}
-
 type oauthConfig struct {
 	AuthorizeURL string
 	TokenURL     string
@@ -205,7 +183,7 @@ func (a *App) oauthBaseURLForRegion(region string) string {
 	if strings.TrimSpace(a.cfg.OAuthBaseURL) != "" && a.cfg.OAuthBaseURL != globalOAuthBaseURL {
 		return a.cfg.OAuthBaseURL
 	}
-	if region == "cn" {
+	if region == regionCN {
 		return cnOAuthBaseURL
 	}
 	return globalOAuthBaseURL
@@ -229,7 +207,7 @@ func (a *App) apiBaseURLForRegion(region string) string {
 	if strings.TrimSpace(a.cfg.APIBaseURL) != "" && a.cfg.APIBaseURL != globalAPIBaseURL {
 		return a.cfg.APIBaseURL
 	}
-	if region == "cn" {
+	if region == regionCN {
 		return cnAPIBaseURL
 	}
 	return globalAPIBaseURL
@@ -590,20 +568,7 @@ func readConfirmYesDefault(in io.Reader, out io.Writer, prompt string) (bool, er
 	}
 }
 
-func (a *App) loginPromptRegion() string {
-	return a.authRegionFromContext()
-}
-
-func (a *App) authRegionFromContext() string {
-	ctx, err := loadContext(a.env)
-	if err != nil {
-		return ""
-	}
-	if ctx.CurrentRegion == "global" || ctx.CurrentRegion == "cn" {
-		return ctx.CurrentRegion
-	}
-	return ""
-}
+func (a *App) loginPromptRegion() string { return a.authRegionFromContext() }
 
 func (a *App) promptForLogin() error {
 	if !a.shouldPromptForLogin() {

@@ -126,10 +126,7 @@ func (a *App) resolveProjectTargetFrom(explicit, startPath string) (projectTarge
 		if err != nil {
 			return projectTarget{}, err
 		}
-		region := ctx.CurrentRegion
-		if region == "" {
-			region = "global"
-		}
+		region := currentRegionFromContext(ctx)
 		if project.Region != nil && *project.Region != "" {
 			region = *project.Region
 		} else if resolved.Region != nil && *resolved.Region != "" {
@@ -149,7 +146,7 @@ func (a *App) resolveProjectTargetFrom(explicit, startPath string) (projectTarge
 		// guidance instead. An empty session region (fresh login default)
 		// is treated as "no opinion" and does not conflict.
 		bindingRegion := strings.TrimSpace(binding.Region)
-		sessionRegion := strings.TrimSpace(ctx.CurrentRegion)
+		sessionRegion := currentRegionFromContext(ctx)
 		if bindingRegion != "" && sessionRegion != "" && !strings.EqualFold(bindingRegion, sessionRegion) {
 			return projectTarget{}, &cliError{
 				Message: fmt.Sprintf("This repo is bound to a %s project (.agora/project.json), but you are logged into %s. Run `agora login --region %s` to switch, or pass --project to override.", bindingRegion, sessionRegion, bindingRegion),
@@ -164,9 +161,6 @@ func (a *App) resolveProjectTargetFrom(explicit, startPath string) (projectTarge
 		if region == "" {
 			region = sessionRegion
 		}
-		if region == "" {
-			region = "global"
-		}
 		if project.Region != nil && *project.Region != "" {
 			region = *project.Region
 		}
@@ -179,7 +173,7 @@ func (a *App) resolveProjectTargetFrom(explicit, startPath string) (projectTarge
 	if err != nil {
 		return projectTarget{}, err
 	}
-	region := ctx.CurrentRegion
+	region := currentRegionFromContext(ctx)
 	if project.Region != nil && *project.Region != "" {
 		region = *project.Region
 	}
@@ -306,10 +300,7 @@ func (a *App) projectCreate(name, template string, features []string, rtmDataCen
 	if err != nil {
 		return nil, err
 	}
-	region := ctx.CurrentRegion
-	if region == "" {
-		region = "global"
-	}
+	region := currentRegionFromContext(ctx)
 	features = projectCreateFeatures(template, features)
 	rtmDataCenter, err = rtmDataCenterForFeatures(features, rtmDataCenter)
 	if err != nil {
@@ -418,10 +409,7 @@ func (a *App) projectUse(projectArg string) (map[string]any, error) {
 	if resolved == nil {
 		return nil, &cliError{Message: fmt.Sprintf("Project %q was not found. Run `agora project list` to see available projects.", projectArg), Code: "PROJECT_NOT_FOUND"}
 	}
-	region := current.CurrentRegion
-	if region == "" {
-		region = "global"
-	}
+	region := currentRegionFromContext(current)
 	if resolved.Region != nil && *resolved.Region != "" {
 		region = *resolved.Region
 	}
