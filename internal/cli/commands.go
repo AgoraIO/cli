@@ -868,6 +868,7 @@ When .agora/project.json exists, this command updates it for the selected projec
 	}
 	write.Flags().Bool("overwrite", false, "replace the target file with only Agora App ID and App Certificate values")
 	write.Flags().Bool("append", false, "append Agora App ID and App Certificate values when no existing values are present")
+	write.Flags().StringVar(&a.projectEnvProject, "project", "", "project ID or exact project name; defaults to the current project context")
 	write.Flags().StringVar(&a.projectEnvWriteTemplate, "template", "", "credential key layout: nextjs or standard; if omitted, detect Next.js from the workspace")
 	cmd.AddCommand(write)
 	return cmd

@@ -303,6 +303,8 @@ func TestCLIProjectEnvFormatsAndWriteRules(t *testing.T) {
 	project.FeatureState.ConvoAIEnabled = true
 	project.FeatureState.RTMEnabled = true
 	api.projects[project.ProjectID] = &project
+	explicitProject := buildFakeProject("Project Explicit", "prj_explicit", "app_explicit", "global")
+	api.projects[explicitProject.ProjectID] = &explicitProject
 	persistSessionForIntegration(t, configHome)
 	if err := saveContext(map[string]string{"XDG_CONFIG_HOME": configHome}, projectContext{
 		CurrentProjectID:   &project.ProjectID,
@@ -331,6 +333,27 @@ func TestCLIProjectEnvFormatsAndWriteRules(t *testing.T) {
 	}})
 	if jsonResult.exitCode != 0 || !strings.Contains(jsonResult.stdout, `"command":"project env"`) || !strings.Contains(jsonResult.stdout, `"AGORA_FEATURE_CONVOAI":true`) {
 		t.Fatalf("unexpected json env result: %+v", jsonResult)
+	}
+
+	explicitProjectDir := t.TempDir()
+	explicitProjectPath := filepath.Join(explicitProjectDir, "explicit.env")
+	explicitProjectWrite := runCLI(t, []string{"project", "env", "write", explicitProjectPath, "--project", explicitProject.ProjectID, "--overwrite", "--template", "standard", "--json"}, cliRunOptions{
+		env: map[string]string{
+			"XDG_CONFIG_HOME":    configHome,
+			"AGORA_API_BASE_URL": api.baseURL,
+			"AGORA_LOG_LEVEL":    "error",
+		},
+		workdir: explicitProjectDir,
+	})
+	if explicitProjectWrite.exitCode != 0 || !strings.Contains(explicitProjectWrite.stdout, `"projectId":"prj_explicit"`) {
+		t.Fatalf("unexpected explicit project write result: %+v", explicitProjectWrite)
+	}
+	explicitProjectEnv, err := os.ReadFile(explicitProjectPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(explicitProjectEnv), "AGORA_APP_ID=app_explicit") {
+		t.Fatalf("expected explicit project env values, got %s", string(explicitProjectEnv))
 	}
 
 	if err := os.WriteFile(filepath.Join(projectDir, ".env.custom"), []byte("FOO=bar\n"), 0o644); err != nil {
