@@ -29,17 +29,7 @@ const (
 )
 
 func (a *App) login(noBrowser bool, region string, progress progressEmitter) (map[string]any, error) {
-	// Resolve the effective login region exactly once. An explicit --region
-	// flag (global or cn) wins; otherwise a flag-less login means global. We
-	// intentionally do NOT carry over a previously preferred region: the
-	// resolved value below drives both the OAuth host and the persisted
-	// context, so any divergence would leave the session pointed at one
-	// control plane while its token was issued by another.
-	loginRegion := "global"
-	if region == "cn" {
-		loginRegion = "cn"
-	}
-	config := a.oauthConfigForRegion(loginRegion)
+	config := a.oauthConfigForRegion(region)
 	pair, err := generatePKCE()
 	if err != nil {
 		return nil, err
@@ -91,10 +81,10 @@ func (a *App) login(noBrowser bool, region string, progress progressEmitter) (ma
 		return nil, err
 	}
 	progress.emit("oauth:complete", "Session stored", nil)
-	if err := a.resetSessionRuntimeState(loginRegion); err != nil {
+	if err := a.resetSessionRuntimeState(region); err != nil {
 		return nil, err
 	}
-	return map[string]any{"action": "login", "expiresAt": token.ExpiresAt, "region": loginRegion, "scope": token.Scope, "status": "authenticated"}, nil
+	return map[string]any{"action": "login", "expiresAt": token.ExpiresAt, "region": region, "scope": token.Scope, "status": "authenticated"}, nil
 }
 
 func (a *App) resetSessionRuntimeState(loginRegion string) error {

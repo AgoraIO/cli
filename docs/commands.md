@@ -44,7 +44,7 @@ Authenticate with Agora Console
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
 | `--no-browser` | `bool` | — | print the login URL instead of auto-opening a browser |
-| `--region` | `string` | — | control plane region for login (global or cn; defaults to global) |
+| `--region` | `string` | `global` | control plane region for login (global or cn) |
 
 ### `agora auth logout`
 
@@ -131,7 +131,7 @@ Authenticate with Agora Console
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
 | `--no-browser` | `bool` | — | print the login URL instead of auto-opening a browser |
-| `--region` | `string` | — | control plane region for login (global or cn; defaults to global) |
+| `--region` | `string` | `global` | control plane region for login (global or cn) |
 
 ### `agora logout`
 

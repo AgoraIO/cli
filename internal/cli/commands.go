@@ -347,7 +347,7 @@ func (a *App) buildLoginCommand(use string) *cobra.Command {
 		},
 	}
 	cmd.Flags().BoolVar(&noBrowser, "no-browser", false, "print the login URL instead of auto-opening a browser")
-	cmd.Flags().StringVar(&region, "region", "", "control plane region for login (global or cn; defaults to global)")
+	cmd.Flags().StringVar(&region, "region", "global", "control plane region for login (global or cn)")
 	return cmd
 }
 
