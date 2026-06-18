@@ -958,13 +958,22 @@ Example:
 ```
 
 Returns the current resolved config object. Safe branch fields:
-- `apiBaseUrl`
-- `oauthBaseUrl`
 - `output`
 - `logLevel`
 - `browserAutoOpen`
 - `telemetryEnabled`
 - `debug` (renamed from legacy `verbose` in v0.2.0; legacy key is migrated on first load)
+
+Endpoint and OAuth integration values are derived from the active login
+region and may be temporarily overridden with environment variables such as
+`AGORA_API_BASE_URL`, `AGORA_OAUTH_BASE_URL`, `AGORA_OAUTH_CLIENT_ID`, and
+`AGORA_OAUTH_SCOPE`; they are not persisted in `config.json`.
+
+Migration note: configs written by older CLI versions may contain
+`apiBaseUrl`, `oauthBaseUrl`, `oauthClientId`, or `oauthScope`. Schema version
+4 drops those keys on first load. If automation previously depended on those
+persisted values, set the corresponding `AGORA_*` environment variable in the
+job environment instead.
 
 ### `config update`
 

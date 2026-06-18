@@ -15,6 +15,10 @@ Earlier entries pre-date this convention and only carry their version's compare 
 
 ## [Unreleased]
 
+### Changed
+
+- **BREAKING**: Stop persisting CLI API/OAuth integration values in `config.json`. `apiBaseUrl`, `oauthBaseUrl`, `oauthClientId`, and `oauthScope` are now derived from the selected login region or from explicit environment variable overrides (`AGORA_API_BASE_URL`, `AGORA_OAUTH_BASE_URL`, `AGORA_OAUTH_CLIENT_ID`, `AGORA_OAUTH_SCOPE`). Existing configs auto-migrate to schema version `4` and drop those legacy keys on first load; users who previously pinned custom endpoints in `config.json` should move those values to environment variables.
+
 ## [0.2.5] - 2026-06-05
 
 Installer migration, quickstart scaffold cleanup, and onboarding doc refresh.

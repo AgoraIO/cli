@@ -89,7 +89,7 @@ func RenderCommandReference(out io.Writer, root *cobra.Command) error {
 		}
 	}
 
-	_, err := io.WriteString(out, b.String())
+	_, err := io.WriteString(out, strings.TrimRight(b.String(), "\n")+"\n")
 	return err
 }
 

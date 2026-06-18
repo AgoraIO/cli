@@ -22,10 +22,12 @@ import (
 )
 
 const (
-	globalAPIBaseURL   = "https://agora-cli.agora.io"
-	cnAPIBaseURL       = "https://cli-cn.agora.io"
-	globalOAuthBaseURL = "https://sso2.agora.io"
-	cnOAuthBaseURL     = "https://sso.shengwang.cn"
+	globalAPIBaseURL     = "https://agora-cli.agora.io"
+	cnAPIBaseURL         = "https://cli-cn.agora.io"
+	globalOAuthBaseURL   = "https://sso2.agora.io"
+	cnOAuthBaseURL       = "https://sso.shengwang.cn"
+	defaultOAuthClientID = "agora_web_cli"
+	defaultOAuthScope    = "basic_info,console"
 )
 
 func (a *App) login(noBrowser bool, region string, progress progressEmitter) (map[string]any, error) {
@@ -159,8 +161,8 @@ func (a *App) oauthConfigForRegion(region string) oauthConfig {
 	return oauthConfig{
 		AuthorizeURL: base + "/api/v0/oauth/authorize",
 		TokenURL:     base + "/api/v0/oauth/token",
-		ClientID:     a.env["AGORA_OAUTH_CLIENT_ID"],
-		Scope:        a.env["AGORA_OAUTH_SCOPE"],
+		ClientID:     valueOrDefault(a.env["AGORA_OAUTH_CLIENT_ID"], defaultOAuthClientID),
+		Scope:        valueOrDefault(a.env["AGORA_OAUTH_SCOPE"], defaultOAuthScope),
 	}
 }
 
@@ -168,20 +170,13 @@ func (a *App) oauthConfigForRegion(region string) oauthConfig {
 // region. Resolution order is:
 //
 //  1. an explicit process-env override (AGORA_OAUTH_BASE_URL),
-//  2. a persisted non-default config override,
-//  3. the built-in region default (cn vs global).
+//  2. the built-in region default (cn vs global).
 //
-// As with apiBaseURLForRegion, the explicit-env check must look at the
-// original process environment rather than a.env. applyConfigToEnv injects
-// default values into a.env after startup, and treating those injected
-// defaults as explicit overrides would prevent region-aware fallback from
-// selecting the correct cn/global SSO host.
+// As with apiBaseURLForRegion, the explicit-env check uses the original
+// process environment so only user-provided overrides bypass region defaults.
 func (a *App) oauthBaseURLForRegion(region string) string {
 	if override := strings.TrimSpace(a.explicitEnvValue("AGORA_OAUTH_BASE_URL")); override != "" {
 		return override
-	}
-	if strings.TrimSpace(a.cfg.OAuthBaseURL) != "" && a.cfg.OAuthBaseURL != globalOAuthBaseURL {
-		return a.cfg.OAuthBaseURL
 	}
 	if region == regionCN {
 		return cnOAuthBaseURL
@@ -193,19 +188,13 @@ func (a *App) oauthBaseURLForRegion(region string) string {
 // requested region. Resolution order is:
 //
 //  1. an explicit process-env override (AGORA_API_BASE_URL),
-//  2. a persisted non-default config override,
-//  3. the built-in region default (cn vs global).
+//  2. the built-in region default (cn vs global).
 //
-// The explicit-env check intentionally uses explicitEnvValue rather than
-// a.env because applyConfigToEnv injects defaults into a.env after startup.
-// Reading only a.env would make those injected global defaults look like
-// user-pinned overrides, which would break region-aware host switching.
+// The explicit-env check intentionally uses explicitEnvValue so only
+// user-provided overrides bypass region-aware host selection.
 func (a *App) apiBaseURLForRegion(region string) string {
 	if override := strings.TrimSpace(a.explicitEnvValue("AGORA_API_BASE_URL")); override != "" {
 		return override
-	}
-	if strings.TrimSpace(a.cfg.APIBaseURL) != "" && a.cfg.APIBaseURL != globalAPIBaseURL {
-		return a.cfg.APIBaseURL
 	}
 	if region == regionCN {
 		return cnAPIBaseURL
@@ -220,10 +209,7 @@ func (a *App) apiBaseURLForRegion(region string) string {
 //  1. a real user override such as `AGORA_API_BASE_URL=... agora ...`, from
 //  2. a default value injected later by applyConfigToEnv().
 //
-// That distinction matters for region-aware endpoint selection: reading from
-// a.env alone would treat injected global defaults as if the user had pinned
-// them intentionally, preventing the cn/global fallback logic from switching
-// hosts.
+// That distinction matters for region-aware endpoint selection.
 func (a *App) explicitEnvValue(key string) string {
 	if a.osEnv != nil {
 		return a.osEnv[key]
@@ -232,6 +218,13 @@ func (a *App) explicitEnvValue(key string) string {
 		return a.env[key]
 	}
 	return ""
+}
+
+func valueOrDefault(value, fallback string) string {
+	if trimmed := strings.TrimSpace(value); trimmed != "" {
+		return trimmed
+	}
+	return fallback
 }
 
 type pkcePair struct {

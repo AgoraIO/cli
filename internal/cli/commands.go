@@ -509,23 +509,10 @@ func (a *App) buildConfigCommand() *cobra.Command {
 		Example: example(`
   agora config update --output json
   agora config update --browser-auto-open=false
-  agora config update --api-base-url https://agora-cli.agora.io
   agora config update --debug=true
 `),
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			next := a.cfg
-			if cmd.Flags().Changed("api-base-url") {
-				next.APIBaseURL = cfg.APIBaseURL
-			}
-			if cmd.Flags().Changed("oauth-base-url") {
-				next.OAuthBaseURL = cfg.OAuthBaseURL
-			}
-			if cmd.Flags().Changed("oauth-client-id") {
-				next.OAuthClientID = cfg.OAuthClientID
-			}
-			if cmd.Flags().Changed("oauth-scope") {
-				next.OAuthScope = cfg.OAuthScope
-			}
 			if cmd.Flags().Changed("telemetry-enabled") {
 				next.TelemetryEnabled = telemetryEnabled
 			}
@@ -553,10 +540,6 @@ func (a *App) buildConfigCommand() *cobra.Command {
 			return renderResult(cmd, "config update", next)
 		},
 	}
-	update.Flags().StringVar(&cfg.APIBaseURL, "api-base-url", cfg.APIBaseURL, "default CLI API base URL")
-	update.Flags().StringVar(&cfg.OAuthBaseURL, "oauth-base-url", cfg.OAuthBaseURL, "default OAuth base URL")
-	update.Flags().StringVar(&cfg.OAuthClientID, "oauth-client-id", cfg.OAuthClientID, "default OAuth client ID")
-	update.Flags().StringVar(&cfg.OAuthScope, "oauth-scope", cfg.OAuthScope, "default OAuth scope")
 	update.Flags().BoolVar(&telemetryEnabled, "telemetry-enabled", false, "persist telemetry preference; use --telemetry-enabled=false to disable")
 	update.Flags().BoolVar(&browserAutoOpen, "browser-auto-open", false, "persist browser auto-open preference; use --browser-auto-open=false to disable")
 	update.Flags().StringVar(&cfg.LogLevel, "log-level", cfg.LogLevel, "persist default log level")

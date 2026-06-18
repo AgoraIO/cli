@@ -46,6 +46,14 @@ func TestOAuthConfigForRegion(t *testing.T) {
 			t.Fatalf("unexpected token url: %s", cfg.TokenURL)
 		}
 	})
+
+	t.Run("client and scope default without env", func(t *testing.T) {
+		app.env = map[string]string{}
+		cfg := app.oauthConfigForRegion("global")
+		if cfg.ClientID != defaultOAuthClientID || cfg.Scope != defaultOAuthScope {
+			t.Fatalf("unexpected oauth defaults: %+v", cfg)
+		}
+	})
 }
 
 func TestAPIBaseURLForRegion(t *testing.T) {
@@ -73,9 +81,8 @@ func TestAPIBaseURLForRegion(t *testing.T) {
 		app.osEnv = nil
 	})
 
-	t.Run("config override wins over region default", func(t *testing.T) {
-		app.cfg.APIBaseURL = "https://staging-api.example.com"
-		if got := app.apiBaseURLForRegion("cn"); got != "https://staging-api.example.com" {
+	t.Run("config does not override region default", func(t *testing.T) {
+		if got := app.apiBaseURLForRegion("cn"); got != cnAPIBaseURL {
 			t.Fatalf("unexpected api base url: %s", got)
 		}
 	})

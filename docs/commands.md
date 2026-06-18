@@ -82,13 +82,9 @@ Update persisted CLI defaults
 
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
-| `--api-base-url` | `string` | `https://agora-cli.agora.io` | default CLI API base URL |
 | `--browser-auto-open` | `bool` | — | persist browser auto-open preference; use --browser-auto-open=false to disable |
 | `--debug` | `bool` | — | persist the --debug preference (echo structured logs to stderr); use --debug=false to disable |
 | `--log-level` | `string` | `info` | persist default log level |
-| `--oauth-base-url` | `string` | `https://sso2.agora.io` | default OAuth base URL |
-| `--oauth-client-id` | `string` | `agora_web_cli` | default OAuth client ID |
-| `--oauth-scope` | `string` | `basic_info,console` | default OAuth scope |
 | `--output` | `output` | `pretty` | persist default output mode (pretty or json) |
 | `--telemetry-enabled` | `bool` | — | persist telemetry preference; use --telemetry-enabled=false to disable |
 
