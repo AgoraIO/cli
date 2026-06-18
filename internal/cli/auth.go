@@ -106,7 +106,6 @@ func (a *App) resetSessionRuntimeState(loginRegion string) error {
 		CurrentProjectID:   nil,
 		CurrentProjectName: nil,
 		CurrentRegion:      loginRegion,
-		PreferredRegion:    loginRegion,
 	}
 	if err := saveContext(a.env, rebuilt); err != nil {
 		return err
@@ -160,9 +159,6 @@ func (a *App) authRegion() string {
 	}
 	if strings.TrimSpace(ctx.CurrentRegion) != "" {
 		return ctx.CurrentRegion
-	}
-	if strings.TrimSpace(ctx.PreferredRegion) != "" {
-		return ctx.PreferredRegion
 	}
 	return "global"
 }
@@ -597,8 +593,8 @@ func (a *App) authRegionFromContext() string {
 	if err != nil {
 		return ""
 	}
-	if ctx.PreferredRegion == "global" || ctx.PreferredRegion == "cn" {
-		return ctx.PreferredRegion
+	if ctx.CurrentRegion == "global" || ctx.CurrentRegion == "cn" {
+		return ctx.CurrentRegion
 	}
 	return ""
 }

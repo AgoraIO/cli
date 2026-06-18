@@ -101,14 +101,14 @@ func writeSecureJSON(path string, value any) error {
 }
 
 // loadContext reads the persisted project context (currently selected
-// project + region). A missing file returns the zero-value context with
-// region defaults set to "global".
+// project + active control-plane region). A missing file returns the
+// zero-value context with region defaulted to "global".
 func loadContext(env map[string]string) (projectContext, error) {
 	path, err := resolveContextFilePath(env)
 	if err != nil {
 		return projectContext{}, err
 	}
-	ctx := projectContext{CurrentRegion: "global", PreferredRegion: "global"}
+	ctx := projectContext{CurrentRegion: "global"}
 	data, err := os.ReadFile(path)
 	if errors.Is(err, os.ErrNotExist) {
 		return ctx, nil
@@ -121,9 +121,6 @@ func loadContext(env map[string]string) (projectContext, error) {
 	}
 	if ctx.CurrentRegion == "" {
 		ctx.CurrentRegion = "global"
-	}
-	if ctx.PreferredRegion == "" {
-		ctx.PreferredRegion = "global"
 	}
 	return ctx, nil
 }

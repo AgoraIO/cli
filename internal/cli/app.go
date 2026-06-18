@@ -52,7 +52,6 @@ type projectContext struct {
 	CurrentProjectID   *string `json:"currentProjectId"`
 	CurrentProjectName *string `json:"currentProjectName"`
 	CurrentRegion      string  `json:"currentRegion"`
-	PreferredRegion    string  `json:"preferredRegion"`
 }
 
 type projectSummary struct {

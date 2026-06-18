@@ -191,7 +191,6 @@ func mcpTools() []map[string]any {
 		mcpTool("agora.project.use", "Select the current Agora project", map[string]string{"project": "string"}),
 		mcpTool("agora.project.create", "Create a new Agora project and optionally enable features", map[string]string{
 			"name":           "string",
-			"region":         "string",
 			"template":       "string",
 			"features":       "array",
 			"rtmDataCenter":  "string",
@@ -223,7 +222,6 @@ func mcpTools() []map[string]any {
 			"template":      "string",
 			"project":       "string",
 			"newProject":    "boolean",
-			"region":        "string",
 			"rtmDataCenter": "string",
 			"features":      "array",
 		}),
@@ -360,7 +358,6 @@ func (a *App) callMCPTool(name string, args map[string]any, progress progressEmi
 		progress.emit("project:create", "Creating Agora project", map[string]any{"projectName": name, "features": projectCreateFeatures(stringArg(args, "template"), features)})
 		result, err := a.projectCreate(
 			name,
-			stringArg(args, "region"),
 			stringArg(args, "template"),
 			features,
 			rtmDataCenter,
@@ -460,7 +457,6 @@ func (a *App) callMCPTool(name string, args map[string]any, progress progressEmi
 			defaultString(stringArg(args, "dir"), name),
 			*template,
 			stringArg(args, "project"),
-			stringArg(args, "region"),
 			stringSliceArg(args, "features"),
 			stringArg(args, "rtmDataCenter"),
 			boolArg(args, "newProject", false),

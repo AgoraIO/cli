@@ -301,16 +301,14 @@ func (a *App) enableProjectFeature(feature string, project projectDetail, region
 	}
 }
 
-func (a *App) projectCreate(name, region, template string, features []string, rtmDataCenter string, idempotencyKey string) (map[string]any, error) {
+func (a *App) projectCreate(name, template string, features []string, rtmDataCenter string, idempotencyKey string) (map[string]any, error) {
 	ctx, err := loadContext(a.env)
 	if err != nil {
 		return nil, err
 	}
+	region := ctx.CurrentRegion
 	if region == "" {
-		region = ctx.PreferredRegion
-		if region == "" {
-			region = "global"
-		}
+		region = "global"
 	}
 	features = projectCreateFeatures(template, features)
 	rtmDataCenter, err = rtmDataCenterForFeatures(features, rtmDataCenter)
@@ -336,7 +334,6 @@ func (a *App) projectCreate(name, region, template string, features []string, rt
 	ctx.CurrentProjectID = &project.ProjectID
 	ctx.CurrentProjectName = &project.Name
 	ctx.CurrentRegion = region
-	ctx.PreferredRegion = region
 	if err := saveContext(a.env, ctx); err != nil {
 		return nil, err
 	}
@@ -423,7 +420,7 @@ func (a *App) projectUse(projectArg string) (map[string]any, error) {
 	}
 	region := current.CurrentRegion
 	if region == "" {
-		region = current.PreferredRegion
+		region = "global"
 	}
 	if resolved.Region != nil && *resolved.Region != "" {
 		region = *resolved.Region
@@ -431,9 +428,6 @@ func (a *App) projectUse(projectArg string) (map[string]any, error) {
 	current.CurrentProjectID = &resolved.ProjectID
 	current.CurrentProjectName = &resolved.Name
 	current.CurrentRegion = region
-	if current.PreferredRegion == "" {
-		current.PreferredRegion = region
-	}
 	if err := saveContext(a.env, current); err != nil {
 		return nil, err
 	}

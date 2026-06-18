@@ -25,7 +25,6 @@ func TestCLIProjectEnvAndDoctor(t *testing.T) {
 		CurrentProjectID:   &alpha.ProjectID,
 		CurrentProjectName: &alpha.Name,
 		CurrentRegion:      "global",
-		PreferredRegion:    "global",
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -248,7 +247,6 @@ func TestCLIProjectDoctorDeepDetectsWorkspaceDrift(t *testing.T) {
 		CurrentProjectID:   &project.ProjectID,
 		CurrentProjectName: &project.Name,
 		CurrentRegion:      "global",
-		PreferredRegion:    "global",
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -310,7 +308,6 @@ func TestCLIProjectEnvFormatsAndWriteRules(t *testing.T) {
 		CurrentProjectID:   &project.ProjectID,
 		CurrentProjectName: &project.Name,
 		CurrentRegion:      "global",
-		PreferredRegion:    "global",
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -445,7 +442,6 @@ func TestCLIProjectEnvWriteRecordsProjectTypeInBinding(t *testing.T) {
 		CurrentProjectID:   &project.ProjectID,
 		CurrentProjectName: &project.Name,
 		CurrentRegion:      "global",
-		PreferredRegion:    "global",
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -501,7 +497,6 @@ func TestCLIFeatureEnableAndDoctorAuthError(t *testing.T) {
 		CurrentProjectID:   &project.ProjectID,
 		CurrentProjectName: &project.Name,
 		CurrentRegion:      "global",
-		PreferredRegion:    "global",
 	}); err != nil {
 		t.Fatal(err)
 	}

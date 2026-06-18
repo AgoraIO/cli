@@ -44,7 +44,7 @@ Authenticate with Agora Console
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
 | `--no-browser` | `bool` | — | print the login URL instead of auto-opening a browser |
-| `--region` | `string` | — | control plane region for login defaults (global or cn) |
+| `--region` | `string` | — | control plane region for login (global or cn; defaults to global) |
 
 ### `agora auth logout`
 
@@ -115,7 +115,6 @@ Create a project, clone a quickstart, and write env in one flow
 | `--feature` | `stringArray` | `[]` | enable a feature on the newly created project (repeatable); defaults to rtc, rtm, convoai; convoai also enables rtm |
 | `--new-project` | `bool` | — | always create a new Agora project instead of reusing an existing one |
 | `--project` | `string` | — | existing project ID or exact project name to bind to |
-| `--region` | `string` | — | control plane region for newly created projects (global or cn) |
 | `--rtm-data-center` | `string` | — | RTM data center to configure when rtm is enabled on a newly created project (CN, NA, EU, or AP); defaults to NA |
 | `--template` | `string` | — | quickstart template ID to use |
 
@@ -132,7 +131,7 @@ Authenticate with Agora Console
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
 | `--no-browser` | `bool` | — | print the login URL instead of auto-opening a browser |
-| `--region` | `string` | — | control plane region for login defaults (global or cn) |
+| `--region` | `string` | — | control plane region for login (global or cn; defaults to global) |
 
 ### `agora logout`
 
@@ -177,7 +176,6 @@ Create a new remote Agora project
 | `--dry-run` | `bool` | — | return the planned project create result without creating remote resources |
 | `--feature` | `stringArray` | `[]` | enable one or more features after creation; defaults to rtc, rtm, convoai; convoai also enables rtm |
 | `--idempotency-key` | `string` | — | caller-provided key for safe retries when supported by the API |
-| `--region` | `string` | — | control plane region for the project context (global or cn) |
 | `--rtm-data-center` | `string` | — | RTM data center to configure when rtm is enabled (CN, NA, EU, or AP); defaults to NA |
 | `--template` | `string` | — | apply a higher-level project preset such as voice-agent |
 
@@ -379,4 +377,3 @@ Show the current auth status
 **`outputModes`**: `pretty`, `json`
 
 **`doctorStatus`**: `healthy`, `warning`, `not_ready`, `auth_error`
-

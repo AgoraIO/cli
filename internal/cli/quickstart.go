@@ -459,6 +459,9 @@ func cloneQuickstartRepo(repoURL, targetDir, ref string) error {
 	// #nosec G204 -- git is invoked without a shell; repoURL and targetDir
 	// follow "--" so git cannot parse them as flags.
 	cmd := exec.Command("git", gitQuickstartCloneArgs(repoURL, targetDir, ref)...)
+	if isLocalGitRepoURL(repoURL) {
+		cmd.Env = append(os.Environ(), "GIT_ALLOW_PROTOCOL=file")
+	}
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		trimmed := strings.TrimSpace(string(output))
@@ -469,6 +472,11 @@ func cloneQuickstartRepo(repoURL, targetDir, ref string) error {
 		return fmt.Errorf("git clone failed for %s (%s). %s", repoURL, trimmed, hint)
 	}
 	return nil
+}
+
+func isLocalGitRepoURL(repoURL string) bool {
+	trimmed := strings.TrimSpace(repoURL)
+	return filepath.IsAbs(trimmed) || strings.HasPrefix(trimmed, "file://")
 }
 
 // validateGitRef rejects ref values that would either confuse git's
@@ -520,7 +528,10 @@ func validateRepoOverrideURL(s string) error {
 func gitQuickstartCloneArgs(repoURL, targetDir, ref string) []string {
 	// Disable credential helpers for this invocation so non-TTY agent/CI runs
 	// do not consult macOS keychain for public HTTPS repos.
-	args := []string{"-c", "credential.helper=", "clone", "--depth", "1"}
+	args := []string{"-c", "credential.helper=", "clone"}
+	if !isLocalGitRepoURL(repoURL) {
+		args = append(args, "--depth", "1")
+	}
 	if strings.TrimSpace(ref) != "" {
 		args = append(args, "--branch", strings.TrimSpace(ref))
 	}
