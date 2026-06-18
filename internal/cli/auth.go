@@ -29,7 +29,12 @@ const (
 )
 
 func (a *App) login(noBrowser bool, region string, progress progressEmitter) (map[string]any, error) {
-	config := a.oauthConfigForRegion(region)
+	loginRegion, err := normalizeLoginRegion(region)
+	if err != nil {
+		return nil, err
+	}
+
+	config := a.oauthConfigForRegion(loginRegion)
 	pair, err := generatePKCE()
 	if err != nil {
 		return nil, err
@@ -81,10 +86,21 @@ func (a *App) login(noBrowser bool, region string, progress progressEmitter) (ma
 		return nil, err
 	}
 	progress.emit("oauth:complete", "Session stored", nil)
-	if err := a.resetSessionRuntimeState(region); err != nil {
+	if err := a.resetSessionRuntimeState(loginRegion); err != nil {
 		return nil, err
 	}
-	return map[string]any{"action": "login", "expiresAt": token.ExpiresAt, "region": region, "scope": token.Scope, "status": "authenticated"}, nil
+	return map[string]any{"action": "login", "expiresAt": token.ExpiresAt, "region": loginRegion, "scope": token.Scope, "status": "authenticated"}, nil
+}
+
+func normalizeLoginRegion(region string) (string, error) {
+	switch strings.ToLower(strings.TrimSpace(region)) {
+	case "", "global":
+		return "global", nil
+	case "cn":
+		return "cn", nil
+	default:
+		return "", fmt.Errorf("--region must be one of: global, cn")
+	}
 }
 
 func (a *App) resetSessionRuntimeState(loginRegion string) error {
