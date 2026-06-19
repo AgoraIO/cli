@@ -38,7 +38,7 @@ agora --help
 Install a pinned version:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/AgoraIO/cli/main/install.sh | sh -s -- --version 0.2.1
+curl -fsSL https://raw.githubusercontent.com/AgoraIO/cli/main/install.sh | sh -s -- --version 0.2.5
 agora --help
 ```
 
@@ -80,7 +80,7 @@ agora --help
 Install a pinned version:
 
 ```powershell
-$env:VERSION = "0.2.1"
+$env:VERSION = "0.2.5"
 irm https://raw.githubusercontent.com/AgoraIO/cli/main/install.ps1 | iex
 agora --help
 ```
@@ -105,6 +105,8 @@ If your PowerShell execution policy blocks inline scripts, download `install.ps1
 --list-versions         Print recent published versions and exit.
 --force                 Reinstall even if the requested version is present, or
                         proceed past an existing managed install warning.
+--replace-npm           If an existing npm-managed agora is detected, uninstall
+                        agoraio-cli with npm before installing this binary.
 
 # Shell integration (auto-on; pass an opt-out flag to disable)
 --no-path               Don't append the install directory to your shell rc file.
@@ -137,7 +139,7 @@ If your PowerShell execution policy blocks inline scripts, download `install.ps1
 -SkipShell              Umbrella for -NoPath -NoCompletion.
 ```
 
-If another managed `agora` install is detected, the installer refuses by default to avoid creating two installs that shadow each other on PATH. Pass `--force` to install alongside it.
+If another managed `agora` install is detected, the installer refuses by default to avoid creating two installs that shadow each other on PATH. Uninstall the existing package first, then re-run the standalone installer. For global npm installs, `--replace-npm` can perform that migration for you. Pass `--force` only when you intentionally want a side-by-side install.
 
 ## Uninstall
 
@@ -160,7 +162,7 @@ Uninstall removes the binary and `agora.install.json` receipt from the install d
 Both direct installers support these core overrides:
 
 - `GITHUB_REPO`: install from a fork or alternate repository.
-- `VERSION`: install a specific version. Both `0.2.1` and `v0.2.1` are accepted.
+- `VERSION`: install a specific version. Both `0.2.5` and `v0.2.5` are accepted.
 - `INSTALL_DIR`: install to a custom directory.
 - `GITHUB_TOKEN` or `GH_TOKEN`: optional GitHub token to avoid API rate limits when resolving the latest release.
 
@@ -190,7 +192,7 @@ Both `install.sh` and `install.ps1` use the same stable exit-code contract for s
 | 4    | unsupported platform / architecture                                                                                            |
 | 5    | network or download failure                                                                                                    |
 | 6    | checksum verification failed                                                                                                   |
-| 7    | install or permission failure (non-writable dir, sudo, or refused to overwrite a managed install without `--force` / `-Force`) |
+| 7    | install or permission failure (non-writable dir, sudo, or refused to overwrite a managed install)                              |
 | 8    | post-install verification failed                                                                                               |
 
 ### Idempotent re-runs
@@ -199,7 +201,7 @@ Both installers short-circuit with exit `0` when the target install path already
 
 ### Managed-install detection
 
-Both installers refuse to overwrite an `agora` binary that came from a package manager and exit `7` with a recommended upgrade command. Override with `--force` / `-Force`.
+Both installers refuse to overwrite an `agora` binary that came from a package manager and exit `7` with a recommended upgrade command. Uninstall the package-manager version before switching to the standalone installer. For global npm installs on Unix shells, `--replace-npm` can run `npm uninstall -g agoraio-cli` before installing the standalone binary. Use `--force` / `-Force` only for intentional side-by-side installs.
 
 | Manager                | Detected by                                                  | Recommended upgrade         |
 | ---------------------- | ------------------------------------------------------------ | --------------------------- |
@@ -259,7 +261,7 @@ go build -o agora .
 
 ### npm wrapper
 
-The `agoraio-cli` npm package is a thin Node.js shim that resolves the right native binary for your platform via `optionalDependencies`. The platform binary itself is the same artifact published to GitHub Releases. Each release is published with [npm provenance](https://docs.npmjs.com/generating-provenance-statements) so consumers can verify the package was built from this repository's release workflow.
+The `agoraio-cli` npm package is a thin Node.js shim that resolves the right native binary for your platform via `optionalDependencies`. The platform binary itself is the same artifact published to GitHub Releases. The wrapper package is published with [npm provenance](https://docs.npmjs.com/generating-provenance-statements) so consumers can verify it was built from this repository's release workflow.
 
 ```bash
 # Install globally
@@ -270,7 +272,7 @@ agora --help
 npx agoraio-cli --help
 
 # Pin a specific version
-npm install -g agoraio-cli@0.2.1
+npm install -g agoraio-cli@0.2.5
 
 # Update to the latest published version
 npm update -g agoraio-cli
@@ -295,15 +297,22 @@ For one-off shell sessions, source the generated script according to your shell'
 
 ### GitHub API rate limits
 
-If latest-version resolution fails, retry with a pinned version or provide `GITHUB_TOKEN` / `GH_TOKEN`:
+The direct installers call the GitHub REST API only when resolving the latest release. The binary download itself uses public release URLs and does not require authentication.
+
+If latest-version resolution fails, pin `VERSION` first — that skips the API lookup entirely:
 
 ```bash
-GITHUB_TOKEN=your-token-here VERSION=0.2.1 sh install.sh
+curl -fsSL https://raw.githubusercontent.com/AgoraIO/cli/main/install.sh | sh -s -- --version 0.2.5
+```
+
+If you must resolve latest from a shared IP (for example CI) and hit GitHub's unauthenticated API rate limit, optionally provide `GITHUB_TOKEN` or `GH_TOKEN`:
+
+```bash
+GITHUB_TOKEN=your-token-here sh install.sh
 ```
 
 ```powershell
 $env:GITHUB_TOKEN = "your-token-here"
-$env:VERSION = "0.2.1"
 & ([scriptblock]::Create((irm https://raw.githubusercontent.com/AgoraIO/cli/main/install.ps1)))
 ```
 
@@ -317,7 +326,14 @@ $env:VERSION = "0.2.1"
 The shell installer refuses to install over an existing managed `agora` to avoid creating two installs that shadow each other on PATH. Either:
 
 - Keep using the existing install, or
-- Re-run the installer with `--force` to install alongside it.
+- Uninstall the existing package, then re-run the standalone installer:
+
+  ```bash
+  curl -fsSL https://raw.githubusercontent.com/AgoraIO/cli/main/install.sh | sh
+  ```
+
+- If it is npm-managed, re-run the installer with `--replace-npm` to run `npm uninstall -g agoraio-cli` before installing the standalone binary.
+- Re-run the installer with `--force` only if you intentionally want a side-by-side install.
 
 ### PATH issues
 
@@ -371,8 +387,8 @@ cosign verify "ghcr.io/agoraio/agora-cli:${TAG#v}" \
   --certificate-oidc-issuer 'https://token.actions.githubusercontent.com'
 ```
 
-To audit dependencies, download the `*.spdx.json` SBOM that ships next to each archive (e.g. `agora-cli_v0.2.1_linux_amd64.tar.gz.spdx.json`) and feed it to a scanner such as [Grype](https://github.com/anchore/grype):
+To audit dependencies, download the `*.spdx.json` SBOM that ships next to each archive (e.g. `agora-cli_v0.2.5_linux_amd64.tar.gz.spdx.json`) and feed it to a scanner such as [Grype](https://github.com/anchore/grype):
 
 ```bash
-grype sbom:agora-cli_v0.2.1_linux_amd64.tar.gz.spdx.json
+grype sbom:agora-cli_v0.2.5_linux_amd64.tar.gz.spdx.json
 ```

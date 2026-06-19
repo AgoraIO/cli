@@ -324,8 +324,15 @@ func (a *App) quickstartCreate(template quickstartTemplate, targetDir, explicitP
 		return nil, err
 	}
 	progress.emit("clone:complete", "Quickstart repository cloned", map[string]any{"targetPath": absTarget})
+	if err := stripClonedGitMetadata(absTarget); err != nil {
+		if cleanupErr := os.RemoveAll(absTarget); cleanupErr != nil {
+			return nil, fmt.Errorf("failed to remove quickstart git metadata after clone: %v; cleanup also failed for %s: %v", err, absTarget, cleanupErr)
+		}
+		return nil, fmt.Errorf("failed to remove quickstart git metadata after clone: %v; removed %s", err, absTarget)
+	}
+	progress.emit("clone:strip-git", "Removed quickstart repository history", map[string]any{"targetPath": absTarget})
 
-	written := []string{".git"}
+	written := []string{}
 	envStatus := "template-only"
 	envPath := ""
 	if boundProject != nil {
@@ -454,6 +461,10 @@ func (a *App) quickstartRepoURL(template quickstartTemplate) (string, string, er
 		return override, key, nil
 	}
 	return template.RepoURL, "", nil
+}
+
+func stripClonedGitMetadata(targetDir string) error {
+	return os.RemoveAll(filepath.Join(targetDir, ".git"))
 }
 
 func cloneQuickstartRepo(repoURL, targetDir, ref string) error {

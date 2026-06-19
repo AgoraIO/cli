@@ -214,6 +214,7 @@ Additional stage-specific fields may appear (for example `repoUrl`, `projectId`,
 | `clone:override` | `quickstart create`, `init` | Before `clone:start` when an `AGORA_QUICKSTART_<TEMPLATE>_REPO_URL` override is in use | `repoUrl`, `envVar` |
 | `clone:start` | `quickstart create`, `init` | Before the `git clone` shell-out | `repoUrl`, `targetPath`, `ref` |
 | `clone:complete` | `quickstart create`, `init` | After `git clone` succeeds | `targetPath` |
+| `clone:strip-git` | `quickstart create`, `init` | After upstream `.git` metadata is removed from the scaffold | `targetPath` |
 | `project:create` | `init` | Before creating a new Agora project | `projectName`, `features` |
 | `project:created` | `init` | After the project is ready | `projectId`, `projectName` |
 | `project:reuse` | `init` | When binding to an existing project | `projectId`, `projectName` |
@@ -227,6 +228,7 @@ Additional stage-specific fields may appear (for example `repoUrl`, `projectId`,
 {"event":"progress","command":"init","stage":"project:reuse","message":"Reusing existing Agora project","timestamp":"...","projectId":"prj_abc","projectName":"Default Project"}
 {"event":"progress","command":"init","stage":"clone:start","message":"Cloning quickstart repository","timestamp":"...","repoUrl":"...","targetPath":"...","ref":""}
 {"event":"progress","command":"init","stage":"clone:complete","message":"Quickstart repository cloned","timestamp":"...","targetPath":"..."}
+{"event":"progress","command":"init","stage":"clone:strip-git","message":"Removed quickstart repository history","timestamp":"...","targetPath":"..."}
 {"ok":true,"command":"init","data":{},"meta":{"exitCode":0,"outputMode":"json"}}
 ```
 

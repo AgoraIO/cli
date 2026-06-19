@@ -5,8 +5,8 @@ Releases are fully automated via GoReleaser. Pushing a `v*` tag is the only manu
 ## Release
 
 ```bash
-git tag v0.2.2
-git push origin v0.2.2
+git tag v0.2.5
+git push origin v0.2.5
 ```
 
 The release workflow (`.github/workflows/release.yml`) then:
@@ -22,11 +22,11 @@ The release workflow (`.github/workflows/release.yml`) then:
    - Downloads the release archives, verifies them against `checksums.txt` (SHA-256), and refuses to publish on mismatch
    - Stages the per-platform binary into each unscoped `agoraio-cli-{os}-{arch}` package
    - Stamps the tag version into all package.json files (wrapper + 6 platform packages)
-   - Publishes the six per-platform packages with `npm publish --provenance`
+   - Publishes the six per-platform packages with `npm publish` authenticated by `NPM_TOKEN`
    - Publishes the wrapper package (`agoraio-cli`) with `npm publish --provenance`
    - Runs a post-publish smoke test: `npx --yes agoraio-cli@<tag> --version` with retry/backoff to handle registry propagation
-   - Authenticates via [npm trusted publishing](https://docs.npmjs.com/trusted-publishers/) (OIDC from GitHub Actions — no `NPM_TOKEN` secret)
-   - Requires `id-token: write` workflow permission (already set in `release.yml`)
+   - Authenticates the wrapper via [npm trusted publishing](https://docs.npmjs.com/trusted-publishers/) (OIDC from GitHub Actions)
+   - Requires `NPM_TOKEN` for the platform packages and `id-token: write` workflow permission for the wrapper (already set in `release.yml`)
 
 3. **Apt repository** job (triggered by the published release):
    - Downloads `.deb` files from the release
@@ -35,7 +35,7 @@ The release workflow (`.github/workflows/release.yml`) then:
 
 ## Release notes
 
-Before tagging, ensure [CHANGELOG.md](CHANGELOG.md) has the version section finalized, including any migration or upgrade notes. GoReleaser publishes auto-generated release notes from commits; paste highlights from the CHANGELOG section into the GitHub release description if you want a curated summary.
+Before tagging, ensure [CHANGELOG.md](CHANGELOG.md) has the version section finalized (empty `[Unreleased]`, dated release heading, updated compare links), including any migration or upgrade notes. GoReleaser publishes auto-generated release notes from commits; paste highlights from the CHANGELOG section into the GitHub release description if you want a curated summary.
 
 ## Local Verification
 
@@ -61,14 +61,14 @@ The release workflow exposes a `workflow_dispatch` trigger that runs the npm pub
 
 ## Pre-tag checklist (npm)
 
-Before tagging the first real release that ships npm, confirm:
+Before tagging a real npm release, confirm:
 
-- [ ] Each npm package has a **Trusted Publisher** configured on [npmjs.com](https://www.npmjs.com) (Package → Settings → Trusted Publisher → GitHub Actions):
+- [ ] The wrapper package has a **Trusted Publisher** configured on [npmjs.com](https://www.npmjs.com) (Package → Settings → Trusted Publisher → GitHub Actions):
   - Repository: `AgoraIO/cli`
   - Workflow filename: `release.yml`
-  - Configure for `agoraio-cli` and all six `agoraio-cli-{os}-{arch}` platform packages
+- [ ] The six `agoraio-cli-{os}-{arch}` platform packages are publishable by the npm automation token stored in the `NPM_TOKEN` GitHub secret.
 - [ ] `agoraio-cli` and `agoraio-cli-*` package names on npmjs.com are owned by the Agora npm org / publisher and not squatted.
-- [ ] The workflow has `id-token: write` permission (already set in `release.yml`); trusted publishing and provenance require it.
+- [ ] The workflow has `id-token: write` permission (already set in `release.yml`); wrapper trusted publishing and provenance require it.
 - [ ] A `workflow_dispatch` dry-run on the current `main` succeeds end-to-end (validates packaging and tarball contents).
 - [ ] First publish should be a release-candidate tag (e.g. `v0.1.x-rc.1`) so an unexpected failure does not affect a "latest" tag in the registry.
 
@@ -78,6 +78,7 @@ Before tagging the first real release that ships npm, confirm:
 | -------------------- | -------- | ------------------------------- |
 | `APT_SIGNING_KEY`    | secret   | Signed apt repo on GitHub Pages |
 | `APT_SIGNING_KEY_ID` | variable | Signed apt repo on GitHub Pages |
+| `NPM_TOKEN`          | secret   | Publishing npm platform packages |
 
 Homebrew and Scoop are not part of the current GoReleaser config. Add `brews:` / `scoops:` blocks before documenting them as automated channels.
 
@@ -86,7 +87,7 @@ Homebrew and Scoop are not part of the current GoReleaser config. Add `brews:` /
 | Channel                 | How                                                         |
 | ----------------------- | ----------------------------------------------------------- |
 | Homebrew                | Coming soon; direct installer is current primary macOS path |
-| npm (convenience)       | Active; published with provenance from `release.yml`        |
+| npm (convenience)       | Active; wrapper uses trusted publishing, platform packages use `NPM_TOKEN` |
 | apt/deb (Debian/Ubuntu) | apt-repo.yml → GitHub Pages                                 |
 | rpm (RHEL/Fedora)       | Release artifact (.rpm via GoReleaser)                      |
 | apk (Alpine/Docker)     | Release artifact (.apk via GoReleaser)                      |
@@ -107,7 +108,8 @@ If a published version is bad:
 
 - [ ] Enable GitHub Pages on this repo (Settings → Pages → Source: GitHub Actions)
 - [ ] Generate GPG key for apt signing; set `APT_SIGNING_KEY` and `APT_SIGNING_KEY_ID`
-- [ ] Configure npm **Trusted Publishers** for `agoraio-cli` and all `agoraio-cli-*` packages (repo: `AgoraIO/cli`, workflow: `release.yml`)
+- [ ] Configure npm **Trusted Publisher** for `agoraio-cli` (repo: `AgoraIO/cli`, workflow: `release.yml`)
+- [ ] Configure an npm automation token with publish access to the six `agoraio-cli-*` platform packages and store it as `NPM_TOKEN`
 - [ ] Run a `workflow_dispatch` dry-run of the release workflow to validate npm packaging
 - [ ] Add Homebrew and Scoop GoReleaser blocks before announcing those channels
 - [ ] Submit first Winget manifest PR to `microsoft/winget-pkgs` after the first release

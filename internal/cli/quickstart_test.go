@@ -28,6 +28,28 @@ func TestGitQuickstartCloneArgs(t *testing.T) {
 	}
 }
 
+func TestStripClonedGitMetadata(t *testing.T) {
+	repo := createLocalGitRepo(t, map[string]string{
+		"README.md": "# Quickstart\n",
+	})
+	target := filepath.Join(t.TempDir(), "quickstart")
+	if err := cloneQuickstartRepo(repo, target, ""); err != nil {
+		t.Fatalf("cloneQuickstartRepo failed: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(target, ".git")); err != nil {
+		t.Fatalf("expected cloned git repo before strip: %v", err)
+	}
+	if err := stripClonedGitMetadata(target); err != nil {
+		t.Fatalf("stripClonedGitMetadata failed: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(target, ".git")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("expected .git removed after strip, got %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(target, "README.md")); err != nil {
+		t.Fatalf("expected README to remain after strip: %v", err)
+	}
+}
+
 func TestCloneQuickstartRepoLocal(t *testing.T) {
 	repo := createLocalGitRepo(t, map[string]string{
 		"README.md": "# Quickstart\n",

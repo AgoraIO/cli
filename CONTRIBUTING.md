@@ -128,6 +128,22 @@ change; prefer adding a new code and deprecating the old one over a rename.
   that is part of the public contract (JSON shape, exit code, stderr text).
   Use `app_test.go` for isolated helper logic.
 
+## CI and releases
+
+GitHub Actions are configured for:
+
+- push and pull request validation on Linux, macOS, and Windows
+- automated tag-driven releases for `v*` tags
+- cross-platform release artifacts for Linux, macOS, and Windows
+
+Release workflow behavior:
+
+- a pushed tag matching `v*` (for example `v0.2.5`) triggers the release workflow
+- the workflow runs tests, builds release binaries, packages them, and publishes a GitHub release automatically
+- release artifacts include checksums, Cosign signatures, and an SBOM
+
+See [AGENTS.md](AGENTS.md) for the full release pipeline (npm, Homebrew, apt, GitHub Pages).
+
 ## Branching model
 
 - `main` is always releasable. CI must be green before merge.
