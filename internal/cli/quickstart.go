@@ -18,6 +18,7 @@ type quickstartTemplate struct {
 	Description    string
 	Runtime        string
 	RepoURL        string
+	Ref            string
 	DocsURL        string
 	DetectPaths    []string
 	EnvExamplePath string
@@ -79,6 +80,22 @@ func quickstartTemplates() []quickstartTemplate {
 			SupportsInit:   true,
 			Available:      true,
 		},
+		{
+			ID:             "android",
+			Title:          "Conversational AI Android Quickstart",
+			Description:    "Clone the official Android conversational AI quickstart.",
+			Runtime:        "android",
+			RepoURL:        "https://github.com/AgoraIO-Conversational-AI/agent-quickstart-android",
+			DocsURL:        "https://github.com/AgoraIO-Conversational-AI/agent-quickstart-android/tree/main",
+			DetectPaths:    []string{"settings.gradle", "gradlew", "server/env.example"},
+			EnvExamplePath: "server/env.example",
+			EnvTargetPath:  "server/.env",
+			InstallCommand: "Install Python backend dependencies and Android Studio",
+			RunCommand:     "Run the Python backend, then launch the Android app",
+			EnvDocsSummary: "Copies server/env.example to server/.env, then writes APP_ID and APP_CERTIFICATE for the Python backend.",
+			SupportsInit:   true,
+			Available:      true,
+		},
 	}
 }
 
@@ -104,6 +121,7 @@ Use this group when you want a standalone demo or onboarding project.`,
   agora quickstart create my-nextjs-demo --template nextjs
   agora quickstart create my-python-demo --template python --project my-agent-demo
   agora quickstart create my-go-demo --template go --project my-agent-demo
+  agora quickstart create my-android-demo --template android --project my-agent-demo
 `),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) > 0 {
@@ -222,6 +240,7 @@ The CLI can infer the quickstart type from the repository layout, or you can for
   agora quickstart env write apps/my-nextjs-demo
   agora quickstart env write apps/my-python-demo --project my-agent-demo
   agora quickstart env write apps/my-go-demo --project my-agent-demo
+  agora quickstart env write apps/my-android-demo --project my-agent-demo
   agora quickstart env write . --template nextjs
 `),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -237,12 +256,13 @@ The CLI can infer the quickstart type from the repository layout, or you can for
 		Long: `Write the runtime-specific env file expected by a cloned quickstart repository.
 
 Next.js quickstarts receive NEXT_PUBLIC_* client env vars plus server-only Agora credentials.
-Python and Go quickstarts receive backend APP_ID and APP_CERTIFICATE values.`,
+Python, Go, and Android quickstarts receive backend APP_ID and APP_CERTIFICATE values.`,
 		Example: example(`
   agora quickstart env write
   agora quickstart env write apps/my-nextjs-demo
   agora quickstart env write apps/my-python-demo --project my-agent-demo
   agora quickstart env write apps/my-go-demo --project my-agent-demo
+  agora quickstart env write apps/my-android-demo --project my-agent-demo
   agora quickstart env write . --template python
 `),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -292,11 +312,15 @@ func (a *App) quickstartCreate(template quickstartTemplate, targetDir, explicitP
 	if err != nil {
 		return nil, err
 	}
+	effectiveRef := strings.TrimSpace(ref)
+	if effectiveRef == "" {
+		effectiveRef = strings.TrimSpace(template.Ref)
+	}
 	if overrideKey != "" {
 		progress.emit("clone:override", fmt.Sprintf("Using repo override from %s", overrideKey), map[string]any{"repoUrl": repoURL, "envVar": overrideKey})
 	}
-	progress.emit("clone:start", "Cloning quickstart repository", map[string]any{"repoUrl": repoURL, "targetPath": absTarget, "ref": ref})
-	if err := cloneQuickstartRepo(repoURL, absTarget, ref); err != nil {
+	progress.emit("clone:start", "Cloning quickstart repository", map[string]any{"repoUrl": repoURL, "targetPath": absTarget, "ref": effectiveRef})
+	if err := cloneQuickstartRepo(repoURL, absTarget, effectiveRef); err != nil {
 		return nil, err
 	}
 	progress.emit("clone:complete", "Quickstart repository cloned", map[string]any{"targetPath": absTarget})
@@ -353,7 +377,7 @@ func (a *App) quickstartCreate(template quickstartTemplate, targetDir, explicitP
 		"title":        template.Title,
 		"written":      written,
 		"nextSteps":    initNextSteps(template, absTarget),
-		"ref":          ref,
+		"ref":          effectiveRef,
 	}
 	if boundProject != nil {
 		result["projectId"] = boundProject.project.ProjectID
@@ -628,7 +652,7 @@ func conflictingQuickstartEnvKeys(templateID string) []string {
 	switch templateID {
 	case "nextjs":
 		return []string{"AGORA_APP_ID", "AGORA_APP_CERTIFICATE", "APP_ID", "APP_CERTIFICATE"}
-	case "python", "go":
+	case "android", "python", "go":
 		return []string{"AGORA_APP_ID", "AGORA_APP_CERTIFICATE", "NEXT_PUBLIC_AGORA_APP_ID", "NEXT_AGORA_APP_CERTIFICATE"}
 	default:
 		return nil
@@ -642,7 +666,7 @@ func renderQuickstartEnvValues(template quickstartTemplate, project projectDetai
 			"NEXT_PUBLIC_AGORA_APP_ID":   project.AppID,
 			"NEXT_AGORA_APP_CERTIFICATE": *project.SignKey,
 		}
-	case "python", "go":
+	case "android", "python", "go":
 		return map[string]any{
 			"APP_ID":          project.AppID,
 			"APP_CERTIFICATE": *project.SignKey,

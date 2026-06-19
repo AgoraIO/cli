@@ -33,6 +33,14 @@ func TestCLIQuickstartListAndCreate(t *testing.T) {
 		"server-go/main.go":       "package main\nfunc main() {}\n",
 		"web-client/package.json": `{"name":"go-quickstart-web"}`,
 	})
+	androidRepo := createLocalGitRepo(t, map[string]string{
+		"README.md":                        "# Android Quickstart\n",
+		"settings.gradle":                  "rootProject.name = \"android-quickstart\"\n",
+		"gradlew":                          "#!/bin/sh\n",
+		"app/src/main/AndroidManifest.xml": "<manifest package=\"io.agora.android.quickstart\" />\n",
+		"server/env.example":               "APP_ID=\nAPP_CERTIFICATE=\nPORT=8000\n",
+		"server/main.py":                   "print('hello from backend')\n",
+	})
 
 	project := buildFakeProject("Project Alpha", "prj_123456", "app_123456", "global")
 	api.projects[project.ProjectID] = &project
@@ -53,11 +61,14 @@ func TestCLIQuickstartListAndCreate(t *testing.T) {
 	if list.exitCode != 0 || !strings.Contains(list.stdout, `"id":"nextjs"`) || !strings.Contains(list.stdout, `"id":"python"`) || !strings.Contains(list.stdout, `"id":"go"`) {
 		t.Fatalf("unexpected quickstart list result: %+v", list)
 	}
+	if !strings.Contains(list.stdout, `"id":"android"`) {
+		t.Fatalf("expected android quickstart in list result: %+v", list)
+	}
 	listAll := runCLI(t, []string{"quickstart", "list", "--show-all", "--json"}, cliRunOptions{env: map[string]string{
 		"XDG_CONFIG_HOME": configHome,
 		"AGORA_LOG_LEVEL": "error",
 	}})
-	if listAll.exitCode != 0 || !strings.Contains(listAll.stdout, `"id":"go"`) {
+	if listAll.exitCode != 0 || !strings.Contains(listAll.stdout, `"id":"go"`) || !strings.Contains(listAll.stdout, `"id":"android"`) {
 		t.Fatalf("unexpected quickstart list --show-all result: %+v", listAll)
 	}
 
@@ -168,6 +179,82 @@ func TestCLIQuickstartListAndCreate(t *testing.T) {
 	})
 	if writePythonEnv.exitCode != 0 || !strings.Contains(writePythonEnv.stdout, `"template":"python"`) {
 		t.Fatalf("unexpected python quickstart env write result: %+v", writePythonEnv)
+	}
+
+	androidUnboundTarget := filepath.Join(rootDir, "android-unbound")
+	createAndroidUnbound := runCLI(t, []string{"quickstart", "create", "android-unbound", "--template", "android", "--dir", androidUnboundTarget, "--json"}, cliRunOptions{
+		env: map[string]string{
+			"XDG_CONFIG_HOME":                   t.TempDir(),
+			"AGORA_LOG_LEVEL":                   "error",
+			"AGORA_QUICKSTART_ANDROID_REPO_URL": androidRepo,
+		},
+		workdir: rootDir,
+	})
+	if createAndroidUnbound.exitCode != 0 || !strings.Contains(createAndroidUnbound.stdout, `"envStatus":"template-only"`) {
+		t.Fatalf("unexpected unbound android quickstart create result: %+v", createAndroidUnbound)
+	}
+	if _, err := os.Stat(filepath.Join(androidUnboundTarget, "server", ".env")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("did not expect backend env in unbound android scaffold, got %v", err)
+	}
+
+	androidBoundTarget := filepath.Join(rootDir, "android-demo")
+	createAndroidBound := runCLI(t, []string{"quickstart", "create", "android-demo", "--template", "android", "--dir", androidBoundTarget, "--json"}, cliRunOptions{
+		env: map[string]string{
+			"XDG_CONFIG_HOME":                   configHome,
+			"AGORA_API_BASE_URL":                api.baseURL,
+			"AGORA_LOG_LEVEL":                   "error",
+			"AGORA_QUICKSTART_ANDROID_REPO_URL": androidRepo,
+		},
+		workdir: rootDir,
+	})
+	if createAndroidBound.exitCode != 0 || !strings.Contains(createAndroidBound.stdout, `"envStatus":"configured"`) || !strings.Contains(createAndroidBound.stdout, `"projectId":"prj_123456"`) {
+		t.Fatalf("unexpected bound android quickstart create result: %+v", createAndroidBound)
+	}
+	androidEnv, err := os.ReadFile(filepath.Join(androidBoundTarget, "server", ".env"))
+	if err != nil {
+		t.Fatalf("expected android backend .env in bound scaffold: %v", err)
+	}
+	if !strings.Contains(string(androidEnv), "APP_ID=app_123456") || !strings.Contains(string(androidEnv), "APP_CERTIFICATE=") || !strings.Contains(string(androidEnv), "PORT=8000") {
+		t.Fatalf("unexpected android backend env contents: %s", string(androidEnv))
+	}
+	androidMetadata, err := os.ReadFile(filepath.Join(androidBoundTarget, ".agora", "project.json"))
+	if err != nil {
+		t.Fatalf("expected android .agora/project.json in bound scaffold: %v", err)
+	}
+	if !strings.Contains(string(androidMetadata), `"template": "android"`) {
+		t.Fatalf("unexpected android .agora/project.json contents: %s", string(androidMetadata))
+	}
+
+	writeAndroidEnv := runCLI(t, []string{"quickstart", "env", "write", androidBoundTarget, "--template", "android", "--json"}, cliRunOptions{
+		env: map[string]string{
+			"XDG_CONFIG_HOME":    configHome,
+			"AGORA_API_BASE_URL": api.baseURL,
+			"AGORA_LOG_LEVEL":    "error",
+		},
+		workdir: rootDir,
+	})
+	if writeAndroidEnv.exitCode != 0 || !strings.Contains(writeAndroidEnv.stdout, `"template":"android"`) {
+		t.Fatalf("unexpected android quickstart env write result: %+v", writeAndroidEnv)
+	}
+	androidEnvAfterWrite, err := os.ReadFile(filepath.Join(androidBoundTarget, "server", ".env"))
+	if err != nil {
+		t.Fatalf("expected android backend .env after env write: %v", err)
+	}
+	if !strings.Contains(string(androidEnvAfterWrite), "APP_ID=app_123456") || !strings.Contains(string(androidEnvAfterWrite), "APP_CERTIFICATE=") {
+		t.Fatalf("unexpected android backend env after env write: %s", string(androidEnvAfterWrite))
+	}
+
+	initAndroid := runCLI(t, []string{"init", "android-init-demo", "--template", "android", "--project", "prj_123456", "--json"}, cliRunOptions{
+		env: map[string]string{
+			"XDG_CONFIG_HOME":                   configHome,
+			"AGORA_API_BASE_URL":                api.baseURL,
+			"AGORA_LOG_LEVEL":                   "error",
+			"AGORA_QUICKSTART_ANDROID_REPO_URL": androidRepo,
+		},
+		workdir: rootDir,
+	})
+	if initAndroid.exitCode != 0 || !strings.Contains(initAndroid.stdout, `"template":"android"`) || !strings.Contains(initAndroid.stdout, `"envPath":"server/.env"`) {
+		t.Fatalf("unexpected android init result: %+v", initAndroid)
 	}
 
 	repoScopedConfig := t.TempDir()
