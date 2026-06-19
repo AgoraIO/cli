@@ -619,7 +619,7 @@ Automation notes:
 Example:
 
 ```bash
-./agora quickstart create my-android-demo --template android --project my-project --json
+./agora quickstart create my-python-demo --template python --project my-project --json
 ```
 
 Required `data` fields:
@@ -660,7 +660,7 @@ Safe branch fields:
 Example:
 
 ```bash
-./agora quickstart env write /abs/path/to/my-android-demo --json
+./agora quickstart env write /abs/path/to/my-python-demo --json
 ```
 
 Required `data` fields:
