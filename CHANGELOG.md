@@ -15,9 +15,14 @@ Earlier entries pre-date this convention and only carry their version's compare 
 
 ## [Unreleased]
 
+### Added
+
+- Add the Android conversational AI quickstart as a fully supported template with project-bound env seeding for the Python backend and `init` support.
+
 ### Fixed
 
 - Update GoReleaser Cosign signing to emit `checksums.txt.sigstore.json` with `--bundle`, matching Cosign's current bundle-based signing flow.
+- Remove the Android quickstart clone-only behavior so `quickstart create`, `quickstart env write`, and `init` all follow the same project-binding flow as Next.js, Python, and Go.
 
 ## [0.2.2] - 2026-05-26
 

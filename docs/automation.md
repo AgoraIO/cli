@@ -340,6 +340,7 @@ Example:
 ```bash
 ./agora init my-nextjs-demo --template nextjs --json
 ./agora init my-nextjs-demo --template nextjs --new-project --json
+./agora init my-android-demo --template android --json
 ```
 
 By default `init` reuses an existing project — preferring one named exactly `"Default Project"`. If no default exists, interactive sessions show existing projects with a create-new option and default to the most recently created project; JSON, CI, and non-TTY runs select the most recent project automatically. Pass `--new-project` to force creation. Use `--project <name|id>` to bind to a specific project.
@@ -349,7 +350,7 @@ Required `data` fields:
 - `action`
   Always `init`.
 - `template`
-  Template ID such as `nextjs`, `python`, or `go`.
+  Template ID such as `nextjs`, `python`, `go`, or `android`.
 - `projectAction`
   `created` or `existing`.
 - `reusedExistingProject`
@@ -616,7 +617,7 @@ Automation notes:
 Example:
 
 ```bash
-./agora quickstart create my-python-demo --template python --project my-project --json
+./agora quickstart create my-android-demo --template android --project my-project --json
 ```
 
 Required `data` fields:
@@ -657,7 +658,7 @@ Safe branch fields:
 Example:
 
 ```bash
-./agora quickstart env write /abs/path/to/my-python-demo --json
+./agora quickstart env write /abs/path/to/my-android-demo --json
 ```
 
 Required `data` fields:
@@ -679,7 +680,8 @@ Required `data` fields:
 Env write behavior:
 - quickstart env files contain only the App ID and App Certificate variable names required by the template
 - Next.js uses `NEXT_PUBLIC_AGORA_APP_ID` and `NEXT_AGORA_APP_CERTIFICATE`
-- Python and Go use `APP_ID` and `APP_CERTIFICATE`
+- Python, Go, and Android use `APP_ID` and `APP_CERTIFICATE`
+- Android quickstarts read and write `server/env.example` and `server/.env`
 - project metadata such as project ID, project name, region, template, projectType, and env path is stored in `.agora/project.json`
 - existing quickstart env files are preserved; missing credential keys are appended and existing credential keys are updated
 - stale Agora credential aliases for another runtime are commented out to avoid ambiguous dotenv resolution; for example, a Next.js quickstart prefers `NEXT_PUBLIC_AGORA_APP_ID` and comments out old `AGORA_APP_ID` / `APP_ID` entries when replacing them

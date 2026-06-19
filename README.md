@@ -19,7 +19,7 @@ agora init my-nextjs-demo --template nextjs
 | Next.js video app | `agora init my-nextjs-demo --template nextjs` | A cloned Next.js quickstart, project binding, and `.env.local` |
 | Python voice agent | `agora init my-python-demo --template python` | A Python quickstart with Agora credentials written for the backend |
 | Go token service | `agora init my-go-demo --template go` | A Go server quickstart with project metadata and env wiring |
-| Android conversational AI app | `agora quickstart create my-android-demo --template android` | A cloned Android quickstart on the `rest-api` branch |
+| Android conversational AI app | `agora init my-android-demo --template android` | An Android quickstart with the Python backend env file written to `server/.env` |
 
 ## Install
 
@@ -180,6 +180,7 @@ Prints build metadata. Release binaries include version, commit, and build date.
 ```bash
 agora login
 agora init my-nextjs-demo --template nextjs
+agora init my-android-demo --template android
 ```
 
 ### Use an existing project with a quickstart
@@ -231,6 +232,7 @@ Template-specific behavior:
 - Next.js quickstarts write `.env.local` and use `NEXT_PUBLIC_AGORA_APP_ID` plus `NEXT_AGORA_APP_CERTIFICATE`
 - Python quickstarts copy `server/env.example` to `server/.env`, then use `APP_ID` plus `APP_CERTIFICATE`
 - Go quickstarts copy `server-go/env.example` to `server-go/.env`, then use `APP_ID` plus `APP_CERTIFICATE`
+- Android quickstarts copy `server/env.example` to `server/.env`, then use `APP_ID` plus `APP_CERTIFICATE`
 
 The CLI also writes repo-local project metadata to:
 
