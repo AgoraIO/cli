@@ -13,11 +13,16 @@ import (
 )
 
 type quickstartTemplate struct {
-	ID             string
-	Title          string
-	Description    string
-	Runtime        string
-	RepoURL        string
+	ID          string
+	Title       string
+	Description string
+	Runtime     string
+	RepoURL     string
+	// RepoURLCN / DocsURLCN are the cn-region variants. They currently
+	// mirror the global URLs because the conversational-AI quickstarts
+	// have no China-hosted mirror yet; set them to the cn URL when one
+	// exists and quickstartRepoURLForRegion / quickstartDocsURL will pick
+	// it up automatically (an empty value falls back to the global URL).
 	RepoURLCN      string
 	DocsURL        string
 	DocsURLCN      string
