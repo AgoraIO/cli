@@ -66,6 +66,7 @@ func TestMain(m *testing.M) {
 		os.Exit(executeCLI(cliArgs))
 		return
 	}
+
 	os.Exit(m.Run())
 }
 
@@ -251,6 +252,8 @@ func helperEnv(base []string, overrides map[string]string) []string {
 // quickstart repos so quickstart-clone tests do not hit the network.
 func createLocalGitRepo(t *testing.T, files map[string]string) string {
 	t.Helper()
+	t.Setenv("GIT_ALLOW_PROTOCOL", "file")
+
 	repoDir := t.TempDir()
 	for path, content := range files {
 		filePath := filepath.Join(repoDir, filepath.FromSlash(path))

@@ -65,12 +65,12 @@ func quickstartTemplates() []quickstartTemplate {
 			RepoURLCN:      "https://github.com/AgoraIO-Conversational-AI/agent-quickstart-python",
 			DocsURL:        "https://github.com/AgoraIO-Conversational-AI/agent-quickstart-python",
 			DocsURLCN:      "https://github.com/AgoraIO-Conversational-AI/agent-quickstart-python",
-			DetectPaths:    []string{"server/env.example", "server", "web-client"},
-			EnvExamplePath: "server/env.example",
-			EnvTargetPath:  "server/.env",
+			DetectPaths:    []string{"server/requirements.txt", "web/package.json"},
+			EnvExamplePath: "server/.env.example",
+			EnvTargetPath:  "server/.env.local",
 			InstallCommand: "bun install",
 			RunCommand:     "bun run dev",
-			EnvDocsSummary: "Copies server/env.example to server/.env, then writes APP_ID and APP_CERTIFICATE.",
+			EnvDocsSummary: "Copies server/.env.example to server/.env.local, then writes AGORA_APP_ID and AGORA_APP_CERTIFICATE.",
 			SupportsInit:   true,
 			Available:      true,
 		},
@@ -83,12 +83,12 @@ func quickstartTemplates() []quickstartTemplate {
 			RepoURLCN:      "https://github.com/AgoraIO-Conversational-AI/agent-quickstart-go",
 			DocsURL:        "https://github.com/AgoraIO-Conversational-AI/agent-quickstart-go",
 			DocsURLCN:      "https://github.com/AgoraIO-Conversational-AI/agent-quickstart-go",
-			DetectPaths:    []string{"server-go/env.example", "server-go", "web-client"},
-			EnvExamplePath: "server-go/env.example",
-			EnvTargetPath:  "server-go/.env",
+			DetectPaths:    []string{"server/go.mod", "client/package.json"},
+			EnvExamplePath: "server/.env.example",
+			EnvTargetPath:  "server/.env.local",
 			InstallCommand: "make setup",
 			RunCommand:     "make dev",
-			EnvDocsSummary: "Copies server-go/env.example to server-go/.env, then writes APP_ID and APP_CERTIFICATE.",
+			EnvDocsSummary: "Copies server/.env.example to server/.env.local, then writes AGORA_APP_ID and AGORA_APP_CERTIFICATE.",
 			SupportsInit:   true,
 			Available:      true,
 		},
@@ -250,7 +250,7 @@ The CLI can infer the quickstart type from the repository layout, or you can for
 		Long: `Write the runtime-specific env file expected by a cloned quickstart repository.
 
 Next.js quickstarts receive NEXT_PUBLIC_* client env vars plus server-only Agora credentials.
-Python and Go quickstarts receive backend APP_ID and APP_CERTIFICATE values.`,
+Python and Go quickstarts receive backend AGORA_APP_ID and AGORA_APP_CERTIFICATE values.`,
 		Example: example(`
   agora quickstart env write
   agora quickstart env write apps/my-nextjs-demo
@@ -662,7 +662,7 @@ func conflictingQuickstartEnvKeys(templateID string) []string {
 	case "nextjs":
 		return []string{"AGORA_APP_ID", "AGORA_APP_CERTIFICATE", "APP_ID", "APP_CERTIFICATE"}
 	case "python", "go":
-		return []string{"AGORA_APP_ID", "AGORA_APP_CERTIFICATE", "NEXT_PUBLIC_AGORA_APP_ID", "NEXT_AGORA_APP_CERTIFICATE"}
+		return []string{"APP_ID", "APP_CERTIFICATE", "NEXT_PUBLIC_AGORA_APP_ID", "NEXT_AGORA_APP_CERTIFICATE"}
 	default:
 		return nil
 	}
@@ -677,8 +677,8 @@ func renderQuickstartEnvValues(template quickstartTemplate, project projectDetai
 		}
 	case "python", "go":
 		return map[string]any{
-			"APP_ID":          project.AppID,
-			"APP_CERTIFICATE": *project.SignKey,
+			"AGORA_APP_ID":          project.AppID,
+			"AGORA_APP_CERTIFICATE": *project.SignKey,
 		}
 	default:
 		return map[string]any{}
