@@ -93,3 +93,43 @@ func TestPathFixSuggestionEmptyInstallDirFallsBackToInstallerHint(t *testing.T) 
 		t.Fatalf("expected no half-built export line when install dir is empty, got %q", got)
 	}
 }
+
+func TestInstallDoctorNetworkEndpointsFollowCurrentRegion(t *testing.T) {
+	t.Run("global uses global endpoints", func(t *testing.T) {
+		app := &App{
+			cfg: defaultConfig(),
+			env: map[string]string{"XDG_CONFIG_HOME": t.TempDir()},
+		}
+		endpoints := app.installDoctorNetworkEndpoints()
+		if len(endpoints) != 2 {
+			t.Fatalf("expected 2 endpoints, got %+v", endpoints)
+		}
+		if endpoints[0].url != apiBaseURL {
+			t.Fatalf("expected global api endpoint, got %q", endpoints[0].url)
+		}
+		if endpoints[1].url != oauthBaseURL {
+			t.Fatalf("expected global oauth endpoint, got %q", endpoints[1].url)
+		}
+	})
+
+	t.Run("cn uses cn endpoints", func(t *testing.T) {
+		env := map[string]string{"XDG_CONFIG_HOME": t.TempDir()}
+		if err := saveContext(env, projectContext{CurrentRegion: regionCN}); err != nil {
+			t.Fatal(err)
+		}
+		app := &App{
+			cfg: defaultConfig(),
+			env: env,
+		}
+		endpoints := app.installDoctorNetworkEndpoints()
+		if len(endpoints) != 2 {
+			t.Fatalf("expected 2 endpoints, got %+v", endpoints)
+		}
+		if endpoints[0].url != apiBaseURLCN {
+			t.Fatalf("expected cn api endpoint, got %q", endpoints[0].url)
+		}
+		if endpoints[1].url != oauthBaseURLCN {
+			t.Fatalf("expected cn oauth endpoint, got %q", endpoints[1].url)
+		}
+	})
+}

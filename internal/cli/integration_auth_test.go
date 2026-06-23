@@ -17,7 +17,7 @@ func TestCLILoginAndWhoAmI(t *testing.T) {
 	oauth := newFakeOAuthServer()
 	defer oauth.server.Close()
 
-	result := runCLI(t, []string{"login"}, cliRunOptions{env: map[string]string{
+	result := runCLI(t, []string{"login", "--region", "cn"}, cliRunOptions{env: map[string]string{
 		"XDG_CONFIG_HOME":         configHome,
 		"AGORA_OAUTH_BASE_URL":    oauth.baseURL,
 		"AGORA_OAUTH_CLIENT_ID":   "test-public-client",
@@ -68,6 +68,9 @@ func TestCLILoginAndWhoAmI(t *testing.T) {
 	data := envelope["data"].(map[string]any)
 	if data["authenticated"] != true {
 		t.Fatalf("expected authenticated response, got %v", status.stdout)
+	}
+	if data["region"] != "cn" {
+		t.Fatalf("expected persisted auth region cn, got %v", data["region"])
 	}
 }
 

@@ -26,6 +26,7 @@ This catalog is the source of truth for stable codes. CI runs `make snapshot-err
 | `PROJECT_NOT_SELECTED` | 1 | No explicit, repo-local, or global project context is available. | Pass `--project`, work inside a bound quickstart, or run `agora project use <project>`. |
 | `PROJECT_NOT_FOUND` | 1 | The requested project ID or exact name was not found. | Run `agora project list` and retry with the project ID. |
 | `PROJECT_AMBIGUOUS` | 1 | A project name matched multiple projects. | Retry with the project ID. |
+| `PROJECT_REGION_MISMATCH` | 1 | A repo-local `.agora/project.json` binding points to a different region than the active login region. | Run `agora login --region <region>` for the bound project region, or pass `--project` to override the repo-local binding. |
 | `PROJECT_NO_CERTIFICATE` | 1 | The selected project has no app certificate for env seeding. | Enable an app certificate in Console or select another project. |
 | `PROJECT_ENV_TEMPLATE_UNKNOWN` | 1 | The `--template` value for `project env write` is not supported. | Use `nextjs` or `standard`. |
 | `PROJECT_NOT_READY` | 1 | `project doctor` could not surface a more specific issue. | Re-run `project doctor` for details. |

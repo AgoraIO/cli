@@ -19,8 +19,10 @@ import (
 //     same docs tree. Pages publishes these files under /md/ after
 //     rendering the human HTML site, giving agents stable source URLs
 //     such as /md/commands.md and /md/automation.md.
-//   - consoleURL is the public Agora Console front door.
-//   - productDocsURL is the public product documentation site.
+//   - consoleURL / consoleURLCN are the public Console front doors for
+//     the global and cn control planes respectively.
+//   - productDocsURL / productDocsURLCN are the public product
+//     documentation sites for the global and cn control planes.
 //
 // A smoke test in open_targets_test.go validates that each URL
 // parses, uses HTTPS, and is non-empty so a typo here surfaces in CI.
@@ -32,7 +34,9 @@ const (
 	cliDocsURL         = "https://agoraio.github.io/cli/"
 	cliDocsMarkdownURL = "https://agoraio.github.io/cli/md/index.md"
 	consoleURL         = "https://console.agora.io"
+	consoleURLCN       = "https://console.shengwang.cn"
 	productDocsURL     = "https://docs.agora.io"
+	productDocsURLCN   = "https://doc.shengwang.cn"
 )
 
 // openTargetEnv maps each open-target name to the environment variable
@@ -48,15 +52,15 @@ var openTargetEnv = map[string]string{
 }
 
 // resolveOpenTarget returns the URL the `agora open` command should
-// open or print for the given target name. Resolution order:
+// open or print for the given target name and active login region.
+// Resolution order:
 //
-//  1. Per-target environment override from openTargetEnv (when set
-//     and non-empty), e.g. AGORA_DOCS_URL=https://staging-docs.example/
-//  2. Compiled-in canonical URL.
+//  1. Region-agnostic environment override from openTargetEnv
+//  2. Compiled-in region default
 //
 // Returns a structured error for unknown targets so the message stays
 // consistent with the rest of the CLI's input-validation errors.
-func resolveOpenTarget(target string, env map[string]string) (string, error) {
+func resolveOpenTarget(target, region string, env map[string]string) (string, error) {
 	envKey, known := openTargetEnv[target]
 	if !known {
 		return "", fmt.Errorf("unknown open target %q. Use console, docs, docs-md, or product-docs.", target)
@@ -66,15 +70,29 @@ func resolveOpenTarget(target string, env map[string]string) (string, error) {
 			return override, nil
 		}
 	}
-	switch target {
-	case "console":
-		return consoleURL, nil
-	case "docs":
-		return cliDocsURL, nil
-	case "docs-md":
-		return cliDocsMarkdownURL, nil
-	case "product-docs":
-		return productDocsURL, nil
+
+	if normalizeContextRegion(region) == regionCN {
+		switch target {
+		case "console":
+			return consoleURLCN, nil
+		case "docs":
+			return cliDocsURL, nil
+		case "docs-md":
+			return cliDocsMarkdownURL, nil
+		case "product-docs":
+			return productDocsURLCN, nil
+		}
+	} else {
+		switch target {
+		case "console":
+			return consoleURL, nil
+		case "docs":
+			return cliDocsURL, nil
+		case "docs-md":
+			return cliDocsMarkdownURL, nil
+		case "product-docs":
+			return productDocsURL, nil
+		}
 	}
 	// Unreachable: openTargetEnv keys and switch cases are kept in sync.
 	return "", fmt.Errorf("unknown open target %q. Use console, docs, docs-md, or product-docs.", target)

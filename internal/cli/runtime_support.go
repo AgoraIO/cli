@@ -17,14 +17,11 @@ import (
 const (
 	// currentAppConfigVersion is the schema version stamped on every
 	// config write. Bumping it forces ensureAppConfigState to mark
-	// the load as "migrated" so the migration banner runs once. v3
-	// renamed the persisted "verbose" key to "debug" (see
-	// mergeConfig); v2 was the API/OAuth base-URL flip from staging
-	// to production.
-	currentAppConfigVersion = 3
-	previousAPIBaseURL      = "https://agora-cli-bff.staging.la3.agoralab.co"
-	previousOAuthBaseURL    = "https://staging-sso.agora.io"
-	previousOAuthClientID   = "cli_demo"
+	// the load as "migrated" so the migration banner runs once. v4
+	// stopped persisting endpoint/OAuth integration defaults; v3 renamed
+	// the persisted "verbose" key to "debug" (see mergeConfig); v2 was
+	// the API/OAuth base-URL flip from staging to production.
+	currentAppConfigVersion = 4
 )
 
 type configState struct {
@@ -70,7 +67,7 @@ func ensureAppConfigState(env map[string]string) (configState, error) {
 	}
 
 	cfg := defaultConfig()
-	mergeConfig(&cfg, migratePreviousConfig(raw))
+	mergeConfig(&cfg, raw)
 	version, hasVersion := intValue(raw["version"])
 	if hasVersion && version > currentAppConfigVersion {
 		return configState{}, fmt.Errorf("Config version %d is newer than this CLI supports.", version)
@@ -96,26 +93,6 @@ func ensureAppConfigState(env map[string]string) (configState, error) {
 		PreviousVersion: previousVersion,
 		Status:          status,
 	}, nil
-}
-
-func migratePreviousConfig(raw map[string]any) map[string]any {
-	clone := map[string]any{}
-	for k, v := range raw {
-		clone[k] = v
-	}
-	version, _ := intValue(raw["version"])
-	if version < 2 {
-		if v, ok := clone["apiBaseUrl"].(string); ok && v == previousAPIBaseURL {
-			clone["apiBaseUrl"] = defaultConfig().APIBaseURL
-		}
-		if v, ok := clone["oauthBaseUrl"].(string); ok && v == previousOAuthBaseURL {
-			clone["oauthBaseUrl"] = defaultConfig().OAuthBaseURL
-		}
-		if v, ok := clone["oauthClientId"].(string); ok && v == previousOAuthClientID {
-			clone["oauthClientId"] = defaultConfig().OAuthClientID
-		}
-	}
-	return clone
 }
 
 func intValue(v any) (int, bool) {

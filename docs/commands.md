@@ -44,7 +44,7 @@ Authenticate with Agora Console
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
 | `--no-browser` | `bool` | — | print the login URL instead of auto-opening a browser |
-| `--region` | `string` | — | control plane region for login defaults (global or cn) |
+| `--region` | `string` | `global` | control plane region for login (global or cn) |
 
 ### `agora auth logout`
 
@@ -82,13 +82,9 @@ Update persisted CLI defaults
 
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
-| `--api-base-url` | `string` | `https://agora-cli.agora.io` | default CLI API base URL |
 | `--browser-auto-open` | `bool` | — | persist browser auto-open preference; use --browser-auto-open=false to disable |
 | `--debug` | `bool` | — | persist the --debug preference (echo structured logs to stderr); use --debug=false to disable |
 | `--log-level` | `string` | `info` | persist default log level |
-| `--oauth-base-url` | `string` | `https://sso2.agora.io` | default OAuth base URL |
-| `--oauth-client-id` | `string` | `agora_web_cli` | default OAuth client ID |
-| `--oauth-scope` | `string` | `basic_info,console` | default OAuth scope |
 | `--output` | `output` | `pretty` | persist default output mode (pretty or json) |
 | `--telemetry-enabled` | `bool` | — | persist telemetry preference; use --telemetry-enabled=false to disable |
 
@@ -115,7 +111,6 @@ Create a project, clone a quickstart, and write env in one flow
 | `--feature` | `stringArray` | `[]` | enable a feature on the newly created project (repeatable); defaults to rtc, rtm, convoai; convoai also enables rtm |
 | `--new-project` | `bool` | — | always create a new Agora project instead of reusing an existing one |
 | `--project` | `string` | — | existing project ID or exact project name to bind to |
-| `--region` | `string` | — | control plane region for newly created projects (global or cn) |
 | `--rtm-data-center` | `string` | — | RTM data center to configure when rtm is enabled on a newly created project (CN, NA, EU, or AP); defaults to NA |
 | `--template` | `string` | — | quickstart template ID to use |
 
@@ -132,7 +127,7 @@ Authenticate with Agora Console
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
 | `--no-browser` | `bool` | — | print the login URL instead of auto-opening a browser |
-| `--region` | `string` | — | control plane region for login defaults (global or cn) |
+| `--region` | `string` | `global` | control plane region for login (global or cn) |
 
 ### `agora logout`
 
@@ -177,7 +172,6 @@ Create a new remote Agora project
 | `--dry-run` | `bool` | — | return the planned project create result without creating remote resources |
 | `--feature` | `stringArray` | `[]` | enable one or more features after creation; defaults to rtc, rtm, convoai; convoai also enables rtm |
 | `--idempotency-key` | `string` | — | caller-provided key for safe retries when supported by the API |
-| `--region` | `string` | — | control plane region for the project context (global or cn) |
 | `--rtm-data-center` | `string` | — | RTM data center to configure when rtm is enabled (CN, NA, EU, or AP); defaults to NA |
 | `--template` | `string` | — | apply a higher-level project preset such as voice-agent |
 
@@ -209,6 +203,7 @@ Write project environment variables to a dotenv file
 |------|------|---------|-------------|
 | `--append` | `bool` | — | append Agora App ID and App Certificate values when no existing values are present |
 | `--overwrite` | `bool` | — | replace the target file with only Agora App ID and App Certificate values |
+| `--project` | `string` | — | project ID or exact project name; defaults to the current project context |
 | `--template` | `string` | — | credential key layout: nextjs or standard; if omitted, detect Next.js from the workspace |
 
 ### `agora project feature`
@@ -379,4 +374,3 @@ Show the current auth status
 **`outputModes`**: `pretty`, `json`
 
 **`doctorStatus`**: `healthy`, `warning`, `not_ready`, `auth_error`
-

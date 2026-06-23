@@ -301,7 +301,7 @@ func (a *App) buildOpenCommand() *cobra.Command {
   agora open --target docs --browser
 `),
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			url, err := resolveOpenTarget(target, a.osEnv)
+			url, err := resolveOpenTarget(target, a.authRegion(), a.osEnv)
 			if err != nil {
 				return err
 			}
@@ -347,7 +347,7 @@ func (a *App) buildLoginCommand(use string) *cobra.Command {
 		},
 	}
 	cmd.Flags().BoolVar(&noBrowser, "no-browser", false, "print the login URL instead of auto-opening a browser")
-	cmd.Flags().StringVar(&region, "region", "", "control plane region for login defaults (global or cn)")
+	cmd.Flags().StringVar(&region, "region", "global", "control plane region for login (global or cn)")
 	return cmd
 }
 
@@ -509,23 +509,10 @@ func (a *App) buildConfigCommand() *cobra.Command {
 		Example: example(`
   agora config update --output json
   agora config update --browser-auto-open=false
-  agora config update --api-base-url https://agora-cli.agora.io
   agora config update --debug=true
 `),
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			next := a.cfg
-			if cmd.Flags().Changed("api-base-url") {
-				next.APIBaseURL = cfg.APIBaseURL
-			}
-			if cmd.Flags().Changed("oauth-base-url") {
-				next.OAuthBaseURL = cfg.OAuthBaseURL
-			}
-			if cmd.Flags().Changed("oauth-client-id") {
-				next.OAuthClientID = cfg.OAuthClientID
-			}
-			if cmd.Flags().Changed("oauth-scope") {
-				next.OAuthScope = cfg.OAuthScope
-			}
 			if cmd.Flags().Changed("telemetry-enabled") {
 				next.TelemetryEnabled = telemetryEnabled
 			}
@@ -553,10 +540,6 @@ func (a *App) buildConfigCommand() *cobra.Command {
 			return renderResult(cmd, "config update", next)
 		},
 	}
-	update.Flags().StringVar(&cfg.APIBaseURL, "api-base-url", cfg.APIBaseURL, "default CLI API base URL")
-	update.Flags().StringVar(&cfg.OAuthBaseURL, "oauth-base-url", cfg.OAuthBaseURL, "default OAuth base URL")
-	update.Flags().StringVar(&cfg.OAuthClientID, "oauth-client-id", cfg.OAuthClientID, "default OAuth client ID")
-	update.Flags().StringVar(&cfg.OAuthScope, "oauth-scope", cfg.OAuthScope, "default OAuth scope")
 	update.Flags().BoolVar(&telemetryEnabled, "telemetry-enabled", false, "persist telemetry preference; use --telemetry-enabled=false to disable")
 	update.Flags().BoolVar(&browserAutoOpen, "browser-auto-open", false, "persist browser auto-open preference; use --browser-auto-open=false to disable")
 	update.Flags().StringVar(&cfg.LogLevel, "log-level", cfg.LogLevel, "persist default log level")
@@ -600,17 +583,17 @@ These commands do not clone local application code. Use "agora quickstart" for s
 }
 
 func (a *App) buildProjectCreate() *cobra.Command {
-	var region, rtmDataCenter, template string
+	var rtmDataCenter, template string
 	var features []string
 	var dryRun bool
 	var idempotencyKey string
 	cmd := &cobra.Command{
 		Use:   "create [name]",
 		Short: "Create a new remote Agora project",
-		Long:  "Create a new Agora project resource in the selected control-plane region and optionally enable features after creation.",
+		Long:  "Create a new Agora project resource in the current control-plane region and optionally enable features after creation.",
 		Example: example(`
   agora project create my-app
-  agora project create my-agent-demo --region global --feature rtc --feature convoai
+  agora project create my-agent-demo --feature rtc --feature convoai
   agora project create my-rtm-demo --rtm-data-center EU
   agora project create my-voice-agent --template voice-agent
 `),
@@ -634,7 +617,7 @@ func (a *App) buildProjectCreate() *cobra.Command {
 					"enabledFeatures": plannedFeatures,
 					"idempotencyKey":  idempotencyKey,
 					"projectName":     args[0],
-					"region":          region,
+					"region":          a.authRegion(),
 					"status":          "planned",
 					"template":        template,
 				}
@@ -643,14 +626,13 @@ func (a *App) buildProjectCreate() *cobra.Command {
 				}
 				return renderResult(cmd, "project create", result)
 			}
-			data, err := a.projectCreate(args[0], region, template, features, normalizedRTMDataCenter, idempotencyKey)
+			data, err := a.projectCreate(args[0], template, features, normalizedRTMDataCenter, idempotencyKey)
 			if err != nil {
 				return err
 			}
 			return renderResult(cmd, "project create", data)
 		},
 	}
-	cmd.Flags().StringVar(&region, "region", "", "control plane region for the project context (global or cn)")
 	cmd.Flags().StringVar(&rtmDataCenter, "rtm-data-center", "", "RTM data center to configure when rtm is enabled (CN, NA, EU, or AP); defaults to NA")
 	cmd.Flags().StringVar(&template, "template", "", "apply a higher-level project preset such as voice-agent")
 	cmd.Flags().StringArrayVar(&features, "feature", nil, fmt.Sprintf("enable one or more features after creation; defaults to %s; convoai also enables rtm", featureListString()))
@@ -886,6 +868,7 @@ When .agora/project.json exists, this command updates it for the selected projec
 	}
 	write.Flags().Bool("overwrite", false, "replace the target file with only Agora App ID and App Certificate values")
 	write.Flags().Bool("append", false, "append Agora App ID and App Certificate values when no existing values are present")
+	write.Flags().StringVar(&a.projectEnvProject, "project", "", "project ID or exact project name; defaults to the current project context")
 	write.Flags().StringVar(&a.projectEnvWriteTemplate, "template", "", "credential key layout: nextjs or standard; if omitted, detect Next.js from the workspace")
 	cmd.AddCommand(write)
 	return cmd

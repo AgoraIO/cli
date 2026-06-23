@@ -349,7 +349,7 @@ type fakeProject struct {
 	Name         string  `json:"name"`
 	ProjectID    string  `json:"projectId"`
 	ProjectType  string  `json:"projectType"`
-	Region       string  `json:"region"`
+	Region       string  `json:"-"`
 	SignKey      *string `json:"signKey"`
 	Stage        int     `json:"stage"`
 	Status       string  `json:"status"`
@@ -432,7 +432,6 @@ func newFakeCLIBFF() *fakeCLIBFF {
 					"name":                   project.Name,
 					"projectId":              project.ProjectID,
 					"projectType":            project.ProjectType,
-					"region":                 project.Region,
 					"signKey":                project.SignKey,
 					"stage":                  project.Stage,
 					"status":                 project.Status,

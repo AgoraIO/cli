@@ -8,12 +8,8 @@ import "strings"
 // public names.
 type appConfig struct {
 	Version          int        `json:"version"`
-	APIBaseURL       string     `json:"apiBaseUrl"`
 	BrowserAutoOpen  bool       `json:"browserAutoOpen"`
 	LogLevel         string     `json:"logLevel"`
-	OAuthBaseURL     string     `json:"oauthBaseUrl"`
-	OAuthClientID    string     `json:"oauthClientId"`
-	OAuthScope       string     `json:"oauthScope"`
 	Output           outputMode `json:"output"`
 	TelemetryEnabled bool       `json:"telemetryEnabled"`
 	// Debug controls whether `appendAppLog` mirrors structured log
@@ -29,13 +25,9 @@ type appConfig struct {
 // back to these values.
 func defaultConfig() appConfig {
 	return appConfig{
-		Version:          3,
-		APIBaseURL:       "https://agora-cli.agora.io",
+		Version:          4,
 		BrowserAutoOpen:  true,
 		LogLevel:         "info",
-		OAuthBaseURL:     "https://sso2.agora.io",
-		OAuthClientID:    "agora_web_cli",
-		OAuthScope:       "basic_info,console",
 		Output:           outputPretty,
 		TelemetryEnabled: true,
 		Debug:            false,
@@ -46,23 +38,11 @@ func defaultConfig() appConfig {
 // missing or wrong-typed fields. This is the partial-update path used by
 // the migration flow in ensureAppConfigState.
 func mergeConfig(cfg *appConfig, raw map[string]any) {
-	if v, ok := raw["apiBaseUrl"].(string); ok && v != "" {
-		cfg.APIBaseURL = v
-	}
 	if v, ok := raw["browserAutoOpen"].(bool); ok {
 		cfg.BrowserAutoOpen = v
 	}
 	if v, ok := raw["logLevel"].(string); ok && v != "" {
 		cfg.LogLevel = v
-	}
-	if v, ok := raw["oauthBaseUrl"].(string); ok && v != "" {
-		cfg.OAuthBaseURL = v
-	}
-	if v, ok := raw["oauthClientId"].(string); ok && v != "" {
-		cfg.OAuthClientID = v
-	}
-	if v, ok := raw["oauthScope"].(string); ok && v != "" {
-		cfg.OAuthScope = v
 	}
 	if v, ok := raw["output"].(string); ok && (v == "json" || v == "pretty") {
 		cfg.Output = outputMode(v)
@@ -87,10 +67,6 @@ func mergeConfig(cfg *appConfig, raw map[string]any) {
 // populated. DO_NOT_TRACK forces telemetry off regardless of the persisted
 // config preference (Console-style telemetry opt-out signal).
 func (a *App) applyConfigToEnv() {
-	a.setEnvIfMissing("AGORA_API_BASE_URL", a.cfg.APIBaseURL)
-	a.setEnvIfMissing("AGORA_OAUTH_BASE_URL", a.cfg.OAuthBaseURL)
-	a.setEnvIfMissing("AGORA_OAUTH_CLIENT_ID", a.cfg.OAuthClientID)
-	a.setEnvIfMissing("AGORA_OAUTH_SCOPE", a.cfg.OAuthScope)
 	a.setEnvIfMissing("AGORA_OUTPUT", string(a.cfg.Output))
 	a.setEnvIfMissing("AGORA_SENTRY_ENABLED", boolString(a.cfg.TelemetryEnabled))
 	a.setEnvIfMissing("AGORA_BROWSER_AUTO_OPEN", boolString(a.cfg.BrowserAutoOpen))

@@ -252,13 +252,7 @@ func (a *App) installDoctorAgoraHomeCheck() doctorCheckCategory {
 
 func (a *App) installDoctorNetworkCheck() doctorCheckCategory {
 	items := []doctorCheckItem{}
-	endpoints := []struct {
-		name string
-		url  string
-	}{
-		{"api", a.env["AGORA_API_BASE_URL"]},
-		{"oauth", a.env["AGORA_OAUTH_BASE_URL"]},
-	}
+	endpoints := a.installDoctorNetworkEndpoints()
 	client := &http.Client{Timeout: 5 * time.Second}
 	for _, ep := range endpoints {
 		if strings.TrimSpace(ep.url) == "" {
@@ -308,6 +302,20 @@ func (a *App) installDoctorNetworkCheck() doctorCheckCategory {
 		})
 	}
 	return categoryWithStatus("network", items)
+}
+
+func (a *App) installDoctorNetworkEndpoints() []struct {
+	name string
+	url  string
+} {
+	region := a.authRegion()
+	return []struct {
+		name string
+		url  string
+	}{
+		{"api", a.apiBaseURLForRegion(region)},
+		{"oauth", a.oauthBaseURLForRegion(region)},
+	}
 }
 
 func (a *App) installDoctorAuthCheck() doctorCheckCategory {

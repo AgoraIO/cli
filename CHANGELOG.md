@@ -15,6 +15,15 @@ Earlier entries pre-date this convention and only carry their version's compare 
 
 ## [Unreleased]
 
+### Changed
+
+- Add region-aware CLI profile support for `global` and `cn`: `agora login --region` now selects the API/OAuth endpoints, Console/docs links, quickstart URLs, doctor network checks, and project context region used by later commands.
+- **BREAKING**: `agora login` without `--region` now resets the active region to `global` (and clears the session-scoped project context and project-list cache) instead of reusing the previously selected region. Pass `--region cn` to authenticate against the cn control plane.
+- **BREAKING**: Remove `--region` from `agora init` and `agora project create`; new projects now use the active login region instead of a per-command region flag.
+- **BREAKING**: Update public JSON shapes for region-aware profiles: `auth login --json` and `auth status --json` include `data.region`, while project list/show API models no longer expose a project `region` field because the project APIs do not return it.
+- **BREAKING**: Stop persisting CLI API/OAuth integration values in `config.json`. `apiBaseUrl`, `oauthBaseUrl`, `oauthClientId`, and `oauthScope` are now derived from the selected login region or from explicit environment variable overrides (`AGORA_API_BASE_URL`, `AGORA_OAUTH_BASE_URL`, `AGORA_OAUTH_CLIENT_ID`, `AGORA_OAUTH_SCOPE`). Existing configs auto-migrate to schema version `4` and drop those legacy keys on first load; users who previously pinned custom endpoints in `config.json` should move those values to environment variables.
+- Add `PROJECT_REGION_MISMATCH` when a repo-local `.agora/project.json` binding points to a different region than the active login region.
+
 ## [0.2.5] - 2026-06-05
 
 Installer migration, quickstart scaffold cleanup, and onboarding doc refresh.
