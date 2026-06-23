@@ -148,10 +148,29 @@ jobs:
             (cd "$download_dir" && shasum -a 256 "$archive" > checksums.txt)
           fi
 
-          python3 -m http.server 18080 --directory "$fixture_root" >/tmp/agora-install-server.log 2>&1 &
+          python3 -m http.server 18080 --bind 127.0.0.1 --directory "$fixture_root" >/tmp/agora-install-server.log 2>&1 &
           server_pid=$!
-          trap 'kill "$server_pid"' EXIT
-          sleep 2
+          trap 'kill "$server_pid" 2>/dev/null || true; wait "$server_pid" 2>/dev/null || true' EXIT
+
+          archive_url="http://127.0.0.1:18080/download/v${version}/${archive}"
+          server_ready=false
+          for attempt in $(seq 1 20); do
+            if ! kill -0 "$server_pid" 2>/dev/null; then
+              cat /tmp/agora-install-server.log >&2 || true
+              echo "Fixture HTTP server exited before serving ${archive_url}." >&2
+              exit 1
+            fi
+            if curl -fsS --head "$archive_url" >/dev/null; then
+              server_ready=true
+              break
+            fi
+            sleep 1
+          done
+          if [ "$server_ready" != true ]; then
+            cat /tmp/agora-install-server.log >&2 || true
+            echo "Fixture HTTP server did not serve ${archive_url}." >&2
+            exit 1
+          fi
 
           # The installer enforces --proto =https in production. The smoke test
           # serves the fixture from a local HTTP server, so we relax the proto
