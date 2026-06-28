@@ -2,7 +2,7 @@
 # Agora CLI installer for macOS, Linux, and Windows POSIX shells.
 #
 # Quick start:
-#   curl -fsSL https://raw.githubusercontent.com/AgoraIO/cli/main/install.sh | sh
+#   curl -fsSL https://agoraio.github.io/cli/install.sh | sh
 #
 # Pin a version:
 #   curl -fsSL .../install.sh | sh -s -- --version 0.1.4
@@ -39,6 +39,7 @@ RELEASES_DOWNLOAD_BASE_URL="${RELEASES_DOWNLOAD_BASE_URL:-https://github.com/${G
 RELEASES_PAGE_URL="${RELEASES_PAGE_URL:-https://github.com/${GITHUB_REPO}/releases}"
 DOCS_URL="${DOCS_URL:-https://github.com/${GITHUB_REPO}#readme}"
 ISSUES_URL="${ISSUES_URL:-https://github.com/${GITHUB_REPO}/issues}"
+INSTALLER_BASE_URL="${INSTALLER_BASE_URL:-https://agoraio.github.io/cli}"
 AUTH_TOKEN="${GITHUB_TOKEN:-${GH_TOKEN:-}}"
 NO_COLOR_ENV="${NO_COLOR:-}"
 
@@ -156,6 +157,17 @@ verbose() {
   printf '%s[debug]%s %s\n' "$DIM" "$RESET" "$*" >&2
 }
 
+installer_script_url() {
+  case "$GITHUB_REPO" in
+    AgoraIO/cli)
+      printf '%s/install.sh\n' "${INSTALLER_BASE_URL%/}"
+      ;;
+    *)
+      printf 'https://raw.githubusercontent.com/%s/main/install.sh\n' "$GITHUB_REPO"
+      ;;
+  esac
+}
+
 die() {
   err "$1"
   exit "${2:-$EXIT_GENERIC}"
@@ -227,6 +239,8 @@ ${BOLD}Environment:${RESET}
   RELEASES_PAGE_URL           Override release page URL (used in messages).
   DOCS_URL                    Override docs URL (used in next-steps footer).
   ISSUES_URL                  Override issues URL (used in error messages).
+  INSTALLER_BASE_URL          Override canonical installer base URL (used in
+                              retry messages for AgoraIO/cli).
 
 ${BOLD}Exit codes:${RESET}
   ${EXIT_OK}  success
@@ -791,11 +805,11 @@ guard_managed_install() {
   if [ "$MANAGED_INSTALL" = "npm" ]; then
     say "  To switch to the standalone installer manually:"
     say "    ${GREEN}npm uninstall -g agoraio-cli${RESET}"
-    say "    ${GREEN}curl -fsSL https://raw.githubusercontent.com/${GITHUB_REPO}/main/install.sh | sh${RESET}"
+    say "    ${GREEN}curl -fsSL $(installer_script_url) | sh${RESET}"
     say "  Or re-run with ${BOLD}--replace-npm${RESET} to uninstall the npm package and install this binary."
   else
     say "  To switch to the standalone installer, uninstall the ${MANAGED_INSTALL} package first, then re-run:"
-    say "    ${GREEN}curl -fsSL https://raw.githubusercontent.com/${GITHUB_REPO}/main/install.sh | sh${RESET}"
+    say "    ${GREEN}curl -fsSL $(installer_script_url) | sh${RESET}"
   fi
   say "  Or re-run with ${BOLD}--force${RESET} to install alongside (may shadow the ${MANAGED_INSTALL} install on PATH)."
   exit "$EXIT_INSTALL"

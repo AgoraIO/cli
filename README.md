@@ -19,7 +19,7 @@ Native Agora CLI for authentication, project management, quickstart setup, and d
 ### Install the CLI
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/AgoraIO/cli/main/install.sh | sh
+curl -fsSL https://agoraio.github.io/cli/install.sh | sh
 ```
 
 Run the CLI:
@@ -32,7 +32,7 @@ Alternative install paths:
 
 ```bash
 # Windows PowerShell
-irm https://raw.githubusercontent.com/AgoraIO/cli/main/install.ps1 | iex
+irm https://agoraio.github.io/cli/install.ps1 | iex
 ```
 
 Locked-down environments that block `curl | sh` can use npm, download a release archive from GitHub, or mirror the binary internally. Every release includes `checksums.txt`, a Cosign keyless signature, and an SBOM; see [docs/install.md](docs/install.md#enterprise--locked-down-environments) for manual tarball, checksum, and Cosign verification steps.
@@ -41,9 +41,19 @@ Notes:
 
 - The shell installer supports macOS, Linux, and Windows POSIX shells such as Git Bash. Use `install.ps1` for native PowerShell installs on Windows.
 - **Shell setup is auto-on**: the installer wires the install directory onto your `PATH` (when needed) and writes a shell completion script for the detected shell (bash, zsh, fish, or PowerShell). Pass `--no-path`, `--no-completion`, or the umbrella `--skip-shell` (PowerShell: `-NoPath` / `-NoCompletion` / `-SkipShell`) to opt out granularly.
-- Installer help is always available with `curl -fsSL https://raw.githubusercontent.com/AgoraIO/cli/main/install.sh | sh -s -- --help`.
+- Installer help is always available with `curl -fsSL https://agoraio.github.io/cli/install.sh | sh -s -- --help`.
 - Pinned versions, dry runs, custom install directories, npm details, and source builds are documented in [docs/install.md](docs/install.md).
 - Release artifacts and checksums: [GitHub Releases](https://github.com/AgoraIO/cli/releases). Vulnerability disclosures: [SECURITY.md](SECURITY.md).
+
+Direct GitHub fallback:
+
+```bash
+# macOS, Linux, and Windows POSIX shells
+curl -fsSL https://raw.githubusercontent.com/AgoraIO/cli/main/install.sh | sh
+
+# Windows PowerShell
+irm https://raw.githubusercontent.com/AgoraIO/cli/main/install.ps1 | iex
+```
 
 ### Build from source
 

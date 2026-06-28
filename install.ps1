@@ -9,7 +9,7 @@
 #   - Documented exit-code contract (matches install.sh; see docs/install.md)
 #
 # Quick start:
-#   irm https://raw.githubusercontent.com/AgoraIO/cli/main/install.ps1 | iex
+#   irm https://agoraio.github.io/cli/install.ps1 | iex
 #
 # Pin a version:
 #   $env:VERSION = '0.2.0'; & ([scriptblock]::Create((irm .../install.ps1)))

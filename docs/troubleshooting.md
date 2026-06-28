@@ -69,14 +69,14 @@ If the older binary came from a global npm install and you want to switch
 to the standalone installer, either migrate in one installer run:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/AgoraIO/cli/main/install.sh | sh -s -- --replace-npm
+curl -fsSL @@CLI_INSTALL_SH_URL@@ | sh -s -- --replace-npm
 ```
 
 Or uninstall npm first and then run the standalone installer:
 
 ```bash
 npm uninstall -g agoraio-cli
-curl -fsSL https://raw.githubusercontent.com/AgoraIO/cli/main/install.sh | sh
+curl -fsSL @@CLI_INSTALL_SH_URL@@ | sh
 ```
 
 Use `--force` only when you intentionally want two installs and understand
@@ -176,7 +176,7 @@ Re-run the installer once (it always fetches the latest script and archive
 names):
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/AgoraIO/cli/main/install.sh | sh
+curl -fsSL @@CLI_INSTALL_SH_URL@@ | sh
 ```
 
 npm and other package-manager installs are unaffected.
