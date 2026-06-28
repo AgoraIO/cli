@@ -1223,6 +1223,9 @@ func TestProjectWebhookCreateDefaultsCNDeliveryRegion(t *testing.T) {
 	project := buildFakeProject("demo-cn", "prj_cn", "app_cn", "cn")
 	api.projects[project.ProjectID] = &project
 	persistSessionForIntegration(t, configHome)
+	if err := saveContext(map[string]string{"XDG_CONFIG_HOME": configHome}, projectContext{CurrentRegion: regionCN}); err != nil {
+		t.Fatal(err)
+	}
 
 	result := runCLI(t, []string{"project", "webhook", "create", "--project", "demo-cn", "--feature", "rtc", "--url", "https://example.cn/webhook", "--events", "channel-created", "--json"}, cliRunOptions{env: webhookTestEnv(configHome, api.baseURL)})
 	if result.exitCode != 0 || !strings.Contains(result.stdout, `"urlRegion":"cn"`) || strings.Contains(result.stdout, "displayNameCn") {
