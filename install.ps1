@@ -48,6 +48,9 @@ $InstallReceiptFileName = 'agora.install.json'
 
 $GitHubApiUrl            = if ($env:GITHUB_API_URL) { $env:GITHUB_API_URL } else { 'https://api.github.com' }
 $ReleasesDownloadBaseUrl = if ($env:RELEASES_DOWNLOAD_BASE_URL) { $env:RELEASES_DOWNLOAD_BASE_URL } else { "https://github.com/$GitHubRepo/releases/download" }
+$S3DownloadBaseUrl       = if ($env:S3_DOWNLOAD_BASE_URL) { $env:S3_DOWNLOAD_BASE_URL } else { 'https://dl.agora.io/cli/releases' }
+$S3LatestUrl             = if ($env:S3_LATEST_URL) { $env:S3_LATEST_URL } else { 'https://dl.agora.io/cli/latest.json' }
+$AgoraInstallSource      = if ($env:AGORA_INSTALL_SOURCE) { $env:AGORA_INSTALL_SOURCE } else { 'auto' }
 $ReleasesPageUrl         = if ($env:RELEASES_PAGE_URL) { $env:RELEASES_PAGE_URL } else { "https://github.com/$GitHubRepo/releases" }
 $DocsUrl                 = if ($env:DOCS_URL) { $env:DOCS_URL } else { "https://github.com/$GitHubRepo#readme" }
 $AuthToken               = if ($env:GITHUB_TOKEN) { $env:GITHUB_TOKEN } elseif ($env:GH_TOKEN) { $env:GH_TOKEN } else { $null }
@@ -438,6 +441,10 @@ $destinationBinary = Join-Path $InstallDir 'agora.exe'
 if ($Uninstall) {
     Uninstall-Agora
     exit $EXIT_OK
+}
+
+if ($AgoraInstallSource -notin @('auto', 'github', 's3')) {
+    Fail "AGORA_INSTALL_SOURCE must be one of: auto, github, s3 (got '$AgoraInstallSource')." -ExitCode $EXIT_USAGE
 }
 
 $Version = Normalize-Version $Version
