@@ -36,6 +36,9 @@ VERSION="${VERSION:-}"
 SUDO="${SUDO:-sudo}"
 GITHUB_API_URL="${GITHUB_API_URL:-https://api.github.com}"
 RELEASES_DOWNLOAD_BASE_URL="${RELEASES_DOWNLOAD_BASE_URL:-https://github.com/${GITHUB_REPO}/releases/download}"
+S3_DOWNLOAD_BASE_URL="${S3_DOWNLOAD_BASE_URL:-https://dl.agora.io/cli/releases}"
+S3_LATEST_URL="${S3_LATEST_URL:-https://dl.agora.io/cli/latest.json}"
+AGORA_INSTALL_SOURCE="${AGORA_INSTALL_SOURCE:-auto}"
 RELEASES_PAGE_URL="${RELEASES_PAGE_URL:-https://github.com/${GITHUB_REPO}/releases}"
 DOCS_URL="${DOCS_URL:-https://github.com/${GITHUB_REPO}#readme}"
 ISSUES_URL="${ISSUES_URL:-https://github.com/${GITHUB_REPO}/issues}"
@@ -384,6 +387,15 @@ need_cmd() {
 
 normalize_version() {
   VERSION=$(printf '%s' "$VERSION" | sed 's/^v//')
+}
+
+validate_install_source() {
+  case "$AGORA_INSTALL_SOURCE" in
+    auto|github|s3) ;;
+    *)
+      die "AGORA_INSTALL_SOURCE must be one of: auto, github, s3 (got '${AGORA_INSTALL_SOURCE}')." "$EXIT_USAGE"
+      ;;
+  esac
 }
 
 platform_default_install_dir() {
@@ -1227,6 +1239,7 @@ main() {
   print_banner
 
   normalize_version
+  validate_install_source
   if [ -z "$VERSION" ]; then
     say_step "Resolving latest version..."
     resolve_version
