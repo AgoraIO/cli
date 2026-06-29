@@ -99,10 +99,12 @@ jobs:
     name: Publish npm packages
     # Run after goreleaser on tag pushes; on workflow_dispatch run independently in dry-run mode.
     needs: [goreleaser]
-    if: |
-      always() &&
-      (github.event_name == 'workflow_dispatch' ||
-       (github.event_name == 'push' && needs.goreleaser.result == 'success'))
+    # DISABLED: npm publishing is turned off. To re-enable, restore the condition:
+    #   if: |
+    #     always() &&
+    #     (github.event_name == 'workflow_dispatch' ||
+    #      (github.event_name == 'push' && needs.goreleaser.result == 'success'))
+    if: false
     runs-on: ubuntu-latest
 
     steps:
