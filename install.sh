@@ -239,6 +239,12 @@ ${BOLD}Environment:${RESET}
   NO_COLOR                    Disable colored output (any non-empty value).
   GITHUB_API_URL              Override GitHub API base URL.
   RELEASES_DOWNLOAD_BASE_URL  Override release download base URL.
+  S3_DOWNLOAD_BASE_URL        Override the S3/CloudFront mirror download base
+                              (default: https://dl.agora.io/cli/releases).
+  S3_LATEST_URL               Override the mirror's latest-version pointer
+                              (default: https://dl.agora.io/cli/latest.json).
+  AGORA_INSTALL_SOURCE        auto (GitHub then mirror), github (GitHub only),
+                              or s3 (mirror only). Default: auto.
   RELEASES_PAGE_URL           Override release page URL (used in messages).
   DOCS_URL                    Override docs URL (used in next-steps footer).
   ISSUES_URL                  Override issues URL (used in error messages).
