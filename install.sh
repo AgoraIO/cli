@@ -2,10 +2,11 @@
 # Agora CLI installer for macOS, Linux, and Windows POSIX shells.
 #
 # Quick start:
-#   curl -fsSL https://agoraio.github.io/cli/install.sh | sh
+#   curl -fsSL https://dl.agora.io/cli/install.sh | sh
 #
-# Restricted networks (GitHub blocked): auto-falls back to the dl.agora.io
-# mirror; where GitHub is fully blocked, fetch the script from the mirror too:
+# Restricted networks (GitHub blocked): the script is served from the dl.agora.io
+# CDN, and binaries auto-fall back to the mirror. In a fully-blocked region, skip
+# GitHub for binaries too:
 #   curl -fsSL https://dl.agora.io/cli/install.sh | AGORA_INSTALL_SOURCE=s3 sh
 #
 # Pin a version:
@@ -46,7 +47,7 @@ AGORA_INSTALL_SOURCE="${AGORA_INSTALL_SOURCE:-auto}"
 RELEASES_PAGE_URL="${RELEASES_PAGE_URL:-https://github.com/${GITHUB_REPO}/releases}"
 DOCS_URL="${DOCS_URL:-https://github.com/${GITHUB_REPO}#readme}"
 ISSUES_URL="${ISSUES_URL:-https://github.com/${GITHUB_REPO}/issues}"
-INSTALLER_BASE_URL="${INSTALLER_BASE_URL:-https://agoraio.github.io/cli}"
+INSTALLER_BASE_URL="${INSTALLER_BASE_URL:-https://dl.agora.io/cli}"
 AUTH_TOKEN="${GITHUB_TOKEN:-${GH_TOKEN:-}}"
 NO_COLOR_ENV="${NO_COLOR:-}"
 

@@ -1,0 +1,53 @@
+name: Sync installers to S3
+
+# Keeps the canonical installer scripts on the dl.agora.io mirror in sync with
+# main. The mirror-to-s3 job in release.yml only uploads them on tag releases;
+# this syncs them whenever install.sh / install.ps1 change on main, so
+# https://dl.agora.io/cli/install.sh never lags the default branch.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - install.sh
+      - install.ps1
+
+permissions:
+  contents: read
+
+jobs:
+  sync-installers:
+    runs-on: ubuntu-latest
+    env:
+      AWS_REGION: us-east-1
+      S3_BUCKET: dl-agora-io
+      S3_PREFIX: cli
+      CF_DISTRIBUTION_ID: E2U1WWAZBG33XY
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Upload installer scripts (mutable)
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="s3://${S3_BUCKET}/${S3_PREFIX}"
+          aws s3 cp install.sh  "${base}/install.sh"  --cache-control "public, max-age=300" --content-type "text/x-shellscript"
+          aws s3 cp install.ps1 "${base}/install.ps1" --cache-control "public, max-age=300" --content-type "text/plain"
+          echo "Synced install.sh / install.ps1 to ${base}/"
+
+      - name: Invalidate CloudFront
+        shell: bash
+        run: |
+          set -euo pipefail
+          aws cloudfront create-invalidation \
+            --distribution-id "${CF_DISTRIBUTION_ID}" \
+            --paths "/${S3_PREFIX}/install.sh" "/${S3_PREFIX}/install.ps1"
+          echo "Invalidated /${S3_PREFIX}/install.sh and /${S3_PREFIX}/install.ps1"

@@ -25,8 +25,8 @@ from pathlib import Path
 DEFAULTS = {
     "CLI_DOCS_BASE_URL": "https://agoraio.github.io/cli",
     "CLI_DOCS_MD_BASE_URL": "https://agoraio.github.io/cli/md",
-    "CLI_INSTALL_SH_URL": "https://agoraio.github.io/cli/install.sh",
-    "CLI_INSTALL_PS1_URL": "https://agoraio.github.io/cli/install.ps1",
+    "CLI_INSTALL_SH_URL": "https://dl.agora.io/cli/install.sh",
+    "CLI_INSTALL_PS1_URL": "https://dl.agora.io/cli/install.ps1",
     "CLI_INSTALL_SH_FALLBACK_URL": "https://raw.githubusercontent.com/AgoraIO/cli/main/install.sh",
     "CLI_INSTALL_PS1_FALLBACK_URL": "https://raw.githubusercontent.com/AgoraIO/cli/main/install.ps1",
 }
