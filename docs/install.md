@@ -193,6 +193,44 @@ Advanced or test overrides supported by both direct installers:
 - `GITHUB_API_URL`: alternate API base URL.
 - `RELEASES_DOWNLOAD_BASE_URL`: alternate release download base URL.
 - `RELEASES_PAGE_URL`: alternate releases page URL used in error messages.
+- `AGORA_INSTALL_SOURCE`: control the download source (`auto`, `github`, or `s3`; see [Mirror fallback](#mirror-fallback-for-restricted-networks)).
+- `S3_DOWNLOAD_BASE_URL`: alternate S3/mirror base URL for versioned release archives (default `https://dl.agora.io/cli/releases`).
+- `S3_LATEST_URL`: alternate URL for the mirror's `latest.json` (default `https://dl.agora.io/cli/latest.json`).
+
+## Mirror fallback for restricted networks
+
+The installers download from GitHub by default. When GitHub is unreachable
+(blocked region, API rate limit, transient outage), they automatically fall
+back to the Agora mirror at `https://dl.agora.io/cli` (CloudFront + S3).
+Downloads are still verified against `checksums.txt` regardless of source.
+
+Control the source with `AGORA_INSTALL_SOURCE`:
+
+| Value | Behavior |
+|-------|----------|
+| `auto` (default) | GitHub first, mirror fallback |
+| `github` | GitHub only, no fallback |
+| `s3` | Mirror only, skip GitHub entirely |
+
+Blocked-region one-liner (skips the GitHub timeout entirely):
+
+```sh
+curl -fsSL https://dl.agora.io/cli/install.sh | AGORA_INSTALL_SOURCE=s3 sh
+```
+
+Windows:
+
+```powershell
+$env:AGORA_INSTALL_SOURCE = 's3'; irm https://dl.agora.io/cli/install.ps1 | iex
+```
+
+Advanced overrides: `S3_DOWNLOAD_BASE_URL` (default
+`https://dl.agora.io/cli/releases`) and `S3_LATEST_URL` (default
+`https://dl.agora.io/cli/latest.json`).
+
+**Limitation:** `--prerelease` and version listing require GitHub; the mirror
+only tracks the latest stable release. In a fully blocked region, pin an
+explicit `--version` to install from the mirror.
 
 ## Exit Codes
 
