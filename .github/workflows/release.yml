@@ -391,6 +391,7 @@ jobs:
           echo "version=${tag#v}" >> "$GITHUB_OUTPUT"
 
       - name: Download release artifacts
+        shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -401,8 +402,11 @@ jobs:
             --pattern "agora-cli_*_darwin_*.tar.gz" \
             --pattern "agora-cli_*_windows_*.zip" \
             --pattern "checksums.txt" \
-            --pattern "checksums.txt.sigstore.json" \
             --dir dist
+          # Sigstore bundle is best-effort; its absence must not block mirroring.
+          gh release download "${{ steps.ver.outputs.tag }}" \
+            --pattern "checksums.txt.sigstore.json" \
+            --dir dist || echo "::warning::checksums.txt.sigstore.json not present in release; skipping."
           echo "Downloaded:"; ls -la dist/
 
       - name: Verify SHA-256 checksums before upload
