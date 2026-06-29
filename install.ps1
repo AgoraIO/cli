@@ -9,10 +9,11 @@
 #   - Documented exit-code contract (matches install.sh; see docs/install.md)
 #
 # Quick start:
-#   irm https://agoraio.github.io/cli/install.ps1 | iex
+#   irm https://dl.agora.io/cli/install.ps1 | iex
 #
-# Restricted networks (GitHub blocked): auto-falls back to the dl.agora.io
-# mirror; where GitHub is fully blocked, fetch the script from the mirror too:
+# Restricted networks (GitHub blocked): the script is served from the dl.agora.io
+# CDN, and binaries auto-fall back to the mirror. In a fully-blocked region, skip
+# GitHub for binaries too:
 #   $env:AGORA_INSTALL_SOURCE='s3'; irm https://dl.agora.io/cli/install.ps1 | iex
 #
 # Pin a version:

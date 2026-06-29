@@ -72,7 +72,7 @@ run_case() {
     GREEN=""
     DOCS_URL="https://github.com/AgoraIO/cli#readme"
     GITHUB_REPO="AgoraIO/cli"
-    INSTALLER_BASE_URL="https://agoraio.github.io/cli"
+    INSTALLER_BASE_URL="https://dl.agora.io/cli"
     HOME=$home_dir
     SHELL=$shell_path
     INSTALL_DIR=$install_dir
@@ -129,7 +129,7 @@ assert_contains "$bash_walk_output" "Added $TMPROOT/bash-walk/home/.local/bin to
 canonical_installer_url_output=$(run_case "canonical-installer-url" "/bin/sh" '
   installer_script_url
 ')
-assert_contains "$canonical_installer_url_output" "https://agoraio.github.io/cli/install.sh"
+assert_contains "$canonical_installer_url_output" "https://dl.agora.io/cli/install.sh"
 
 fork_installer_url_output=$(run_case "fork-installer-url" "/bin/sh" '
   GITHUB_REPO="Example/fork"

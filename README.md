@@ -19,7 +19,7 @@ Native Agora CLI for authentication, project management, quickstart setup, and d
 ### Install the CLI
 
 ```bash
-curl -fsSL https://agoraio.github.io/cli/install.sh | sh
+curl -fsSL https://dl.agora.io/cli/install.sh | sh
 ```
 
 Run the CLI:
@@ -28,38 +28,36 @@ Run the CLI:
 agora --help
 ```
 
-Alternative install paths:
+The script is served from the Agora CDN (`dl.agora.io`, CloudFront). Binaries download from GitHub by default and automatically fall back to the CDN mirror if GitHub is unreachable; downloads are verified against `checksums.txt` regardless of source.
+
+Windows PowerShell:
+
+```powershell
+irm https://dl.agora.io/cli/install.ps1 | iex
+```
+
+Alternative install paths (GitHub-hosted; use `install.ps1` for PowerShell):
 
 ```bash
-# Windows PowerShell
-irm https://agoraio.github.io/cli/install.ps1 | iex
+# GitHub Pages
+curl -fsSL https://agoraio.github.io/cli/install.sh | sh
+# raw GitHub
+curl -fsSL https://raw.githubusercontent.com/AgoraIO/cli/main/install.sh | sh
 ```
 
 Locked-down environments that block `curl | sh` can use npm, download a release archive from GitHub, or mirror the binary internally. Every release includes `checksums.txt`, a Cosign keyless signature, and an SBOM; see [docs/install.md](docs/install.md#enterprise--locked-down-environments) for manual tarball, checksum, and Cosign verification steps.
-
-When GitHub is unreachable (blocked region, API rate limit, transient outage), the installer automatically falls back to the Agora mirror at `dl.agora.io` (CloudFront), and downloads are still verified against `checksums.txt`. See [Restricted networks](#restricted-networks-github-blocked) below.
 
 Notes:
 
 - The shell installer supports macOS, Linux, and Windows POSIX shells such as Git Bash. Use `install.ps1` for native PowerShell installs on Windows.
 - **Shell setup is auto-on**: the installer wires the install directory onto your `PATH` (when needed) and writes a shell completion script for the detected shell (bash, zsh, fish, or PowerShell). Pass `--no-path`, `--no-completion`, or the umbrella `--skip-shell` (PowerShell: `-NoPath` / `-NoCompletion` / `-SkipShell`) to opt out granularly.
-- Installer help is always available with `curl -fsSL https://agoraio.github.io/cli/install.sh | sh -s -- --help`.
+- Installer help is always available with `curl -fsSL https://dl.agora.io/cli/install.sh | sh -s -- --help`.
 - Pinned versions, dry runs, custom install directories, npm details, and source builds are documented in [docs/install.md](docs/install.md).
 - Release artifacts and checksums: [GitHub Releases](https://github.com/AgoraIO/cli/releases). Vulnerability disclosures: [SECURITY.md](SECURITY.md).
 
-Direct GitHub fallback:
-
-```bash
-# macOS, Linux, and Windows POSIX shells
-curl -fsSL https://raw.githubusercontent.com/AgoraIO/cli/main/install.sh | sh
-
-# Windows PowerShell
-irm https://raw.githubusercontent.com/AgoraIO/cli/main/install.ps1 | iex
-```
-
 ### Restricted networks (GitHub blocked)
 
-The installer fetches from GitHub by default and automatically falls back to the Agora mirror at `dl.agora.io` on failure. Where GitHub is **fully** blocked, the GitHub-hosted script URLs above are unreachable too — fetch the script from the mirror and skip GitHub entirely with `AGORA_INSTALL_SOURCE=s3`:
+The default command already fetches the install script from the Agora CDN (`dl.agora.io`), so it works even where GitHub is blocked. Binaries still download from GitHub first (with automatic fallback to the mirror); in a fully-blocked region, add `AGORA_INSTALL_SOURCE=s3` to skip GitHub entirely and avoid the failover delay:
 
 ```bash
 # macOS, Linux, and Windows POSIX shells
