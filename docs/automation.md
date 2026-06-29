@@ -948,6 +948,8 @@ Examples:
 
 Webhook commands are feature-scoped. Pass `--feature rtc`, `--feature rtm`, or `--feature convoai` and prefer explicit `--project <id|name>` for automation.
 
+Run `project webhook events --feature <feature> --json` before creating a webhook to discover the event IDs and keys that can be passed to `--events`.
+
 `project webhook events` required `data` fields:
 - `action`
   Always `webhook-events`.

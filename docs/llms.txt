@@ -96,6 +96,7 @@ agora project webhook create --project <project-id> --feature rtc --url https://
 agora project webhook list --project <project-id> --feature rtc --json
 agora project webhook delete <config-id> --project <project-id> --feature rtc --yes --json
 ```
+Run `agora project webhook events --feature <feature> --json` before create/update to discover available event IDs and keys for `--events`.
 
 ### Configuration Management
 ```
