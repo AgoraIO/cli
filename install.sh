@@ -946,12 +946,16 @@ first_tag_name_from_json() {
 
 resolve_version() {
   if [ "$PRERELEASE" = "1" ]; then
+    # Prereleases are GitHub-only: the S3 mirror exposes a stable latest.json
+    # pointer, not a prerelease index (documented limitation).
     url="${GITHUB_API_URL%/}/repos/${GITHUB_REPO}/releases?per_page=10"
+    json="${TMP}/latest.json"
+    download_or_fail "$url" "$json" api
   else
-    url="${GITHUB_API_URL%/}/repos/${GITHUB_REPO}/releases/latest"
+    gh_url="${GITHUB_API_URL%/}/repos/${GITHUB_REPO}/releases/latest"
+    json="${TMP}/latest.json"
+    download_with_fallback "$gh_url" "$S3_LATEST_URL" "$json" api
   fi
-  json="${TMP}/latest.json"
-  download_or_fail "$url" "$json" api
 
   VERSION=$(first_tag_name_from_json "$json")
   VERSION=${VERSION#v}
@@ -1340,7 +1344,9 @@ main() {
 
   FILENAME="agora-cli_v${VERSION}_${OS}_${ARCH}.${ARCHIVE_EXT}"
   ARCHIVE_URL="${RELEASES_DOWNLOAD_BASE_URL%/}/v${VERSION}/${FILENAME}"
+  ARCHIVE_URL_S3="${S3_DOWNLOAD_BASE_URL%/}/v${VERSION}/${FILENAME}"
   CHECKSUMS_URL="${RELEASES_DOWNLOAD_BASE_URL%/}/v${VERSION}/checksums.txt"
+  CHECKSUMS_URL_S3="${S3_DOWNLOAD_BASE_URL%/}/v${VERSION}/checksums.txt"
   ARCHIVE_PATH="${TMP}/${FILENAME}"
   CHECKSUMS_PATH="${TMP}/checksums.txt"
   EXTRACTED_BINARY="${TMP}/${BINARY_NAME}"
@@ -1365,8 +1371,11 @@ main() {
 
   if [ "$DRY_RUN" = "1" ]; then
     say_step "Dry run - no changes will be made."
-    say "  archive:   ${ARCHIVE_URL}"
-    say "  checksums: ${CHECKSUMS_URL}"
+    say "  archive:      ${ARCHIVE_URL}"
+    say "  archive (s3): ${ARCHIVE_URL_S3}"
+    say "  checksums:    ${CHECKSUMS_URL}"
+    say "  checksums(s3):${CHECKSUMS_URL_S3}"
+    say "  source mode:  ${AGORA_INSTALL_SOURCE}"
     say "  install:   ${DESTINATION}"
     sudo_status="no"
     if [ "$USE_SUDO" = "1" ]; then
@@ -1397,10 +1406,10 @@ main() {
   say_step "Installing agora ${VERSION} (${OS}/${ARCH}) -> ${DESTINATION}"
 
   say_step "Downloading archive..."
-  download_or_fail "$ARCHIVE_URL" "$ARCHIVE_PATH" archive
+  download_with_fallback "$ARCHIVE_URL" "$ARCHIVE_URL_S3" "$ARCHIVE_PATH" archive
 
   say_step "Verifying checksum..."
-  download_or_fail "$CHECKSUMS_URL" "$CHECKSUMS_PATH"
+  download_with_fallback "$CHECKSUMS_URL" "$CHECKSUMS_URL_S3" "$CHECKSUMS_PATH"
 
   EXPECTED_SHA=$(
     awk -v file="$FILENAME" '
