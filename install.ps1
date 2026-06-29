@@ -509,7 +509,9 @@ try {
     $sourceBinary = Join-Path $extractDir 'agora.exe'
     $tempDestinationBinary = Join-Path $InstallDir ('.agora.tmp.' + [System.Guid]::NewGuid().ToString('N') + '.exe')
     $archiveUrl = "$($ReleasesDownloadBaseUrl.TrimEnd('/'))/v$Version/$fileName"
+    $archiveUrlS3 = "$($S3DownloadBaseUrl.TrimEnd('/'))/v$Version/$fileName"
     $checksumsUrl = "$($ReleasesDownloadBaseUrl.TrimEnd('/'))/v$Version/checksums.txt"
+    $checksumsUrlS3 = "$($S3DownloadBaseUrl.TrimEnd('/'))/v$Version/checksums.txt"
 
     Show-ExistingInstall
 
@@ -531,8 +533,8 @@ try {
 
     Write-Info "Installing agora $Version (windows/$arch) -> $destinationBinary"
 
-    Download-File -Url $archiveUrl -Destination $archivePath
-    Download-File -Url $checksumsUrl -Destination $checksumsPath
+    Invoke-DownloadWithFallback -GitHubUrl $archiveUrl -S3Url $archiveUrlS3 -Destination $archivePath
+    Invoke-DownloadWithFallback -GitHubUrl $checksumsUrl -S3Url $checksumsUrlS3 -Destination $checksumsPath
 
     $expectedChecksum = Get-ExpectedChecksum -ChecksumsPath $checksumsPath -FileName $fileName
     if (-not $expectedChecksum) {
