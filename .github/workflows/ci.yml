@@ -67,7 +67,7 @@ jobs:
       # from source with setup-go matches the project's toolchain.
       - name: golangci-lint
         if: runner.os == 'Linux'
-        uses: golangci/golangci-lint-action@v6
+        uses: golangci/golangci-lint-action@v9
         with:
           version: v1.64.8
           install-mode: goinstall
