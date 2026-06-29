@@ -148,10 +148,52 @@ jobs:
             (cd "$download_dir" && shasum -a 256 "$archive" > checksums.txt)
           fi
 
-          python3 -m http.server 18080 --directory "$fixture_root" >/tmp/agora-install-server.log 2>&1 &
+          server_log="$fixture_root/http-server.log"
+          server_port_file="$fixture_root/http-server.port"
+          FIXTURE_ROOT="$fixture_root" SERVER_PORT_FILE="$server_port_file" python3 - <<'PY' >"$server_log" 2>&1 &
+          import functools
+          import http.server
+          import os
+          import pathlib
+
+          root = os.environ["FIXTURE_ROOT"]
+          port_file = pathlib.Path(os.environ["SERVER_PORT_FILE"])
+          handler = functools.partial(http.server.SimpleHTTPRequestHandler, directory=root)
+
+          with http.server.ThreadingHTTPServer(("127.0.0.1", 0), handler) as httpd:
+              port_file.write_text(str(httpd.server_port), encoding="utf-8")
+              httpd.serve_forever()
+          PY
           server_pid=$!
-          trap 'kill "$server_pid"' EXIT
-          sleep 2
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+
+          server_ready=0
+          server_url=""
+          archive_url=""
+          for attempt in $(seq 1 40); do
+            if ! kill -0 "$server_pid" 2>/dev/null; then
+              echo "Fixture HTTP server exited before serving the test archive." >&2
+              sed 's/^/  /' "$server_log" >&2 || true
+              exit 1
+            fi
+            if [ -s "$server_port_file" ]; then
+              server_url="http://127.0.0.1:$(cat "$server_port_file")"
+              archive_url="${server_url}/download/v${version}/${archive}"
+            fi
+            if [ -n "$archive_url" ] && curl -fsS --head --connect-timeout 2 "$archive_url" >/dev/null 2>&1; then
+              server_ready=1
+              break
+            fi
+            sleep 0.25
+          done
+          if [ "$server_ready" != "1" ]; then
+            if [ -z "$archive_url" ]; then
+              archive_url="download/v${version}/${archive}"
+            fi
+            echo "Fixture HTTP server did not serve $archive_url." >&2
+            sed 's/^/  /' "$server_log" >&2 || true
+            exit 1
+          fi
 
           # The installer enforces --proto =https in production. The smoke test
           # serves the fixture from a local HTTP server, so we relax the proto
@@ -159,8 +201,8 @@ jobs:
           export INSTALLER_CURL_PROTO_OPTS="--proto =http,https"
 
           VERSION="$version" \
-          RELEASES_DOWNLOAD_BASE_URL="http://127.0.0.1:18080/download" \
-          RELEASES_PAGE_URL="http://127.0.0.1:18080" \
+          RELEASES_DOWNLOAD_BASE_URL="${server_url}/download" \
+          RELEASES_PAGE_URL="$server_url" \
           INSTALL_DIR="$install_dir" \
           sh ./install.sh --force
 
@@ -168,8 +210,8 @@ jobs:
 
           printf '%064d  %s\n' 0 "$archive" > "$download_dir/checksums.txt"
           if VERSION="$version" \
-            RELEASES_DOWNLOAD_BASE_URL="http://127.0.0.1:18080/download" \
-            RELEASES_PAGE_URL="http://127.0.0.1:18080" \
+            RELEASES_DOWNLOAD_BASE_URL="${server_url}/download" \
+            RELEASES_PAGE_URL="$server_url" \
             INSTALL_DIR="$bad_install_dir" \
             sh ./install.sh --force; then
             echo "Expected checksum verification to fail" >&2
