@@ -44,9 +44,9 @@ Use this guide for:
 - In non-interactive runs (`--yes`, JSON, CI, non-TTY), pass `--template` explicitly to `agora init`. The CLI now fails fast with `QUICKSTART_TEMPLATE_REQUIRED` instead of silently selecting a template.
 - Output mode precedence is: explicit CLI flag (`--json` or `--output`) first, user-set `AGORA_OUTPUT` second, then user-customized config file value, then **CI auto-detect → JSON** (see below), then pretty.
 - Set `AGORA_AGENT=<tool-name>` in automated environments to explicitly label agent traffic in the API `User-Agent`. When unset, the CLI may infer a coarse label such as `cursor`, `claude-code`, `cline`, `windsurf`, `codex`, or `aider` from known agent environment markers. Set `AGORA_AGENT_DISABLE_INFER=1` to disable inference.
-- Use `agora mcp serve` to expose local Agora CLI tools to MCP-capable agents. The full surface is exposed: `agora.version`, `agora.introspect`, `agora.auth.{status,logout}`, `agora.config.{path,get}`, `agora.telemetry.status`, `agora.upgrade.check`, `agora.project.{list,show,use,create,doctor,env,env_write}`, `agora.project.feature.{list,status,enable}`, `agora.quickstart.{list,create,env_write}`, and `agora.init`. Authentication is intentionally **not** exposed via MCP because OAuth requires an interactive browser; run `agora login` once on the host first.
+- Use `agora mcp serve` to expose local Agora CLI tools to MCP-capable agents. The full surface is exposed: `agora.version`, `agora.introspect`, `agora.auth.{status,logout}`, `agora.config.{path,get}`, `agora.telemetry.status`, `agora.upgrade.check`, `agora.project.{list,show,use,create,doctor,env,env_write}`, `agora.project.feature.{list,status,enable}`, `agora.project.webhook.{events,list,show,create,update,delete}`, `agora.quickstart.{list,create,env_write}`, and `agora.init`. Authentication is intentionally **not** exposed via MCP because OAuth requires an interactive browser; run `agora login` once on the host first.
 - Use `agora open --target docs` for the human GitHub Pages docs and `agora open --target docs-md` for the agent-facing raw Markdown index. In CI/non-TTY runs the command defaults to URL-only output unless `--browser` is set. The Markdown tree is published under predictable `/md/` URLs, for example `/md/commands.md`, `/md/automation.md`, and `/md/error-codes.md`.
-- Docs publishing reads `docs/site.env` for `CLI_DOCS_BASE_URL` and `CLI_DOCS_MD_BASE_URL`; staging Pages builds can override those environment variables at workflow time without changing docs content. The resolved values are published as `/docs.env` for transparency.
+- Docs publishing reads `docs/site.env` for `CLI_DOCS_*` and `CLI_INSTALL_*` URL defaults; staging Pages builds can override those environment variables at workflow time without changing docs content. The resolved values are published as `/docs.env` for transparency.
 - The CLI maintains a short-lived on-disk completion cache for `agora project use <TAB>` under `<AGORA_HOME>/cache/projects.json`. The cache is only used for completions when a **local unexpired session exists** (`session.json` with a non-empty access token and a future `expiresAt`, when present), so Tab does not suggest stale project names after logout or local session expiry. The cache TTL is 5 minutes by default; override with `AGORA_PROJECT_CACHE_TTL_SECONDS=<seconds>` (set to `0` to disable). Cache files older than 24 h are pruned at every CLI startup. Set `AGORA_DISABLE_CACHE=1` to drop the cache on the next startup. The cache is invalidated automatically by `agora logout` and `agora project create` (the latter clears the file; it does not embed the new project until the next successful list fetch). To **force-refresh** the cached completion page, run `agora project list --refresh-cache` while authenticated; that command fetches the unfiltered first page used by completion and rewrites `projects.json` when it succeeds.
 
 ### CI auto-detect
@@ -933,6 +933,109 @@ Safe branch fields:
 - `feature`
 - `status`
 - `projectId`
+
+### `project webhook`
+
+Examples:
+
+```bash
+./agora project webhook events --feature rtc --json
+./agora project webhook create --project my-project --feature rtc --url https://example.com/webhook --events channel-created,user-joined --json
+./agora project webhook show 42 --project my-project --feature rtc --with-secret --json
+./agora project webhook update 42 --project my-project --feature rtc --url https://example.com/webhook2 --json
+./agora project webhook delete 42 --project my-project --feature rtc --yes --json
+```
+
+Webhook commands are feature-scoped. Pass `--feature rtc`, `--feature rtm`, or `--feature convoai` and prefer explicit `--project <id|name>` for automation.
+
+Run `project webhook events --feature <feature> --json` before creating a webhook to discover the event IDs and keys that can be passed to `--events`.
+
+`project webhook events` required `data` fields:
+- `action`
+  Always `webhook-events`.
+- `feature`
+- `items`
+  Array of event objects.
+
+Each event item includes:
+- `id`
+- `key`
+  Stable CLI event key derived from the English display name, for example `channel-created`.
+- `displayName`
+- `eventType`
+- `payload` when provided by the API.
+
+`project webhook list` required `data` fields:
+- `action`
+  Always `webhook-list`.
+- `projectId`
+- `projectName`
+- `feature`
+- `events`
+  The available event catalog for the selected feature.
+- `items`
+  Array of webhook config objects.
+
+Each list item includes:
+- `configId`
+- `url`
+- `urlRegion`
+  Delivery region for webhook callbacks: `cn`, `sea`, `na`, or `eu`.
+- `enabled`
+  Canonical webhook state field. Webhook JSON does not emit a string `status`.
+- `eventIds`
+- `events`
+  Event details that match `eventIds` when available.
+- `retry`
+  Retry behavior when returned by the API. This field is read-only in the CLI.
+- `useIpWhitelist`
+- `secret`
+  Present when the backend returns a secret, redacted as `********`. `list` never emits a raw secret.
+
+`project webhook show`, `project webhook create`, and `project webhook update` required `data` fields:
+- `action`
+  One of `webhook-show`, `webhook-create`, or `webhook-update`.
+- `projectId`
+- `projectName`
+- `feature`
+- `configId`
+- `url`
+- `urlRegion`
+  Delivery region for webhook callbacks: `cn`, `sea`, `na`, or `eu`.
+- `enabled`
+  Canonical webhook state field. Webhook JSON does not emit a string `status`.
+- `eventIds`
+- `events`
+  Event details that match `eventIds` when available.
+- `useIpWhitelist`
+- `config`
+  Nested webhook config object with the same config fields.
+
+Optional top-level `data` fields for `show`, `create`, and `update` (also present in the nested `config` object when set):
+- `secret`
+  Webhook signing secret. `create` returns the generated or caller-provided secret at `data.secret` and `data.config.secret` so automation can store it. `show` returns the raw secret only with `--with-secret`; otherwise it redacts `data.secret` and `data.config.secret` as `********`. `update` does not rotate secrets; when the backend returns a secret, `update` emits the redacted value. `list` has no top-level `secret`; item secrets are redacted as `items[].secret == "********"`.
+- `retry`
+  Retry behavior when returned by the API. This field is read-only in the CLI and appears at `data.retry` and `data.config.retry`; `list` exposes it per item as `items[].retry`.
+
+`project webhook create` requires `--events <event-id-or-key>[,<event-id-or-key>...]`. `project webhook update` preserves existing values for omitted mutable fields. Use `--url`, `--events`, `--delivery-region`, `--enabled`, or `--disabled` to replace only those fields. `update` does not rotate or emit the raw secret.
+
+`project webhook delete` required `data` fields:
+- `action`
+  Always `webhook-delete`.
+- `projectId`
+- `projectName`
+- `feature`
+- `configId`
+- `deleted`
+  `true` after the remote config is deleted.
+
+Delete is destructive and requires confirmation. Pass `--yes` (or `-y`) in CLI automation; the MCP delete tool requires `confirm: true`.
+
+Safe branch fields by command shape:
+- Event discovery: `feature`, `items[].id`, `items[].key`
+- List: `projectId`, `feature`, `items[].configId`, `items[].enabled`, `items[].eventIds`, `items[].urlRegion`
+- Show/create/update: `projectId`, `feature`, `configId`, `enabled`, `eventIds`, `urlRegion`
+- Delete: `projectId`, `feature`, `configId`, `deleted`
 
 ### `config path`
 

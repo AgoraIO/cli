@@ -118,6 +118,24 @@ func renderResult(cmd *cobra.Command, command string, data any) error {
 	case "project feature status", "project feature enable":
 		m := data.(map[string]any)
 		printBlock(out, "Feature", [][2]string{{"Feature", asString(m["feature"])}, {"Project", asString(m["projectName"])}, {"Status", asString(m["status"])}, {"Message", asString(m["message"])}})
+	case "project webhook events":
+		printWebhookEvents(out, data.(map[string]any))
+	case "project webhook list":
+		printWebhookList(out, data.(map[string]any))
+	case "project webhook show", "project webhook update":
+		printWebhookBlock(out, data.(map[string]any))
+	case "project webhook create":
+		printWebhookBlock(out, data.(map[string]any))
+		fmt.Fprintln(out)
+		fmt.Fprintln(out, "Store this secret now. It may not be shown again.")
+	case "project webhook delete":
+		m := data.(map[string]any)
+		printBlock(out, "Webhook", [][2]string{
+			{"Project", asString(m["projectName"])},
+			{"Feature", asString(m["feature"])},
+			{"Config ID", asString(m["configId"])},
+			{"Deleted", asString(m["deleted"])},
+		})
 	case "project list":
 		m := data.(map[string]any)
 		total, _ := m["total"].(int)
@@ -219,6 +237,122 @@ func redactSensitive(v any) string {
 	default:
 		return "-"
 	}
+}
+
+func printWebhookEvents(out io.Writer, m map[string]any) {
+	printBlock(out, "Webhook Events", [][2]string{{"Feature", asString(m["feature"])}})
+	if items, ok := m["items"].([]webhookEvent); ok && len(items) > 0 {
+		fmt.Fprintln(out)
+		for _, item := range items {
+			fmt.Fprintf(out, "- %s: %d (%s)\n", item.Key, item.ID, item.DisplayName)
+		}
+	}
+}
+
+func printWebhookList(out io.Writer, m map[string]any) {
+	printBlock(out, "Webhooks", [][2]string{
+		{"Project", asString(m["projectName"])},
+		{"Feature", asString(m["feature"])},
+	})
+	if items, ok := m["items"].([]webhookConfig); ok && len(items) > 0 {
+		fmt.Fprintln(out)
+		for _, item := range items {
+			fmt.Fprintf(out, "- %d: %s (%s, enabled %s)\n", item.ConfigID, asString(item.URL), renderWebhookDeliveryRegion(item.URLRegion), asString(item.Enabled))
+		}
+	}
+}
+
+func printWebhookBlock(out io.Writer, m map[string]any) {
+	cfg, ok := m["config"].(webhookConfig)
+	if !ok {
+		cfg = webhookConfig{
+			ConfigID: asInt(m["configId"]),
+			URL:      asString(m["url"]),
+			Enabled:  asBool(m["enabled"]),
+			Secret:   asString(m["secret"]),
+		}
+		if value, _ := m["urlRegion"].(string); value != "" {
+			cfg.URLRegion = value
+		}
+		if events, ok := m["events"].([]webhookEvent); ok {
+			cfg.Events = events
+		}
+		if eventIDs, ok := m["eventIds"].([]int); ok {
+			cfg.EventIDs = eventIDs
+		}
+		if retry, ok := m["retry"].(*bool); ok {
+			cfg.Retry = retry
+		}
+	}
+	rows := [][2]string{
+		{"Project", asString(m["projectName"])},
+		{"Feature", asString(m["feature"])},
+		{"Config ID", asString(cfg.ConfigID)},
+		{"URL", asString(cfg.URL)},
+		{"Events", webhookEventKeys(cfg.Events, cfg.EventIDs)},
+		{"Delivery Region", renderWebhookDeliveryRegion(cfg.URLRegion)},
+		{"Enabled", asString(cfg.Enabled)},
+	}
+	if cfg.Retry != nil {
+		rows = append(rows, [2]string{"Retry", asString(*cfg.Retry)})
+	}
+	rows = append(rows, [2]string{"Secret", asString(cfg.Secret)})
+	printBlock(out, "Webhook", rows)
+}
+
+func renderWebhookDeliveryRegion(value string) string {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "cn":
+		return "China (cn)"
+	case "sea":
+		return "Asia (sea)"
+	case "na":
+		return "North America (na)"
+	case "eu":
+		return "Europe (eu)"
+	default:
+		return asString(value)
+	}
+}
+
+func webhookEventKeys(events []webhookEvent, eventIDs []int) string {
+	if len(events) > 0 {
+		keys := make([]string, 0, len(events))
+		for _, event := range events {
+			if event.Key != "" {
+				keys = append(keys, event.Key)
+				continue
+			}
+			keys = append(keys, asString(event.ID))
+		}
+		return strings.Join(keys, ", ")
+	}
+	if len(eventIDs) > 0 {
+		ids := make([]string, 0, len(eventIDs))
+		for _, id := range eventIDs {
+			ids = append(ids, asString(id))
+		}
+		return strings.Join(ids, ", ")
+	}
+	return "-"
+}
+
+func asInt(v any) int {
+	switch x := v.(type) {
+	case int:
+		return x
+	case int64:
+		return int(x)
+	case float64:
+		return int(x)
+	default:
+		return 0
+	}
+}
+
+func asBool(v any) bool {
+	value, _ := v.(bool)
+	return value
 }
 
 // printBlock renders a key-value block with right-padded labels. An empty

@@ -5,6 +5,8 @@ on:
     branches:
       - main
     paths:
+      - "install.sh"
+      - "install.ps1"
       - "docs/**"
       - "cmd/gendocs/**"
       - "internal/cli/**"
@@ -54,6 +56,14 @@ jobs:
       - name: Prepare human and agent docs
         run: python3 scripts/prepare-pages-site.py --source docs --site _site --env-file docs/site.env
 
+      - name: Verify Pages installer freshness
+        shell: bash
+        run: |
+          test -s _site/install.sh
+          test -s _site/install.ps1
+          cmp install.sh _site/install.sh
+          cmp install.ps1 _site/install.ps1
+
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
@@ -71,4 +81,3 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v5
-

@@ -1,6 +1,10 @@
 package cli
 
-import "testing"
+import (
+	"runtime"
+	"strings"
+	"testing"
+)
 
 func TestReleaseUsesLegacyArchiveNaming(t *testing.T) {
 	tests := []struct {
@@ -38,5 +42,18 @@ func TestUpgradeArchiveCandidatesUsesLegacyNamingThrough020(t *testing.T) {
 	}
 	if len(candidates) != 1 || candidates[0].name != "agora-cli-go_v0.2.0_linux_amd64.tar.gz" {
 		t.Fatalf("unexpected candidates: %+v", candidates)
+	}
+}
+
+func TestInstallerUpgradeCommandUsesDirectGitHubScript(t *testing.T) {
+	command := upgradeCommandForInstallMethod("installer")
+	if runtime.GOOS == "windows" {
+		if !strings.Contains(command, "https://raw.githubusercontent.com/AgoraIO/cli/main/install.ps1") {
+			t.Fatalf("installer command = %q, want raw GitHub PowerShell installer", command)
+		}
+		return
+	}
+	if !strings.Contains(command, "https://raw.githubusercontent.com/AgoraIO/cli/main/install.sh") {
+		t.Fatalf("installer command = %q, want raw GitHub shell installer", command)
 	}
 }
