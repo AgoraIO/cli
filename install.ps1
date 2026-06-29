@@ -130,12 +130,29 @@ function Resolve-Version {
         return
     }
 
-    $latestUrl = "$($GitHubApiUrl.TrimEnd('/'))/repos/$GitHubRepo/releases/latest"
+    $release = $null
+    if ($AgoraInstallSource -ne 's3') {
+        $latestUrl = "$($GitHubApiUrl.TrimEnd('/'))/repos/$GitHubRepo/releases/latest"
+        try {
+            if ($AgoraInstallSource -eq 'github') {
+                $release = Invoke-RestMethod -Uri $latestUrl -Headers (Get-AuthHeaders)
+            } else {
+                $release = Invoke-RestMethod -Uri $latestUrl -Headers (Get-AuthHeaders) -TimeoutSec 5
+            }
+        } catch {
+            if ($AgoraInstallSource -eq 'github') {
+                Fail "Could not resolve the latest release from GitHub. Set VERSION explicitly or provide GITHUB_TOKEN / GH_TOKEN if you are hitting rate limits. Release page: $ReleasesPageUrl" -ExitCode $EXIT_NETWORK
+            }
+            Write-Info 'GitHub unreachable; retrying via dl.agora.io mirror...'
+        }
+    }
 
-    try {
-        $release = Invoke-RestMethod -Uri $latestUrl -Headers (Get-AuthHeaders)
-    } catch {
-        Fail "Could not resolve the latest release. Set VERSION explicitly or provide GITHUB_TOKEN / GH_TOKEN if you are hitting rate limits. Release page: $ReleasesPageUrl" -ExitCode $EXIT_NETWORK
+    if (-not $release) {
+        try {
+            $release = Invoke-RestMethod -Uri $S3LatestUrl -MaximumRetryCount 3 -RetryIntervalSec 2
+        } catch {
+            Fail "Could not resolve the latest version from GitHub or the dl.agora.io mirror. Pin VERSION explicitly to install from the mirror." -ExitCode $EXIT_NETWORK
+        }
     }
 
     $script:Version = Normalize-Version $release.tag_name
@@ -153,6 +170,36 @@ function Download-File {
         Invoke-WebRequest -Uri $Url -OutFile $Destination -Headers (Get-AuthHeaders)
     } catch {
         Fail "Failed to download $Url`nRelease page: $ReleasesPageUrl`nCheck your network or proxy settings, or try again with VERSION pinned." -ExitCode $EXIT_NETWORK
+    }
+}
+
+function Invoke-DownloadWithFallback {
+    param(
+        [Parameter(Mandatory = $true)][string]$GitHubUrl,
+        [Parameter(Mandatory = $true)][string]$S3Url,
+        [Parameter(Mandatory = $true)][string]$Destination
+    )
+
+    if ($AgoraInstallSource -ne 's3') {
+        try {
+            if ($AgoraInstallSource -eq 'github') {
+                Invoke-WebRequest -Uri $GitHubUrl -OutFile $Destination -Headers (Get-AuthHeaders)
+            } else {
+                Invoke-WebRequest -Uri $GitHubUrl -OutFile $Destination -Headers (Get-AuthHeaders) -TimeoutSec 5
+            }
+            return
+        } catch {
+            if ($AgoraInstallSource -eq 'github') {
+                Fail "Failed to download $GitHubUrl`nRelease page: $ReleasesPageUrl`nCheck your network or proxy settings, or try again with VERSION pinned." -ExitCode $EXIT_NETWORK
+            }
+            Write-Info 'GitHub unreachable; retrying via dl.agora.io mirror...'
+        }
+    }
+
+    try {
+        Invoke-WebRequest -Uri $S3Url -OutFile $Destination -MaximumRetryCount 3 -RetryIntervalSec 2
+    } catch {
+        Fail "Failed to download from GitHub and the dl.agora.io mirror: $S3Url`nRelease page: $ReleasesPageUrl" -ExitCode $EXIT_NETWORK
     }
 }
 
