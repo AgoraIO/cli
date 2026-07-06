@@ -1,13 +1,20 @@
 package cli
 
 import (
+	"context"
 	"crypto/rand"
 	"fmt"
 	"math/big"
+	"net"
+	"net/http"
+	"os"
+	"os/signal"
 	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
+
+	"github.com/AgoraIO/cli/internal/cli/playground"
 )
 
 type playgroundOptions struct {
@@ -172,8 +179,49 @@ func (a *App) resolvePlaygroundSession(cmd *cobra.Command, opts *playgroundOptio
 	}, nil
 }
 
-// runConvoaiPlayground is completed in later tasks. Temporary stub so the
-// tree registers and tests compile.
 func (a *App) runConvoaiPlayground(cmd *cobra.Command, opts *playgroundOptions) error {
-	return nil
+	sess, err := a.resolvePlaygroundSession(cmd, opts)
+	if err != nil {
+		return err
+	}
+	assets, err := playground.Assets()
+	if err != nil {
+		return err
+	}
+	ln, err := listenPlayground(sess.port, sess.explicitPort)
+	if err != nil {
+		return err
+	}
+	sess.port = ln.Addr().(*net.TCPAddr).Port
+	url := fmt.Sprintf("http://127.0.0.1:%d", sess.port)
+
+	srv := &http.Server{Handler: newPlaygroundHandler(sess, assets)}
+
+	a.printPlaygroundStartup(cmd, sess, url)
+	if !sess.noOpen && a.cfg.BrowserAutoOpen {
+		_ = openBrowser(url)
+	}
+
+	ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt)
+	defer stop()
+	errCh := make(chan error, 1)
+	go func() { errCh <- srv.Serve(ln) }()
+
+	select {
+	case <-ctx.Done():
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+		return srv.Shutdown(shutdownCtx)
+	case err := <-errCh:
+		if err == http.ErrServerClosed {
+			return nil
+		}
+		return err
+	}
+}
+
+// printPlaygroundStartup is fully implemented in Task 7. Minimal temporary
+// version so this task compiles and running the command shows the URL.
+func (a *App) printPlaygroundStartup(cmd *cobra.Command, sess *playgroundSession, url string) {
+	fmt.Fprintf(cmd.OutOrStdout(), "Agora Convoai Playground running at %s (Ctrl-C to stop)\n", url)
 }

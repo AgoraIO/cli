@@ -2,6 +2,7 @@ package cli
 
 import (
 	"encoding/json"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -164,5 +165,32 @@ func TestGetConfigAcceptsMixedCaseHost(t *testing.T) {
 	h.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("mixed-case localhost must be accepted, got %d", rec.Code)
+	}
+}
+
+func TestListenFreePortAutoIncrements(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ln.Close()
+	busy := ln.Addr().(*net.TCPAddr).Port
+
+	got, err := listenPlayground(busy, false /* not explicit */)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer got.Close()
+	if got.Addr().(*net.TCPAddr).Port == busy {
+		t.Fatal("expected auto-increment away from the busy port")
+	}
+}
+
+func TestListenExplicitBusyPortFails(t *testing.T) {
+	ln, _ := net.Listen("tcp", "127.0.0.1:0")
+	defer ln.Close()
+	busy := ln.Addr().(*net.TCPAddr).Port
+	if _, err := listenPlayground(busy, true /* explicit */); err == nil {
+		t.Fatal("explicit busy port must hard-fail")
 	}
 }
