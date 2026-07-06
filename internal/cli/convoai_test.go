@@ -136,3 +136,33 @@ func TestGetConfigUIDOverride(t *testing.T) {
 		t.Fatalf("expected uid override 777, got %s", env.Data.UID)
 	}
 }
+
+func TestGetConfigUIDZeroFallsThrough(t *testing.T) {
+	sess := &playgroundSession{appID: "a", appCert: "b", channel: "c", uid: 12345, ttl: 3600}
+	h := newPlaygroundHandler(sess, nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/get_config?uid=0", nil)
+	req.Host = "localhost:8787"
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	var env struct {
+		Data struct {
+			UID string `json:"uid"`
+		} `json:"data"`
+	}
+	_ = json.Unmarshal(rec.Body.Bytes(), &env)
+	if env.Data.UID != "12345" {
+		t.Fatalf("uid=0 must fall through to session uid, got %s", env.Data.UID)
+	}
+}
+
+func TestGetConfigAcceptsMixedCaseHost(t *testing.T) {
+	sess := &playgroundSession{appID: "a", appCert: "b", channel: "c", uid: 1, ttl: 3600}
+	h := newPlaygroundHandler(sess, nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/get_config", nil)
+	req.Host = "LOCALHOST:8787"
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("mixed-case localhost must be accepted, got %d", rec.Code)
+	}
+}

@@ -6,6 +6,7 @@ import (
 	"net"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/AgoraIO/cli/internal/agoratoken"
@@ -30,10 +31,11 @@ func newPlaygroundHandler(sess *playgroundSession, assets fs.FS) http.Handler {
 // loopbackGuard rejects requests whose Host is not loopback (defeats DNS-rebinding).
 func loopbackGuard(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		host := r.Host
-		if h, _, err := net.SplitHostPort(r.Host); err == nil {
+		host := strings.ToLower(r.Host)
+		if h, _, err := net.SplitHostPort(host); err == nil {
 			host = h
 		}
+		host = strings.TrimSuffix(host, ".")
 		if host != "127.0.0.1" && host != "localhost" && host != "::1" {
 			http.Error(w, "forbidden host", http.StatusForbidden)
 			return
