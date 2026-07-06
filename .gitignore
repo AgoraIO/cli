@@ -23,3 +23,6 @@ _site/
 # Python bytecode
 __pycache__/
 *.py[cod]
+
+# Frontend dependencies (never commit node_modules)
+frontend/node_modules/
