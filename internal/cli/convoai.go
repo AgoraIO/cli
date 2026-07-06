@@ -238,6 +238,10 @@ func playgroundStartupData(sess *playgroundSession, url string) map[string]any {
 	}
 }
 
+// printPlaygroundStartup renders the startup output directly rather than
+// through renderResult's pretty switch: the human "wire block" (multi-line
+// guidance + certificate reminder) doesn't fit printBlock's key/value shape.
+// JSON mode still goes through renderResult so the envelope stays uniform.
 func (a *App) printPlaygroundStartup(cmd *cobra.Command, sess *playgroundSession, url string) error {
 	data := playgroundStartupData(sess, url)
 	if a.resolveOutputMode(cmd) == outputJSON {
