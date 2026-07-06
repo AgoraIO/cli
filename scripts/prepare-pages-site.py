@@ -18,7 +18,8 @@ import argparse
 import hashlib
 import os
 import shutil
-from datetime import UTC, datetime
+import stat
+from datetime import datetime, timezone
 from pathlib import Path
 
 
@@ -110,6 +111,7 @@ def copy_installers(repo_root: Path, site: Path) -> dict[str, str]:
             raise FileNotFoundError(f"installer not found: {source}")
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(source, target)
+        target.chmod(stat.S_IRUSR | stat.S_IWUSR | stat.S_IRGRP | stat.S_IROTH)
         metadata[key] = sha256(source)
     return metadata
 
@@ -118,7 +120,7 @@ def write_installer_metadata(site: Path, metadata: dict[str, str]) -> None:
     values = {
         **metadata,
         "GITHUB_SHA": os.environ.get("GITHUB_SHA", "").strip() or "local",
-        "PUBLISHED_AT": datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
+        "PUBLISHED_AT": datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
     }
     body = "".join(f"{key}={value}\n" for key, value in sorted(values.items()))
     (site / "installers.env").write_text(body, encoding="utf-8")
