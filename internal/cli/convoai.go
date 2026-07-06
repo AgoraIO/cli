@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -201,7 +202,9 @@ func (a *App) runConvoaiPlayground(cmd *cobra.Command, opts *playgroundOptions) 
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 
-	a.printPlaygroundStartup(cmd, sess, url)
+	if err := a.printPlaygroundStartup(cmd, sess, url); err != nil {
+		return err
+	}
 	if !sess.noOpen && a.cfg.BrowserAutoOpen {
 		_ = openBrowser(url)
 	}
@@ -224,8 +227,30 @@ func (a *App) runConvoaiPlayground(cmd *cobra.Command, opts *playgroundOptions) 
 	}
 }
 
-// printPlaygroundStartup is fully implemented in Task 7. Minimal temporary
-// version so this task compiles and running the command shows the URL.
-func (a *App) printPlaygroundStartup(cmd *cobra.Command, sess *playgroundSession, url string) {
-	fmt.Fprintf(cmd.OutOrStdout(), "Agora Convoai Playground running at %s (Ctrl-C to stop)\n", url)
+func playgroundStartupData(sess *playgroundSession, url string) map[string]any {
+	return map[string]any{
+		"url":      url,
+		"appId":    sess.appID,
+		"channel":  sess.channel,
+		"uid":      strconv.FormatUint(uint64(sess.uid), 10),
+		"agentUid": strconv.FormatUint(uint64(sess.agentUID), 10),
+		"port":     sess.port,
+	}
+}
+
+func (a *App) printPlaygroundStartup(cmd *cobra.Command, sess *playgroundSession, url string) error {
+	data := playgroundStartupData(sess, url)
+	if a.resolveOutputMode(cmd) == outputJSON {
+		return renderResult(cmd, "convoai playground", data)
+	}
+	out := cmd.OutOrStdout()
+	fmt.Fprintf(out, "\nAgora Convoai Playground\n")
+	fmt.Fprintf(out, "  Open:      %s\n\n", url)
+	fmt.Fprintf(out, "Wire your agent with these values:\n")
+	fmt.Fprintf(out, "  APP_ID:    %s\n", sess.appID)
+	fmt.Fprintf(out, "  CHANNEL:   %s\n", sess.channel)
+	fmt.Fprintf(out, "  AGENT_UID: %s   (join your agent with this uid)\n", data["agentUid"])
+	fmt.Fprintf(out, "  Use the same App Certificate as this project (see `agora project env --with-secrets`).\n\n")
+	fmt.Fprintf(out, "Press Ctrl-C to stop.\n")
+	return nil
 }

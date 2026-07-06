@@ -188,6 +188,16 @@ func renderResult(cmd *cobra.Command, command string, data any) error {
 	case "open":
 		m := data.(map[string]any)
 		printBlock(out, "Open", [][2]string{{"Target", asString(m["target"])}, {"URL", asString(m["url"])}, {"Status", asString(m["status"])}})
+	case "convoai playground":
+		m := data.(map[string]any)
+		printBlock(out, "Agora Convoai Playground", [][2]string{
+			{"URL", asString(m["url"])},
+			{"App ID", asString(m["appId"])},
+			{"Channel", asString(m["channel"])},
+			{"UID", asString(m["uid"])},
+			{"Agent UID", asString(m["agentUid"])},
+			{"Port", asString(m["port"])},
+		})
 	default:
 		encoded, _ := json.MarshalIndent(data, "", "  ")
 		fmt.Fprintf(out, "%s\n%s\n", command, string(encoded))

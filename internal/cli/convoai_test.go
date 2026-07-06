@@ -194,3 +194,17 @@ func TestListenExplicitBusyPortFails(t *testing.T) {
 		t.Fatal("explicit busy port must hard-fail")
 	}
 }
+
+func TestPlaygroundStartupEnvelope(t *testing.T) {
+	sess := &playgroundSession{appID: "APP123", channel: "my-dev-room", uid: 12345, agentUID: 87654321, port: 8787}
+	data := playgroundStartupData(sess, "http://127.0.0.1:8787")
+	if data["appId"] != "APP123" || data["channel"] != "my-dev-room" {
+		t.Fatalf("bad envelope: %+v", data)
+	}
+	if data["url"] != "http://127.0.0.1:8787" || data["agentUid"] != "87654321" {
+		t.Fatalf("bad envelope: %+v", data)
+	}
+	if data["uid"] != "12345" {
+		t.Fatalf("bad uid: %+v", data)
+	}
+}
