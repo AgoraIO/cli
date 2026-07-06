@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/signal"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -195,14 +196,17 @@ func (a *App) runConvoaiPlayground(cmd *cobra.Command, opts *playgroundOptions) 
 	sess.port = ln.Addr().(*net.TCPAddr).Port
 	url := fmt.Sprintf("http://127.0.0.1:%d", sess.port)
 
-	srv := &http.Server{Handler: newPlaygroundHandler(sess, assets)}
+	srv := &http.Server{
+		Handler:           newPlaygroundHandler(sess, assets),
+		ReadHeaderTimeout: 10 * time.Second,
+	}
 
 	a.printPlaygroundStartup(cmd, sess, url)
 	if !sess.noOpen && a.cfg.BrowserAutoOpen {
 		_ = openBrowser(url)
 	}
 
-	ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt)
+	ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	errCh := make(chan error, 1)
 	go func() { errCh <- srv.Serve(ln) }()

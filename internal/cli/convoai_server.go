@@ -91,9 +91,9 @@ func writeJSON(w http.ResponseWriter, status int, body any) {
 	_ = json.NewEncoder(w).Encode(body)
 }
 
-// listenPlayground binds 127.0.0.1:port. When explicit is false it auto-
-// increments up to 20 ports past the requested one; when explicit is true a
-// busy port is a hard error.
+// listenPlayground binds 127.0.0.1:port. When explicit is false it tries the
+// requested port and up to 20 following ports; when explicit is true a busy
+// port is a hard error.
 func listenPlayground(port int, explicit bool) (net.Listener, error) {
 	max := port
 	if !explicit {
