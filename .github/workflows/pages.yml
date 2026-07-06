@@ -65,6 +65,17 @@ jobs:
           cmp install.sh _site/install.sh
           cmp install.ps1 _site/install.ps1
 
+      - name: Verify Pages artifact shape
+        shell: bash
+        run: |
+          test -s _site/index.html
+          executable_files="$(find _site -type f \( -perm -100 -o -perm -010 -o -perm -001 \))"
+          if [ -n "$executable_files" ]; then
+            echo "Pages artifact contains executable files:" >&2
+            printf '%s\n' "$executable_files" >&2
+            exit 1
+          fi
+
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
