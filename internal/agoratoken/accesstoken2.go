@@ -60,7 +60,10 @@ type AccessToken2 struct {
 // NewAccessToken2 seeds a random salt. issueTs is the token issue time (unix
 // seconds); expire is seconds-from-issue for the token envelope.
 func NewAccessToken2(appID, appCert string, issueTs, expire uint32) *AccessToken2 {
-	n, _ := rand.Int(rand.Reader, big.NewInt(0xFFFFFFFF))
+	n, err := rand.Int(rand.Reader, big.NewInt(0xFFFFFFFF))
+	if err != nil {
+		panic("agoratoken: crypto/rand failed: " + err.Error())
+	}
 	return &AccessToken2{
 		appID:    appID,
 		appCert:  appCert,

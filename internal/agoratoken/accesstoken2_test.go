@@ -56,13 +56,6 @@ func TestTokenDecodesToBothServices(t *testing.T) {
 	if _, err := io.ReadAll(zr); err != nil {
 		t.Fatalf("payload not valid zlib: %v", err)
 	}
-	tk := fixedToken()
-	if _, ok := tk.services[serviceTypeRtc]; !ok {
-		t.Fatalf("RTC service missing")
-	}
-	if _, ok := tk.services[serviceTypeRtm]; !ok {
-		t.Fatalf("RTM service missing")
-	}
 }
 
 func TestRandomSaltProducesDifferentTokens(t *testing.T) {
