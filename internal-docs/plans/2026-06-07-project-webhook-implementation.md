@@ -27,7 +27,7 @@
 ## Task 0: Backend Confirmation Check
 
 **Files:**
-- Modify: `docs/superpowers/specs/2026-06-07-project-webhook-design.md`
+- Modify: `internal-docs/specs/2026-06-07-project-webhook-design.md`
 
 - [ ] **Step 1: Confirm event ID mapping before production behavior is wired**
 
@@ -45,7 +45,7 @@ eventIds uses ncs-events.items[].eventId.
 
 - [ ] **Step 2: Record the confirmation in the design spec**
 
-Edit `docs/superpowers/specs/2026-06-07-project-webhook-design.md` and replace the final sentence in the event API paragraph with:
+Edit `internal-docs/specs/2026-06-07-project-webhook-design.md` and replace the final sentence in the event API paragraph with:
 
 ```markdown
 Backend owner confirmation: config `eventIds` are populated from event `eventId`, not `eventType`.
@@ -56,7 +56,7 @@ Backend owner confirmation: config `eventIds` are populated from event `eventId`
 Run:
 
 ```bash
-git add docs/superpowers/specs/2026-06-07-project-webhook-design.md
+git add internal-docs/specs/2026-06-07-project-webhook-design.md
 git commit -m "docs: confirm webhook event id mapping"
 ```
 
@@ -360,7 +360,9 @@ Append these tests:
 
 ```go
 func TestNormalizeWebhookEventsIgnoresChineseDisplayName(t *testing.T) {
-	resp := ncsEventListResponse{Items: []ncsEvent{{EventID: 1001, DisplayName: "Channel Created", DisplayNameCn: "频道创建", EventType: 7, Payload: `{"x":1}`}}}
+	resp := ncsEventListResponse{Items: []ncsEvent{
+		{EventID: 1001, DisplayName: "Channel Created", DisplayNameCn: "频道创建", EventType: 7, Payload: `{"x":1}`},
+	}}
 	got := normalizeWebhookEvents(resp)
 	if len(got) != 1 || got[0].Key != "channel-created" || got[0].ID != 1001 || got[0].EventType != 7 || got[0].Payload != `{"x":1}` {
 		t.Fatalf("unexpected normalized events: %#v", got)
@@ -724,7 +726,9 @@ func TestProjectWebhookUpdateReadMergePut(t *testing.T) {
 	defer api.server.Close()
 	project := buildFakeProject("demo", "prj_0001", "app_0001", "global")
 	api.projects[project.ProjectID] = &project
-	api.ncsConfigs["prj_0001/rtc"] = []fakeNCSConfig{{ConfigID: 42, URL: "https://old.example/webhook", URLRegion: "eu", Enabled: true, EventIDs: []int{1001}, UseIPWhitelist: false, Secret: "secret_123"}}
+	api.ncsConfigs["prj_0001/rtc"] = []fakeNCSConfig{
+		{ConfigID: 42, URL: "https://old.example/webhook", URLRegion: "eu", Enabled: true, EventIDs: []int{1001}, UseIPWhitelist: false, Secret: "secret_123"},
+	}
 	configHome := t.TempDir()
 	persistSessionForIntegration(t, configHome)
 	result := runCLI(t, bin, map[string]string{"XDG_CONFIG_HOME": configHome, "AGORA_CLI_BASE_URL": api.baseURL}, "project", "webhook", "update", "42", "--project", "demo", "--feature", "rtc", "--url", "https://new.example/webhook", "--json")
@@ -795,7 +799,9 @@ func TestProjectWebhookListRedactsAndShowWithSecretReveals(t *testing.T) {
 	defer api.server.Close()
 	project := buildFakeProject("demo", "prj_0001", "app_0001", "global")
 	api.projects[project.ProjectID] = &project
-	api.ncsConfigs["prj_0001/rtc"] = []fakeNCSConfig{{ConfigID: 42, URL: "https://example.com/webhook", URLRegion: "na", Enabled: true, EventIDs: []int{1001}, UseIPWhitelist: false, Secret: "secret_123"}}
+	api.ncsConfigs["prj_0001/rtc"] = []fakeNCSConfig{
+		{ConfigID: 42, URL: "https://example.com/webhook", URLRegion: "na", Enabled: true, EventIDs: []int{1001}, UseIPWhitelist: false, Secret: "secret_123"},
+	}
 	configHome := t.TempDir()
 	persistSessionForIntegration(t, configHome)
 
@@ -1062,7 +1068,10 @@ case "project webhook events":
 	}
 case "project webhook list":
 	m := data.(map[string]any)
-	printBlock(out, "Webhooks", [][2]string{{"Project", asString(m["projectName"])}, {"Feature", asString(m["feature"])}})
+	printBlock(out, "Webhooks", [][2]string{
+		{"Project", asString(m["projectName"])},
+		{"Feature", asString(m["feature"])},
+	})
 	if items, ok := m["items"].([]webhookConfig); ok {
 		for _, item := range items {
 			fmt.Fprintf(out, "- %d  %s  %s  enabled=%v\n", item.ConfigID, item.URL, item.URLRegion, item.Enabled)
@@ -1077,7 +1086,12 @@ case "project webhook show", "project webhook create", "project webhook update":
 	}
 case "project webhook delete":
 	m := data.(map[string]any)
-	printBlock(out, "Webhook", [][2]string{{"Project", asString(m["projectName"])}, {"Feature", asString(m["feature"])}, {"Config ID", asString(m["configId"])}, {"Deleted", "true"}})
+	printBlock(out, "Webhook", [][2]string{
+		{"Project", asString(m["projectName"])},
+		{"Feature", asString(m["feature"])},
+		{"Config ID", asString(m["configId"])},
+		{"Deleted", "true"},
+	})
 ```
 
 Add helper:
@@ -1093,7 +1107,17 @@ func printWebhookBlock(out io.Writer, m map[string]any) {
 		if len(keys) > 0 {
 			events = strings.Join(keys, ", ")
 		}
-		printBlock(out, "Webhook", [][2]string{{"Project", asString(m["projectName"])}, {"Feature", asString(m["feature"])}, {"Config ID", asString(cfg.ConfigID)}, {"URL", cfg.URL}, {"Events", events}, {"Delivery Region", renderWebhookDeliveryRegion(cfg.URLRegion)}, {"Enabled", asString(cfg.Enabled)}, {"Retry", asString(cfg.Retry)}, {"Secret", cfg.Secret}})
+		printBlock(out, "Webhook", [][2]string{
+			{"Project", asString(m["projectName"])},
+			{"Feature", asString(m["feature"])},
+			{"Config ID", asString(cfg.ConfigID)},
+			{"URL", cfg.URL},
+			{"Events", events},
+			{"Delivery Region", renderWebhookDeliveryRegion(cfg.URLRegion)},
+			{"Enabled", asString(cfg.Enabled)},
+			{"Retry", asString(cfg.Retry)},
+			{"Secret", cfg.Secret},
+		})
 	}
 }
 ```

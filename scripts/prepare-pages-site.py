@@ -3,7 +3,7 @@
 
 The Pages workflow renders the human site with Jekyll, then this script:
 
-1. Reads docs/site.env for default published URLs.
+1. Reads internal-docs/pages/site.env for default published URLs.
 2. Lets workflow/job env vars override those defaults for staging builds.
 3. Replaces URL placeholders in rendered site files.
 4. Copies raw Markdown and MDC files to _site/md/ with the same replacements.
@@ -128,7 +128,7 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--source", default="docs", type=Path)
     parser.add_argument("--site", default="_site", type=Path)
-    parser.add_argument("--env-file", default=Path("docs/site.env"), type=Path)
+    parser.add_argument("--env-file", default=Path("internal-docs/pages/site.env"), type=Path)
     parser.add_argument("--repo-root", default=Path("."), type=Path)
     args = parser.parse_args()
 

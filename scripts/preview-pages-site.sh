@@ -43,7 +43,7 @@ CLI_DOCS_BASE_URL="http://localhost:${PORT}" \
 CLI_DOCS_MD_BASE_URL="http://localhost:${PORT}/md" \
 CLI_INSTALL_SH_URL="http://localhost:${PORT}/install.sh" \
 CLI_INSTALL_PS1_URL="http://localhost:${PORT}/install.ps1" \
-  python3 scripts/prepare-pages-site.py --source docs --site "$SITE_DIR" --env-file docs/site.env
+  python3 scripts/prepare-pages-site.py --source docs --site "$SITE_DIR" --env-file internal-docs/pages/site.env
 
 cat <<EOF
 

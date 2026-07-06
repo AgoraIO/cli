@@ -25,7 +25,7 @@ import (
 // Today this file ships a no-op default. The Sentry-backed sink is
 // scaffolded as `sentryClient` below so the next release can flip the
 // constructor over without changing the public API. See
-// docs/proposals/telemetry-sentry-wireup.md for the wire-up plan.
+// internal-docs/proposals/telemetry-sentry-wireup.md for the wire-up plan.
 type telemetryClient interface {
 	// Enabled reports whether the underlying sink will actually emit.
 	Enabled() bool
@@ -46,7 +46,7 @@ type telemetryClient interface {
 // agoraSentryDSN is the Sentry project DSN that the CLI ships with.
 // Empty string disables Sentry transport entirely (the default until the
 // Sentry SDK is wired in for the next release). When set, events go to the
-// Agora CLI Sentry project (see docs/proposals/telemetry-sentry-wireup.md).
+// Agora CLI Sentry project (see internal-docs/proposals/telemetry-sentry-wireup.md).
 const agoraSentryDSN = ""
 
 // initTelemetry returns the telemetry client appropriate for the current
@@ -73,7 +73,7 @@ func initTelemetry(configEnabled bool, env map[string]string, _ versionInformati
 	if agoraSentryDSN == "" {
 		// Sentry SDK not compiled in for this build. The wire-up is
 		// scheduled for the next release; until then this is the
-		// expected path. See docs/proposals/telemetry-sentry-wireup.md.
+		// expected path. See internal-docs/proposals/telemetry-sentry-wireup.md.
 		return noopTelemetry{}
 	}
 	return newSentryClient(agoraSentryDSN, env)

@@ -8,6 +8,7 @@ on:
       - "install.sh"
       - "install.ps1"
       - "docs/**"
+      - "internal-docs/pages/**"
       - "cmd/gendocs/**"
       - "internal/cli/**"
       - "scripts/prepare-pages-site.py"
@@ -54,7 +55,7 @@ jobs:
         run: sudo chown -R "$(id -u):$(id -g)" _site
 
       - name: Prepare human and agent docs
-        run: python3 scripts/prepare-pages-site.py --source docs --site _site --env-file docs/site.env
+        run: python3 scripts/prepare-pages-site.py --source docs --site _site --env-file internal-docs/pages/site.env
 
       - name: Verify Pages installer freshness
         shell: bash

@@ -129,24 +129,24 @@ func TestCLIDocsURLMatchesPagesWorkflow(t *testing.T) {
 	}
 	if !strings.Contains(string(body), "Prepare human and agent docs") ||
 		!strings.Contains(string(body), "scripts/prepare-pages-site.py") ||
-		!strings.Contains(string(body), "docs/site.env") {
+		!strings.Contains(string(body), "internal-docs/pages/site.env") {
 		t.Fatal("pages.yml does not prepare docs with the env-file driven Pages script")
 	}
 }
 
 func TestPagesSiteEnvDefaultsMatchOpenTargets(t *testing.T) {
 	repoRoot := findRepoRootForTest(t)
-	siteEnv := filepath.Join(repoRoot, "docs", "site.env")
+	siteEnv := filepath.Join(repoRoot, "internal-docs", "pages", "site.env")
 	body, err := os.ReadFile(siteEnv)
 	if err != nil {
 		t.Fatalf("could not read %s: %v", siteEnv, err)
 	}
 	content := string(body)
 	if !strings.Contains(content, "CLI_DOCS_BASE_URL="+strings.TrimSuffix(cliDocsURL, "/")) {
-		t.Fatalf("docs/site.env does not match cliDocsURL %q:\n%s", cliDocsURL, content)
+		t.Fatalf("internal-docs/pages/site.env does not match cliDocsURL %q:\n%s", cliDocsURL, content)
 	}
 	if !strings.Contains(content, "CLI_DOCS_MD_BASE_URL="+strings.TrimSuffix(cliDocsURL, "/")+"/md") {
-		t.Fatalf("docs/site.env does not match cliDocsMarkdownURL base %q:\n%s", cliDocsMarkdownURL, content)
+		t.Fatalf("internal-docs/pages/site.env does not match cliDocsMarkdownURL base %q:\n%s", cliDocsMarkdownURL, content)
 	}
 }
 
