@@ -88,6 +88,25 @@ Update persisted CLI defaults
 | `--output` | `output` | `pretty` | persist default output mode (pretty or json) |
 | `--telemetry-enabled` | `bool` | — | persist telemetry preference; use --telemetry-enabled=false to disable |
 
+### `agora convoai`
+
+Conversational AI developer tools
+
+_No local flags. Inherited parent and global flags still apply; run `agora <command> --help` for the full flag set._
+
+### `agora convoai playground`
+
+Start a local frontend to talk to your Conversational AI agent
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--agent-uid` | `int64` | — | reserved agent uid printed in the wire block (0 = generate) |
+| `--channel` | `string` | — | RTC channel to join (required; use the same value for your agent) |
+| `--no-open` | `bool` | — | do not open the browser automatically |
+| `--port` | `int` | `8787` | local server port (auto-increments if busy unless explicitly set) |
+| `--ttl` | `string` | `1h` | token lifetime |
+| `--uid` | `int64` | — | browser RTC uid (0 = generate a non-zero uid) |
+
 ### `agora doctor`
 
 Diagnose the local Agora CLI install (PATH, version, network, auth, MCP host)
