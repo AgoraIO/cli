@@ -63,7 +63,7 @@ func RenderCommandReference(out io.Writer, root *cobra.Command) error {
 				b.WriteString("\n\n")
 			}
 			if len(cmd.Flags) == 0 {
-				b.WriteString("_No local flags. Inherited global flags still apply (see [Global Flags](#global-flags))._\n\n")
+				b.WriteString("_No local flags. Inherited parent and global flags still apply; run `agora <command> --help` for the full flag set._\n\n")
 				continue
 			}
 			writeFlagsTable(&b, cmd.Flags)

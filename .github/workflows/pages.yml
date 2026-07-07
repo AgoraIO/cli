@@ -5,7 +5,10 @@ on:
     branches:
       - main
     paths:
+      - "install.sh"
+      - "install.ps1"
       - "docs/**"
+      - "internal-docs/pages/**"
       - "cmd/gendocs/**"
       - "internal/cli/**"
       - "scripts/prepare-pages-site.py"
@@ -52,7 +55,26 @@ jobs:
         run: sudo chown -R "$(id -u):$(id -g)" _site
 
       - name: Prepare human and agent docs
-        run: python3 scripts/prepare-pages-site.py --source docs --site _site --env-file docs/site.env
+        run: python3 scripts/prepare-pages-site.py --source docs --site _site --env-file internal-docs/pages/site.env
+
+      - name: Verify Pages installer freshness
+        shell: bash
+        run: |
+          test -s _site/install.sh
+          test -s _site/install.ps1
+          cmp install.sh _site/install.sh
+          cmp install.ps1 _site/install.ps1
+
+      - name: Verify Pages artifact shape
+        shell: bash
+        run: |
+          test -s _site/index.html
+          executable_files="$(find _site -type f \( -perm -100 -o -perm -010 -o -perm -001 \))"
+          if [ -n "$executable_files" ]; then
+            echo "Pages artifact contains executable files:" >&2
+            printf '%s\n' "$executable_files" >&2
+            exit 1
+          fi
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
@@ -71,4 +93,3 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v5
-

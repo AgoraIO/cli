@@ -29,7 +29,7 @@ Manual installs should verify SHA-256 at minimum; Cosign and SBOM verification a
 Install the latest release:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/AgoraIO/cli/main/install.sh | sh
+curl -fsSL @@CLI_INSTALL_SH_URL@@ | sh
 agora --help
 ```
 
@@ -38,14 +38,14 @@ agora --help
 Install a pinned version:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/AgoraIO/cli/main/install.sh | sh -s -- --version 0.2.5
+curl -fsSL @@CLI_INSTALL_SH_URL@@ | sh -s -- --version 0.2.5
 agora --help
 ```
 
 Install to a user-writable directory:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/AgoraIO/cli/main/install.sh \
+curl -fsSL @@CLI_INSTALL_SH_URL@@ \
   | INSTALL_DIR="$HOME/.local/bin" sh
 agora --help
 ```
@@ -53,13 +53,13 @@ agora --help
 Install only the binary (no shell modifications):
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/AgoraIO/cli/main/install.sh | sh -s -- --skip-shell
+curl -fsSL @@CLI_INSTALL_SH_URL@@ | sh -s -- --skip-shell
 ```
 
 Run a dry run before installing:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/AgoraIO/cli/main/install.sh | sh -s -- --dry-run
+curl -fsSL @@CLI_INSTALL_SH_URL@@ | sh -s -- --dry-run
 ```
 
 The shell installer supports macOS, Linux, and Windows POSIX shells such as Git Bash, MSYS2, and Cygwin. On macOS and Linux, the default install directory is `/usr/local/bin`; when that directory requires elevation and `sudo` is unavailable in the current shell, the installer falls back to a user-writable directory such as `$HOME/.local/bin`. On Windows POSIX shells, the default install directory is `$HOME/bin` and the installed binary is `agora.exe`.
@@ -71,7 +71,7 @@ The shell installer is idempotent. Re-running with the same `--version` will det
 Install the latest release:
 
 ```powershell
-irm https://raw.githubusercontent.com/AgoraIO/cli/main/install.ps1 | iex
+irm @@CLI_INSTALL_PS1_URL@@ | iex
 agora --help
 ```
 
@@ -81,19 +81,33 @@ Install a pinned version:
 
 ```powershell
 $env:VERSION = "0.2.5"
-irm https://raw.githubusercontent.com/AgoraIO/cli/main/install.ps1 | iex
+irm @@CLI_INSTALL_PS1_URL@@ | iex
 agora --help
 ```
 
 Install only the binary (no shell modifications):
 
 ```powershell
-& ([scriptblock]::Create((irm https://raw.githubusercontent.com/AgoraIO/cli/main/install.ps1))) -SkipShell
+& ([scriptblock]::Create((irm @@CLI_INSTALL_PS1_URL@@))) -SkipShell
 ```
 
 The Windows installer installs `agora.exe` into `%LOCALAPPDATA%\Programs\Agora\bin` by default.
 
 If your PowerShell execution policy blocks inline scripts, download `install.ps1` first and run it with `powershell -ExecutionPolicy Bypass -File .\install.ps1`.
+
+### Direct GitHub fallback
+
+The GitHub Pages URLs above are the recommended installer entry points.
+If GitHub Pages is temporarily unavailable, or if you explicitly want to
+fetch the installer script directly from GitHub, use the raw GitHub URLs:
+
+```bash
+curl -fsSL @@CLI_INSTALL_SH_FALLBACK_URL@@ | sh
+```
+
+```powershell
+irm @@CLI_INSTALL_PS1_FALLBACK_URL@@ | iex
+```
 
 ## Unix Installer Flags
 
@@ -146,13 +160,13 @@ If another managed `agora` install is detected, the installer refuses by default
 Direct installer installs can be removed with:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/AgoraIO/cli/main/install.sh | sh -s -- --uninstall
+curl -fsSL @@CLI_INSTALL_SH_URL@@ | sh -s -- --uninstall
 ```
 
 On Windows PowerShell:
 
 ```powershell
-& ([scriptblock]::Create((irm https://raw.githubusercontent.com/AgoraIO/cli/main/install.ps1))) -Uninstall
+& ([scriptblock]::Create((irm @@CLI_INSTALL_PS1_URL@@))) -Uninstall
 ```
 
 Uninstall removes the binary and `agora.install.json` receipt from the install directory. It preserves config, session, context, and logs.
@@ -172,12 +186,51 @@ Shell installer only:
 - `SUDO`: command for privileged installs (default `sudo`; set to `doas`, `sudo -n`, or empty to disable elevation).
 - `DOCS_URL`: alternate docs URL printed in the next-steps footer.
 - `ISSUES_URL`: alternate issues URL printed in error messages.
+- `INSTALLER_BASE_URL`: alternate canonical installer base URL printed in retry and migration messages for `AgoraIO/cli`.
 
 Advanced or test overrides supported by both direct installers:
 
 - `GITHUB_API_URL`: alternate API base URL.
 - `RELEASES_DOWNLOAD_BASE_URL`: alternate release download base URL.
 - `RELEASES_PAGE_URL`: alternate releases page URL used in error messages.
+- `AGORA_INSTALL_SOURCE`: control the download source (`auto`, `github`, or `s3`; see [Mirror fallback](#mirror-fallback-for-restricted-networks)).
+- `S3_DOWNLOAD_BASE_URL`: alternate S3/mirror base URL for versioned release archives (default `https://dl.agora.io/cli/releases`).
+- `S3_LATEST_URL`: alternate URL for the mirror's `latest.json` (default `https://dl.agora.io/cli/latest.json`).
+
+## Mirror fallback for restricted networks
+
+The installers download from GitHub by default. When GitHub is unreachable
+(blocked region, API rate limit, transient outage), they automatically fall
+back to the Agora mirror at `https://dl.agora.io/cli` (CloudFront + S3).
+Downloads are still verified against `checksums.txt` regardless of source.
+
+Control the source with `AGORA_INSTALL_SOURCE`:
+
+| Value | Behavior |
+|-------|----------|
+| `auto` (default) | GitHub first, mirror fallback |
+| `github` | GitHub only, no fallback |
+| `s3` | Mirror only, skip GitHub entirely |
+
+Blocked-region one-liner (skips the GitHub timeout entirely):
+
+```sh
+curl -fsSL https://dl.agora.io/cli/install.sh | AGORA_INSTALL_SOURCE=s3 sh
+```
+
+Windows:
+
+```powershell
+$env:AGORA_INSTALL_SOURCE = 's3'; irm https://dl.agora.io/cli/install.ps1 | iex
+```
+
+Advanced overrides: `S3_DOWNLOAD_BASE_URL` (default
+`https://dl.agora.io/cli/releases`) and `S3_LATEST_URL` (default
+`https://dl.agora.io/cli/latest.json`).
+
+**Limitation:** `--prerelease` and version listing require GitHub; the mirror
+only tracks the latest stable release. In a fully blocked region, pin an
+explicit `--version` to install from the mirror.
 
 ## Exit Codes
 
@@ -251,8 +304,8 @@ go build -o agora .
 
 | Channel                                  | Status                                              | Command                                                                                              |
 | ---------------------------------------- | --------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| Shell installer                          | Available                                           | `curl -fsSL https://raw.githubusercontent.com/AgoraIO/cli/main/install.sh \| sh`                     |
-| Windows PowerShell                       | Available                                           | `irm https://raw.githubusercontent.com/AgoraIO/cli/main/install.ps1 \| iex`                          |
+| Shell installer                          | Available                                           | `curl -fsSL @@CLI_INSTALL_SH_URL@@ \| sh`                     |
+| Windows PowerShell                       | Available                                           | `irm @@CLI_INSTALL_PS1_URL@@ \| iex`                          |
 | Linux `.deb` / `.rpm` / `.apk` artifacts | Available on GitHub releases                        | Download the package for your distro from the release page.                                          |
 | apt repository                           | Available when `apt-repo.yml` publishes the release | Use the signed repository documented by the release.                                                 |
 | Docker / GHCR                            | Available when release images publish               | `docker run --rm ghcr.io/agoraio/agora-cli:latest --help`                                            |
@@ -302,7 +355,7 @@ The direct installers call the GitHub REST API only when resolving the latest re
 If latest-version resolution fails, pin `VERSION` first — that skips the API lookup entirely:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/AgoraIO/cli/main/install.sh | sh -s -- --version 0.2.5
+curl -fsSL @@CLI_INSTALL_SH_URL@@ | sh -s -- --version 0.2.5
 ```
 
 If you must resolve latest from a shared IP (for example CI) and hit GitHub's unauthenticated API rate limit, optionally provide `GITHUB_TOKEN` or `GH_TOKEN`:
@@ -313,7 +366,7 @@ GITHUB_TOKEN=your-token-here sh install.sh
 
 ```powershell
 $env:GITHUB_TOKEN = "your-token-here"
-& ([scriptblock]::Create((irm https://raw.githubusercontent.com/AgoraIO/cli/main/install.ps1)))
+& ([scriptblock]::Create((irm @@CLI_INSTALL_PS1_URL@@)))
 ```
 
 ### Permission errors
@@ -329,7 +382,7 @@ The shell installer refuses to install over an existing managed `agora` to avoid
 - Uninstall the existing package, then re-run the standalone installer:
 
   ```bash
-  curl -fsSL https://raw.githubusercontent.com/AgoraIO/cli/main/install.sh | sh
+  curl -fsSL @@CLI_INSTALL_SH_URL@@ | sh
   ```
 
 - If it is npm-managed, re-run the installer with `--replace-npm` to run `npm uninstall -g agoraio-cli` before installing the standalone binary.

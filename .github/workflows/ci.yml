@@ -93,6 +93,11 @@ jobs:
         shell: bash
         run: sh scripts/test-installer-messages.sh
 
+      - name: Unit test installer fallback logic
+        if: runner.os == 'Linux'
+        shell: bash
+        run: sh scripts/test-installer-fallback.sh
+
       - name: Check PowerShell installer syntax
         if: runner.os == 'Windows'
         shell: pwsh
@@ -148,27 +153,32 @@ jobs:
             (cd "$download_dir" && shasum -a 256 "$archive" > checksums.txt)
           fi
 
-          python3 -m http.server 18080 --bind 127.0.0.1 --directory "$fixture_root" >/tmp/agora-install-server.log 2>&1 &
+          # Fixed-port fixture server (matches the S3 fallback steps below).
+          # Avoids the ephemeral-port + port-file write race that intermittently
+          # hung before writing its port on macOS runners.
+          server_log="$fixture_root/http-server.log"
+          server_url="http://127.0.0.1:18080"
+          archive_url="${server_url}/download/v${version}/${archive}"
+          python3 -m http.server 18080 --directory "$fixture_root" >"$server_log" 2>&1 &
           server_pid=$!
-          trap 'kill "$server_pid" 2>/dev/null || true; wait "$server_pid" 2>/dev/null || true' EXIT
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
 
-          archive_url="http://127.0.0.1:18080/download/v${version}/${archive}"
-          server_ready=false
-          for attempt in $(seq 1 20); do
+          server_ready=0
+          for attempt in $(seq 1 120); do
             if ! kill -0 "$server_pid" 2>/dev/null; then
-              cat /tmp/agora-install-server.log >&2 || true
-              echo "Fixture HTTP server exited before serving ${archive_url}." >&2
+              echo "Fixture HTTP server exited before serving the test archive." >&2
+              sed 's/^/  /' "$server_log" >&2 || true
               exit 1
             fi
-            if curl -fsS --head "$archive_url" >/dev/null; then
-              server_ready=true
+            if curl -fsS --head --connect-timeout 2 "$archive_url" >/dev/null 2>&1; then
+              server_ready=1
               break
             fi
-            sleep 1
+            sleep 0.25
           done
-          if [ "$server_ready" != true ]; then
-            cat /tmp/agora-install-server.log >&2 || true
-            echo "Fixture HTTP server did not serve ${archive_url}." >&2
+          if [ "$server_ready" != "1" ]; then
+            echo "Fixture HTTP server did not serve $archive_url." >&2
+            sed 's/^/  /' "$server_log" >&2 || true
             exit 1
           fi
 
@@ -177,9 +187,15 @@ jobs:
           # restriction (test only).
           export INSTALLER_CURL_PROTO_OPTS="--proto =http,https"
 
+          # Pin the source to github so this test only exercises the fixture
+          # (RELEASES_DOWNLOAD_BASE_URL) path; auto mode would fast-fail a
+          # transient fixture hiccup and divert to the real dl.agora.io mirror.
+          # github mode also uses the retry profile, restoring pre-fallback
+          # resilience.
           VERSION="$version" \
-          RELEASES_DOWNLOAD_BASE_URL="http://127.0.0.1:18080/download" \
-          RELEASES_PAGE_URL="http://127.0.0.1:18080" \
+          AGORA_INSTALL_SOURCE=github \
+          RELEASES_DOWNLOAD_BASE_URL="${server_url}/download" \
+          RELEASES_PAGE_URL="$server_url" \
           INSTALL_DIR="$install_dir" \
           sh ./install.sh --force
 
@@ -187,13 +203,86 @@ jobs:
 
           printf '%064d  %s\n' 0 "$archive" > "$download_dir/checksums.txt"
           if VERSION="$version" \
-            RELEASES_DOWNLOAD_BASE_URL="http://127.0.0.1:18080/download" \
-            RELEASES_PAGE_URL="http://127.0.0.1:18080" \
+            AGORA_INSTALL_SOURCE=github \
+            RELEASES_DOWNLOAD_BASE_URL="${server_url}/download" \
+            RELEASES_PAGE_URL="$server_url" \
             INSTALL_DIR="$bad_install_dir" \
             sh ./install.sh --force; then
             echo "Expected checksum verification to fail" >&2
             exit 1
           fi
+
+      - name: Smoke test installer S3 fallback (Unix)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          set -euo pipefail
+          version='0.0.0-ci'
+          arch="$(uname -m)"; case "$arch" in x86_64|amd64) arch=amd64;; aarch64|arm64) arch=arm64;; esac
+          os="$(uname -s | tr '[:upper:]' '[:lower:]')"
+          archive="agora-cli_v${version}_${os}_${arch}.tar.gz"
+
+          root=".tmp/fallback-fixture"
+          rel="${root}/releases/v${version}"
+          install_dir="$PWD/.tmp/fallback-bin"
+          rm -rf "$root" "$install_dir"
+          mkdir -p "$rel" "$install_dir"
+
+          cp dist/agora "$root/agora"
+          tar -C "$root" -czf "${rel}/${archive}" agora
+          if command -v sha256sum >/dev/null 2>&1; then
+            ( cd "$rel" && sha256sum "$archive" > checksums.txt )
+          else
+            ( cd "$rel" && shasum -a 256 "$archive" > checksums.txt )
+          fi
+          printf '{"tag_name":"v%s","version":"%s"}' "$version" "$version" > "${root}/latest.json"
+
+          server_log="${root}/http.log"
+          python3 -m http.server 18082 --directory "$root" >"$server_log" 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+          server_ready=0
+          for _ in $(seq 1 120); do
+            if ! kill -0 "$server_pid" 2>/dev/null; then
+              echo "Fixture HTTP server exited before becoming ready." >&2
+              sed 's/^/  /' "$server_log" >&2 || true
+              exit 1
+            fi
+            if curl -fsS --head --connect-timeout 2 "http://127.0.0.1:18082/latest.json" >/dev/null 2>&1; then
+              server_ready=1; break
+            fi
+            sleep 0.25
+          done
+          if [ "$server_ready" != "1" ]; then
+            echo "Fixture HTTP server did not become ready." >&2
+            sed 's/^/  /' "$server_log" >&2 || true
+            exit 1
+          fi
+
+          export INSTALLER_CURL_PROTO_OPTS="--proto =http,https"
+          GITHUB_API_URL="http://127.0.0.1:1/api" \
+          RELEASES_DOWNLOAD_BASE_URL="http://127.0.0.1:1/download" \
+          S3_DOWNLOAD_BASE_URL="http://127.0.0.1:18082/releases" \
+          S3_LATEST_URL="http://127.0.0.1:18082/latest.json" \
+          RELEASES_PAGE_URL="http://127.0.0.1:18082" \
+          INSTALL_DIR="$install_dir" \
+          sh ./install.sh --force
+
+          "$install_dir/agora" --help >/dev/null
+          echo "Fallback install succeeded via mock S3."
+
+          printf '%064d  %s\n' 0 "$archive" > "${rel}/checksums.txt"
+          if GITHUB_API_URL="http://127.0.0.1:1/api" \
+             RELEASES_DOWNLOAD_BASE_URL="http://127.0.0.1:1/download" \
+             S3_DOWNLOAD_BASE_URL="http://127.0.0.1:18082/releases" \
+             S3_LATEST_URL="http://127.0.0.1:18082/latest.json" \
+             RELEASES_PAGE_URL="http://127.0.0.1:18082" \
+             INSTALL_DIR="$PWD/.tmp/fallback-bin-bad" \
+             sh ./install.sh --force; then
+            echo "Expected checksum verification to fail on the mirrored archive." >&2
+            exit 1
+          fi
+          echo "Checksum verification correctly rejected the tampered mirror archive."
 
       - name: Smoke test PowerShell installer
         if: runner.os == 'Windows'
@@ -224,7 +313,7 @@ jobs:
           $server = Start-Process -FilePath python -ArgumentList '-m', 'http.server', '18081', '--directory', $fixtureRoot -RedirectStandardOutput $serverOutLog -RedirectStandardError $serverErrLog -PassThru
           $archiveUrl = "http://127.0.0.1:18081/download/v$version/$archive"
           $serverReady = $false
-          for ($attempt = 1; $attempt -le 20; $attempt++) {
+          for ($attempt = 1; $attempt -le 60; $attempt++) {
             if ($server.HasExited) {
               if (Test-Path -LiteralPath $serverOutLog) { Get-Content -Path $serverOutLog | ForEach-Object { Write-Host $_ } }
               if (Test-Path -LiteralPath $serverErrLog) { Get-Content -Path $serverErrLog | ForEach-Object { Write-Host $_ } }
@@ -248,6 +337,9 @@ jobs:
 
           try {
             $env:VERSION = $version
+            # Pin source to github so this test only exercises the fixture path
+            # (auto mode could divert a transient hiccup to the real mirror).
+            $env:AGORA_INSTALL_SOURCE = 'github'
             $env:RELEASES_DOWNLOAD_BASE_URL = 'http://127.0.0.1:18081/download'
             $env:RELEASES_PAGE_URL = 'http://127.0.0.1:18081'
 
@@ -274,5 +366,64 @@ jobs:
             $global:LASTEXITCODE = 0
           } finally {
             Stop-Process -Id $server.Id -Force -ErrorAction SilentlyContinue
-            Remove-Item Env:VERSION, Env:RELEASES_DOWNLOAD_BASE_URL, Env:RELEASES_PAGE_URL -ErrorAction SilentlyContinue
+            Remove-Item Env:VERSION, Env:AGORA_INSTALL_SOURCE, Env:RELEASES_DOWNLOAD_BASE_URL, Env:RELEASES_PAGE_URL -ErrorAction SilentlyContinue
+          }
+
+      - name: Smoke test PowerShell installer S3 fallback
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $version = '0.0.0-ci'
+          $arch = switch ([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString().ToLowerInvariant()) {
+            'x64' { 'amd64' } 'arm64' { 'arm64' } default { throw "Unsupported CI arch" }
+          }
+          $root = Join-Path $PWD '.tmp/fallback-fixture'
+          $rel = Join-Path $root "releases/v$version"
+          $installDir = Join-Path $PWD '.tmp/fallback-bin'
+          $archive = "agora-cli_v$version" + "_windows_${arch}.zip"
+          Remove-Item -Recurse -Force $root, $installDir -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Force -Path $rel, $installDir | Out-Null
+
+          Compress-Archive -Path (Join-Path $PWD 'dist/agora.exe') -DestinationPath (Join-Path $rel $archive) -Force
+          $hash = (Get-FileHash -Path (Join-Path $rel $archive) -Algorithm SHA256).Hash.ToLowerInvariant()
+          Set-Content -Path (Join-Path $rel 'checksums.txt') -Value "$hash  $archive"
+          Set-Content -NoNewline -Path (Join-Path $root 'latest.json') -Value ('{"tag_name":"v' + $version + '","version":"' + $version + '"}')
+
+          $server = Start-Process -FilePath python -ArgumentList '-m', 'http.server', '18083', '--directory', $root -PassThru
+          try {
+            $ready = $false
+            for ($i = 0; $i -lt 120; $i++) {
+              if ($server.HasExited) { throw 'Fixture HTTP server exited before becoming ready.' }
+              try { if ((Invoke-WebRequest -Uri 'http://127.0.0.1:18083/latest.json' -UseBasicParsing).StatusCode -eq 200) { $ready = $true; break } } catch { Start-Sleep -Milliseconds 250 }
+            }
+            if (-not $ready) { throw 'fixture server not ready at http://127.0.0.1:18083/latest.json' }
+
+            $env:GITHUB_API_URL = 'http://127.0.0.1:1/api'
+            $env:RELEASES_DOWNLOAD_BASE_URL = 'http://127.0.0.1:1/download'
+            $env:S3_DOWNLOAD_BASE_URL = 'http://127.0.0.1:18083/releases'
+            $env:S3_LATEST_URL = 'http://127.0.0.1:18083/latest.json'
+            $env:RELEASES_PAGE_URL = 'http://127.0.0.1:18083'
+
+            & ./install.ps1 -InstallDir $installDir
+            if ($LASTEXITCODE -ne 0) { throw "install.ps1 fallback failed: $LASTEXITCODE" }
+            & (Join-Path $installDir 'agora.exe') --help *> $null
+            Write-Host 'Fallback install succeeded via mock S3.'
+
+            # Checksum verification must still fire on S3-served bytes: corrupt
+            # the mirror's checksums.txt and assert install.ps1 refuses.
+            Set-Content -Path (Join-Path $rel 'checksums.txt') -Value ('0' * 64 + "  $archive")
+            $badInstallDir = Join-Path $PWD '.tmp/fallback-bin-bad'
+            $previousNativePreference = $PSNativeCommandUseErrorActionPreference
+            $PSNativeCommandUseErrorActionPreference = $false
+            pwsh -NoProfile -ExecutionPolicy Bypass -File ./install.ps1 -InstallDir $badInstallDir
+            $badExitCode = $LASTEXITCODE
+            $PSNativeCommandUseErrorActionPreference = $previousNativePreference
+            if ($badExitCode -eq 0) {
+              throw 'Expected checksum verification to fail on the mirrored archive.'
+            }
+            $global:LASTEXITCODE = 0
+            Write-Host 'Checksum verification correctly rejected the tampered mirror archive.'
+          } finally {
+            Stop-Process -Id $server.Id -Force -ErrorAction SilentlyContinue
+            Remove-Item Env:GITHUB_API_URL, Env:RELEASES_DOWNLOAD_BASE_URL, Env:S3_DOWNLOAD_BASE_URL, Env:S3_LATEST_URL, Env:RELEASES_PAGE_URL -ErrorAction SilentlyContinue
           }

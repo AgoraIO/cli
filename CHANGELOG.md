@@ -140,7 +140,7 @@ Set `AGORA_ALLOW_UPGRADE_IN_CI=1` only when a CI job intentionally needs to muta
 ### Added
 
 - Add GitHub Pages publishing for generated CLI docs and route `agora open --target docs` to the human CLI docs site, `agora open --target docs-md` to the agent-facing raw Markdown docs under `/md/`, and `product-docs` to Agora product docs.
-- Add `docs/site.env` and Pages build-time URL injection so staging docs can publish with different `CLI_DOCS_BASE_URL` / `CLI_DOCS_MD_BASE_URL` values while keeping predictable human and Markdown paths.
+- Add `internal-docs/pages/site.env` and Pages build-time URL injection so staging docs can publish with different `CLI_DOCS_BASE_URL` / `CLI_DOCS_MD_BASE_URL` values while keeping predictable human and Markdown paths.
 - Add a custom GitHub Pages theme for the human docs with responsive layout, system light/dark mode via `prefers-color-scheme`, and no manual theme toggle.
 - Add `make docs-preview` for a Ruby/Jekyll local docs preview that builds with localhost-friendly paths, injects localhost docs URLs, and serves both the human site and `/md/` Markdown tree.
 - Add global `--yes` / `-y` and `AGORA_NO_INPUT=1` support to accept defaults and suppress prompts.
@@ -169,7 +169,7 @@ Set `AGORA_ALLOW_UPGRADE_IN_CI=1` only when a CI job intentionally needs to muta
 - `agora doctor` now suggests the exact shell-aware command for fixing a missing PATH entry. The `path_resolution` failure suggestion now reads `echo 'export PATH="<dir>:$PATH"' >> ~/.zshrc && source ~/.zshrc` for zsh, the equivalent for bash and `fish_add_path` for fish, the `setx PATH ...` form on Windows, and a generic `~/.profile` fallback for unknown shells. The doctor derives `<dir>` from the running binary's location, so the command is always copy-pasteable.
 - Add a curated `Requirements` and `Verifying release artifacts` section to the README, plus links to `SECURITY.md`, `SUPPORT.md`, the new troubleshooting doc, and `docs/schema/envelope.v1.json` from the Docs index.
 - Add a telemetry stub (`internal/cli/telemetry.go`) with the `telemetryClient` interface, default no-op sink, redaction helper, and `sentryClient` placeholder so the next release wires Sentry by adding the SDK + replacing one constant. The on/off contract (`agora telemetry`, `AGORA_SENTRY_ENABLED`, `DO_NOT_TRACK`) is fully wired; transport is a no-op until Sentry is connected.
-- Add the proposal documents `docs/proposals/supply-chain-hardening.md`, `docs/proposals/ci-matrix-expansion.md`, and `docs/proposals/telemetry-sentry-wireup.md` for the next release.
+- Add the proposal documents `internal-docs/proposals/supply-chain-hardening.md`, `internal-docs/proposals/ci-matrix-expansion.md`, and `internal-docs/proposals/telemetry-sentry-wireup.md` for the next release.
 
 ### Changed
 
@@ -213,7 +213,7 @@ Set `AGORA_ALLOW_UPGRADE_IN_CI=1` only when a CI job intentionally needs to muta
 - README updates land in logical sections (Install requirements, Verifying releases, Docs index, Command Model additions, Troubleshooting redirect) without disturbing the marketing-first opening.
 - `CONTRIBUTING.md` documents the branching model (`main` is releasable, topic branches off `main`), the commit-message convention, the optional DCO sign-off path, and the per-command example requirement for new commands.
 - `docs/automation.md` adds a section documenting the `agora project env` raw-stdout exception and links the new envelope JSON Schema.
-- `docs/proposals/` introduces a new directory for deferred-implementation proposals (supply-chain hardening, CI matrix expansion, Sentry wire-up). Each proposal carries a `status: proposed`, `target-release: next` front-matter so contributors can see what's planned without bisecting branches.
+- `internal-docs/proposals/` introduces a new directory for deferred-implementation proposals (supply-chain hardening, CI matrix expansion, Sentry wire-up). Each proposal carries a `status: proposed`, `target-release: next` front-matter so contributors can see what's planned without bisecting branches.
 
 ## [0.1.9] - 2026-04-30
 
