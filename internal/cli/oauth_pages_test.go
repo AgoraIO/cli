@@ -21,9 +21,29 @@ func TestOAuthCallbackSuccessPageUsesFinalGlobalDesign(t *testing.T) {
 		}
 	}
 
-	for _, forbidden := range []string{"agora whoami", "global-minimal", "global-deck"} {
+	for _, forbidden := range []string{"agora whoami", "global-minimal", "global-deck", "shengwang", "声网", "brand-logo-cn"} {
 		if strings.Contains(html, forbidden) {
 			t.Fatalf("global login page should not contain legacy variant content %q", forbidden)
+		}
+	}
+}
+
+func TestOAuthCallbackSuccessPageDefaultsToGlobalBranding(t *testing.T) {
+	html := renderOAuthCallbackSuccessPage(callbackPageConfig{Region: "test"})
+
+	for _, want := range []string{
+		"agora-page",
+		"Agora%20Logo%20Crisp.webp",
+		"You are now authenticated with Agora CLI",
+	} {
+		if !strings.Contains(html, want) {
+			t.Fatalf("expected fallback login page to contain %q", want)
+		}
+	}
+
+	for _, forbidden := range []string{"shengwang", "声网", "brand-logo-cn"} {
+		if strings.Contains(html, forbidden) {
+			t.Fatalf("fallback login page should not contain China branding %q", forbidden)
 		}
 	}
 }

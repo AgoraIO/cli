@@ -66,7 +66,7 @@ func renderOAuthCallbackPage(content loginPageContent, isError bool, errorTitle,
 
 	var b strings.Builder
 	b.WriteString(`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Agora CLI Login</title><style>`)
-	b.WriteString(loginPageCSS())
+	b.WriteString(loginPageCSS(content.PageClass))
 	b.WriteString(`</style></head><body><main class="page `)
 	b.WriteString(escapeAttr(content.PageClass))
 	if isError {
@@ -93,40 +93,48 @@ func renderOAuthCallbackPage(content loginPageContent, isError bool, errorTitle,
 	return b.String()
 }
 
-// loginPageCSS returns the shared CSS for the final global and China login pages.
-func loginPageCSS() string {
-	return `
+// loginPageCSS returns shared page CSS plus the theme for the active login region.
+func loginPageCSS(pageClass string) string {
+	var b strings.Builder
+	b.WriteString(`
 *{box-sizing:border-box}
-body{margin:0;min-height:100vh;font-family:ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
-.page{min-height:100vh;display:grid;place-items:center;padding:90px 28px 48px;position:relative;overflow:hidden;color:var(--ink);background:var(--bg)}
-.page:before{content:"";position:absolute;inset:0;pointer-events:none}
-.card{width:min(900px,100%);position:relative;z-index:2;min-height:auto;padding:42px;border:1px solid var(--line);border-radius:30px;background:var(--panel);box-shadow:var(--shadow);backdrop-filter:blur(18px)}
-.brand{display:inline-flex;align-items:center;gap:10px;color:var(--ink);font-size:20px;font-weight:950;letter-spacing:-.02em}
+body{margin:0;min-height:100vh;font-family:ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;-webkit-font-smoothing:antialiased}
+.page{min-height:100vh;display:grid;place-items:center;padding:64px 24px;color:var(--ink);background:var(--bg)}
+.card{width:min(760px,100%);padding:40px;border:1px solid var(--line);border-radius:20px;background:var(--panel);box-shadow:var(--shadow)}
+.brand{display:inline-flex;align-items:center;gap:10px;color:var(--ink);font-size:16px;font-weight:700;letter-spacing:-.01em}
 .brand-logo{display:inline-flex;align-items:center;flex:0 0 auto}
 .brand-logo svg{display:block;width:100%;height:100%}
 .brand-logo img{display:block;width:100%;height:auto}
-.brand-logo-agora{width:86px;max-height:34px}
-.brand-logo-cn{justify-content:center;width:58px;height:58px;border-radius:16px;color:#fff;background:radial-gradient(circle at 22% 18%,rgba(255,255,255,.32),transparent 26%),linear-gradient(135deg,#1469ff 0%,#0f8fff 48%,#16c7b7 100%);box-shadow:0 16px 36px rgba(20,105,255,.22)}
-.brand-logo-cn svg{width:42px;height:auto}
-.hero{margin-top:54px;max-width:880px}
-h1{margin:0;max-width:820px;font-size:clamp(34px,3.8vw,54px);line-height:1.12;letter-spacing:-.045em}
-.message{max-width:780px;margin:24px 0 0;color:var(--muted);font-size:clamp(15px,1.3vw,18px);line-height:1.7}
-.next{display:grid;grid-template-columns:1fr auto;gap:18px;align-items:center;margin-top:34px;padding:15px 18px;border:1px solid var(--next-line);border-radius:18px;background:var(--next-bg);box-shadow:var(--next-shadow)}
-.next p{margin:0;color:var(--next-text);font-size:clamp(14px,1.25vw,16px);font-weight:650;letter-spacing:-.02em}
-code{padding:0;border-radius:0;background:transparent;color:var(--primary);font:850 clamp(14px,1.25vw,16px) ui-monospace,SFMono-Regular,Menlo,monospace;white-space:nowrap}
-.safety{margin:24px 0 0;color:var(--muted);font-size:14px;line-height:1.65}
+.brand-logo-agora{width:82px;max-height:32px}
+.hero{margin-top:36px}
+h1{margin:0;max-width:700px;font-size:clamp(26px,3vw,31px);line-height:1.22;letter-spacing:-.03em}
+.message{max-width:680px;margin:18px 0 0;color:var(--muted);font-size:16px;line-height:1.65}
+.next{display:grid;grid-template-columns:1fr auto;gap:18px;align-items:center;margin-top:28px;padding:14px 16px;border:1px solid var(--next-line);border-radius:12px;background:var(--next-bg)}
+.next p{margin:0;color:var(--next-text);font-size:14px;font-weight:600}
+code{padding:5px 9px;border:1px solid var(--code-line);border-radius:8px;background:var(--code-bg);color:var(--primary);font:700 14px ui-monospace,SFMono-Regular,Menlo,monospace;white-space:nowrap}
+.safety{margin:20px 0 0;color:var(--muted);font-size:13px;line-height:1.6}
 .is-error .next{display:none}
-.agora-page{--ink:#f8fbff;--muted:#a9b8cd;--primary:#35d6a5;--line:rgba(255,255,255,.14);--panel:rgba(9,20,38,.54);--shadow:0 24px 90px rgba(0,0,0,.22);--next-line:rgba(255,255,255,.1);--next-bg:rgba(5,11,20,.72);--next-text:#dbe7ff;--next-shadow:none;--bg:radial-gradient(circle at 12% 12%,rgba(53,214,165,.28),transparent 30%),radial-gradient(circle at 88% 16%,rgba(122,167,255,.22),transparent 32%),radial-gradient(circle at 54% 100%,rgba(62,84,255,.18),transparent 36%),linear-gradient(150deg,#050b14 0%,#101b33 48%,#07111f 100%)}
-.agora-page:before{opacity:.2;background-image:linear-gradient(rgba(255,255,255,.08) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.08) 1px,transparent 1px);background-size:44px 44px;mask-image:radial-gradient(circle at 50% 48%,black,transparent 72%)}
-.shengwang-page{--ink:#10233f;--muted:#5f6f85;--primary:#1469ff;--line:rgba(24,56,96,.14);--panel:linear-gradient(135deg,rgba(255,255,255,.96),rgba(255,255,255,.78)),radial-gradient(circle at 0% 0%,rgba(20,105,255,.08),transparent 34%);--shadow:0 30px 100px rgba(16,35,63,.16),0 1px 0 rgba(255,255,255,.78) inset;--next-line:rgba(24,56,96,.16);--next-bg:#f8fafc;--next-text:#5f6f85;--next-shadow:0 12px 40px rgba(20,61,112,.06);--bg:radial-gradient(circle at 18% 12%,rgba(20,105,255,.34),transparent 28%),radial-gradient(circle at 85% 78%,rgba(22,199,183,.24),transparent 30%),linear-gradient(135deg,#e8f1ff 0%,#f8fbff 42%,#e8fff9 100%)}
-.shengwang-page:before{background:linear-gradient(rgba(10,24,48,.045) 1px,transparent 1px),linear-gradient(90deg,rgba(10,24,48,.045) 1px,transparent 1px),radial-gradient(circle at 50% 0%,rgba(5,8,18,.1),transparent 34%);background-size:44px 44px,44px 44px,auto;opacity:.8;mask-image:radial-gradient(circle at 50% 48%,black,transparent 78%)}
 @media (max-width:900px){
-  .page{padding-top:72px}
+  .page{padding:32px 18px}
   .card{padding:28px}
   .next{grid-template-columns:1fr}
   code{white-space:normal;word-break:break-word}
 }
-`
+`)
+
+	if pageClass == "shengwang-page" {
+		b.WriteString(`
+.shengwang-page{--ink:#152033;--muted:#617083;--primary:#1469ff;--brand:#1469ff;--line:#dce7f5;--panel:#fff;--shadow:0 20px 55px rgba(21,45,85,.1);--next-line:#dce7f5;--next-bg:#f7fbff;--next-text:#46576c;--code-line:#cfe0f8;--code-bg:#eef6ff;--bg:linear-gradient(180deg,#f6faff 0%,#fff 58%,#f9fbfd 100%)}
+.brand-logo-cn{width:88px;height:auto;color:var(--brand)}
+.brand-logo-cn svg{width:88px;height:auto}
+`)
+		return b.String()
+	}
+
+	b.WriteString(`
+.agora-page{--ink:#172033;--muted:#647084;--primary:#09976f;--line:#dfe5ee;--panel:#fff;--shadow:0 20px 55px rgba(22,33,55,.1);--next-line:#dfe5ee;--next-bg:#f8fafc;--next-text:#4c596c;--code-line:#d8e2ee;--code-bg:#f3f6fa;--bg:linear-gradient(180deg,#f8fafc 0%,#fff 58%,#f6f8fb 100%)}
+`)
+	return b.String()
 }
 
 // brandLogoHTML returns the official region-specific brand mark used in the callback page.
