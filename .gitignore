@@ -12,6 +12,7 @@ coverage.out
 # Built CLI binaries
 agora
 agora-cli-go
+playgroundhash
 
 # IDE and editor files
 .idea/
