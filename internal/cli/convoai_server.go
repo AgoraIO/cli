@@ -1,11 +1,14 @@
 package cli
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io/fs"
+	"mime"
 	"net"
 	"net/http"
+	"path"
 	"strconv"
 	"strings"
 	"time"
@@ -14,19 +17,45 @@ import (
 )
 
 type playgroundHandler struct {
-	sess   *playgroundSession
-	static http.Handler // serves embedded assets; nil in unit tests
+	sess *playgroundSession
 }
 
 func newPlaygroundHandler(sess *playgroundSession, assets fs.FS) http.Handler {
 	h := &playgroundHandler{sess: sess}
-	if assets != nil {
-		h.static = http.FileServer(http.FS(assets))
-	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/get_config", h.handleGetConfig)
-	mux.HandleFunc("/", h.handleStatic)
+	mux.Handle("/", newStaticHandler(assets))
 	return loopbackGuard(mux)
+}
+
+func newStaticHandler(assets fs.FS) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if assets == nil {
+			http.NotFound(w, r)
+			return
+		}
+		name := strings.TrimPrefix(r.URL.Path, "/")
+		if name == "" || strings.HasSuffix(name, "/") {
+			name += "index.html"
+		}
+		// exact file?
+		if b, err := fs.ReadFile(assets, name); err == nil {
+			http.ServeContent(w, r, path.Base(name), time.Time{}, bytes.NewReader(b))
+			return
+		}
+		// gzipped sibling?
+		if b, err := fs.ReadFile(assets, name+".gz"); err == nil && strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
+			ct := mime.TypeByExtension(path.Ext(name))
+			if ct == "" {
+				ct = "application/octet-stream"
+			}
+			w.Header().Set("Content-Type", ct)
+			w.Header().Set("Content-Encoding", "gzip")
+			_, _ = w.Write(b)
+			return
+		}
+		http.NotFound(w, r)
+	}
 }
 
 // loopbackGuard rejects requests whose Host is not loopback (defeats DNS-rebinding).
@@ -43,14 +72,6 @@ func loopbackGuard(next http.Handler) http.Handler {
 		}
 		next.ServeHTTP(w, r)
 	})
-}
-
-func (h *playgroundHandler) handleStatic(w http.ResponseWriter, r *http.Request) {
-	if h.static == nil {
-		http.NotFound(w, r)
-		return
-	}
-	h.static.ServeHTTP(w, r)
 }
 
 func (h *playgroundHandler) handleGetConfig(w http.ResponseWriter, r *http.Request) {

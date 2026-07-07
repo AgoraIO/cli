@@ -288,12 +288,6 @@ function ConversationInner({ config, rtmClient, onTokenWillExpire }: Conversatio
             />
           </div>
 
-          {/* Waiting state */}
-          {!isAgentConnected && isConnected && (
-            <div style={{ color: '#ff9800', fontSize: 12, textAlign: 'center' }}>
-              Waiting for agent to join…
-            </div>
-          )}
         </div>
 
         {/* Right column: transcript */}

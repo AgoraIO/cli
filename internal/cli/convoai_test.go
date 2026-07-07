@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"testing/fstest"
 
 	"github.com/spf13/cobra"
 )
@@ -206,5 +207,58 @@ func TestPlaygroundStartupEnvelope(t *testing.T) {
 	}
 	if data["uid"] != "12345" {
 		t.Fatalf("bad uid: %+v", data)
+	}
+}
+
+func TestStaticServesGzipWithEncoding(t *testing.T) {
+	// Synthetic FS: index.html raw (small), assets/app.js only as .gz.
+	gzPayload := []byte{0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xff,
+		0x4a, 0xcb, 0xcf, 0x57, 0x48, 0x54, 0xc8, 0x48, 0xcd, 0xc9, 0xc9, 0x57, 0x04, 0x00,
+		0x00, 0x00, 0xff, 0xff} // partial, just non-empty gz bytes for testing
+	testFS := fstest.MapFS{
+		"index.html":       {Data: []byte("<html></html>")},
+		"assets/app.js.gz": {Data: gzPayload},
+	}
+
+	sess := &playgroundSession{appID: "a", appCert: "b", channel: "c", uid: 1, ttl: 3600}
+	h := newPlaygroundHandler(sess, testFS)
+
+	// Request / with Accept-Encoding: gzip → should get gzip-encoded JS.
+	req := httptest.NewRequest(http.MethodGet, "/assets/app.js", nil)
+	req.Host = "127.0.0.1:8787"
+	req.Header.Set("Accept-Encoding", "gzip")
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+	if got := rec.Header().Get("Content-Encoding"); got != "gzip" {
+		t.Fatalf("expected Content-Encoding: gzip, got %q", got)
+	}
+	if rec.Body.Len() == 0 {
+		t.Fatal("expected non-empty body for gzip response")
+	}
+
+	// Request index.html → served raw (exact file exists).
+	req2 := httptest.NewRequest(http.MethodGet, "/", nil)
+	req2.Host = "127.0.0.1:8787"
+	rec2 := httptest.NewRecorder()
+	h.ServeHTTP(rec2, req2)
+	if rec2.Code != http.StatusOK {
+		t.Fatalf("expected 200 for index.html, got %d", rec2.Code)
+	}
+	if got := rec2.Header().Get("Content-Encoding"); got != "" {
+		t.Fatalf("index.html should not have Content-Encoding, got %q", got)
+	}
+
+	// Request with nil assets → 404.
+	hNil := newPlaygroundHandler(sess, nil)
+	req3 := httptest.NewRequest(http.MethodGet, "/", nil)
+	req3.Host = "127.0.0.1:8787"
+	rec3 := httptest.NewRecorder()
+	hNil.ServeHTTP(rec3, req3)
+	if rec3.Code != http.StatusNotFound {
+		t.Fatalf("nil assets: expected 404, got %d", rec3.Code)
 	}
 }

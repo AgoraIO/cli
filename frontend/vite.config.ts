@@ -6,7 +6,7 @@ import compression from 'vite-plugin-compression'
 // RTC SDK is a possible future optimization; agora-rtm has no reliable UMD
 // CDN build, so it is bundled like the official quickstart.)
 export default defineConfig({
-  plugins: [react(), compression({ ext: '.gz', deleteOriginalAssets: false })],
+  plugins: [react(), compression({ ext: '.gz', deleteOriginFile: true })],
   build: {
     outDir: '../internal/cli/playground/webassets',
     emptyOutDir: true,
