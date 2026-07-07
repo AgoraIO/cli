@@ -12,6 +12,7 @@ coverage.out
 # Built CLI binaries
 agora
 agora-cli-go
+playgroundhash
 
 # IDE and editor files
 .idea/
@@ -23,3 +24,6 @@ _site/
 # Python bytecode
 __pycache__/
 *.py[cod]
+
+# Frontend dependencies (never commit node_modules)
+frontend/node_modules/

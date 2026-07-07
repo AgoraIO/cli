@@ -108,6 +108,7 @@ Use "agora --help --all --json" for a machine-readable command tree (agent tooli
 	root.AddCommand(a.buildUpgradeCommand())
 	root.AddCommand(a.buildOpenCommand())
 	root.AddCommand(a.buildMCPCommand())
+	root.AddCommand(a.buildConvoaiCommand())
 	root.AddCommand(a.buildDoctorCommand())
 	root.AddCommand(a.buildEnvHelpCommand())
 	root.AddCommand(a.buildSkillsCommand())
