@@ -340,6 +340,17 @@ func TestWaitForOAuthCallbackAdvertisesLocalhost(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	for header, want := range map[string]string{
+		"Cache-Control":           "no-store",
+		"Content-Security-Policy": "default-src 'none'",
+		"Content-Type":            "text/html; charset=utf-8",
+		"Referrer-Policy":         "no-referrer",
+		"X-Content-Type-Options":  "nosniff",
+	} {
+		if got := resp.Header.Get(header); !strings.Contains(got, want) {
+			t.Fatalf("expected %s header to contain %q, got %q", header, want, got)
+		}
+	}
 	resp.Body.Close()
 	payload, err := server.Wait()
 	if err != nil {

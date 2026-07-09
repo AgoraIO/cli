@@ -53,7 +53,9 @@ func (a *App) login(noBrowser bool, region string, progress progressEmitter) (ma
 		}
 		timeout = time.Duration(parsed) * time.Millisecond
 	}
-	callback, err := waitForOAuthCallback(state, timeout)
+	callback, err := waitForOAuthCallbackWithPage(state, timeout, callbackPageConfig{
+		Region: loginRegion,
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -284,6 +286,10 @@ type callbackPayload struct {
 }
 
 func waitForOAuthCallback(expectedState string, timeout time.Duration) (*callbackServer, error) {
+	return waitForOAuthCallbackWithPage(expectedState, timeout, callbackPageConfig{})
+}
+
+func waitForOAuthCallbackWithPage(expectedState string, timeout time.Duration, page callbackPageConfig) (*callbackServer, error) {
 	wait := make(chan callbackPayload, 1)
 	errs := make(chan error, 1)
 	mux := http.NewServeMux()
@@ -313,18 +319,26 @@ func waitForOAuthCallback(expectedState string, timeout time.Duration) (*callbac
 		code := r.URL.Query().Get("code")
 		state := r.URL.Query().Get("state")
 		oauthErr := r.URL.Query().Get("error")
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Header().Set("Cache-Control", "no-store")
+		w.Header().Set("Referrer-Policy", "no-referrer")
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.Header().Set("Content-Security-Policy", "default-src 'none'; img-src https://cdn.prod.website-files.com; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'")
 		switch {
 		case oauthErr != "":
-			http.Error(w, "Agora CLI login failed. Return to the terminal for details.", http.StatusBadRequest)
+			w.WriteHeader(http.StatusBadRequest)
+			_, _ = io.WriteString(w, renderOAuthCallbackErrorPage(page, "Agora CLI login failed", "Return to the terminal for details."))
 			errs <- fmt.Errorf("OAuth authorization failed: %s", oauthErr)
 		case code == "" || state == "":
-			http.Error(w, "Agora CLI login callback was missing required fields.", http.StatusBadRequest)
+			w.WriteHeader(http.StatusBadRequest)
+			_, _ = io.WriteString(w, renderOAuthCallbackErrorPage(page, "Missing callback fields", "The OAuth callback did not include the required code and state fields."))
 		case state != expectedState:
-			http.Error(w, "Agora CLI login state mismatch.", http.StatusBadRequest)
+			w.WriteHeader(http.StatusBadRequest)
+			_, _ = io.WriteString(w, renderOAuthCallbackErrorPage(page, "Login state mismatch", "Return to the terminal and restart login to protect this session."))
 			errs <- errors.New("OAuth state mismatch.")
 		default:
 			w.WriteHeader(http.StatusOK)
-			_, _ = io.WriteString(w, `<!doctype html><html><head><title>Agora CLI Login Complete</title><meta name="viewport" content="width=device-width, initial-scale=1"></head><body style="font-family: system-ui, sans-serif; margin: 3rem; line-height: 1.5;"><h1>Agora CLI login complete</h1><p>You can close this browser window and return to your terminal.</p></body></html>`)
+			_, _ = io.WriteString(w, renderOAuthCallbackSuccessPage(page))
 			wait <- callbackPayload{Code: code, State: state}
 		}
 	})
