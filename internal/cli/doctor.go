@@ -51,7 +51,7 @@ func quickstartAppIDKey(templateID string) string {
 	case "nextjs":
 		return "NEXT_PUBLIC_AGORA_APP_ID"
 	case "python", "go":
-		return "APP_ID"
+		return "AGORA_APP_ID"
 	default:
 		return ""
 	}
@@ -196,7 +196,7 @@ func buildWorkspaceDoctorDetails(target projectTarget) (doctorCheckCategory, map
 
 	template, found := findQuickstartTemplate(templateID)
 	envRel := strings.TrimSpace(binding.EnvPath)
-	if envRel == "" && found {
+	if found {
 		envRel = template.EnvTargetPath
 	}
 	if envRel == "" {
