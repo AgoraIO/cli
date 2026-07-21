@@ -52,7 +52,6 @@ type projectContext struct {
 	CurrentProjectID   *string `json:"currentProjectId"`
 	CurrentProjectName *string `json:"currentProjectName"`
 	CurrentRegion      string  `json:"currentRegion"`
-	PreferredRegion    string  `json:"preferredRegion"`
 }
 
 type projectSummary struct {
@@ -62,7 +61,6 @@ type projectSummary struct {
 	Name                   string  `json:"name"`
 	ProjectID              string  `json:"projectId"`
 	ProjectType            string  `json:"projectType"`
-	Region                 *string `json:"region,omitempty"`
 	SignKey                *string `json:"signKey"`
 	Stage                  int     `json:"stage"`
 	Status                 string  `json:"status"`
@@ -78,7 +76,6 @@ type projectDetail struct {
 	Name                   string  `json:"name"`
 	ProjectID              string  `json:"projectId"`
 	ProjectType            string  `json:"projectType"`
-	Region                 *string `json:"region,omitempty"`
 	SignKey                *string `json:"signKey"`
 	Stage                  int     `json:"stage"`
 	Status                 string  `json:"status"`

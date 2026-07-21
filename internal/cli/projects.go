@@ -58,7 +58,6 @@ func (a *App) resolveProjectByNameOrID(value string) (*projectSummary, error) {
 				Name:        project.Name,
 				ProjectID:   project.ProjectID,
 				ProjectType: project.ProjectType,
-				Region:      project.Region,
 				SignKey:     project.SignKey,
 				Stage:       project.Stage,
 				Status:      project.Status,
@@ -126,33 +125,36 @@ func (a *App) resolveProjectTargetFrom(explicit, startPath string) (projectTarge
 		if err != nil {
 			return projectTarget{}, err
 		}
-		region := ctx.CurrentRegion
-		if region == "" {
-			region = "global"
-		}
-		if project.Region != nil && *project.Region != "" {
-			region = *project.Region
-		} else if resolved.Region != nil && *resolved.Region != "" {
-			region = *resolved.Region
-		}
-		return projectTarget{project: project, region: region}, nil
+		return projectTarget{project: project, region: currentRegionFromContext(ctx)}, nil
 	}
 	if binding, ok, _, err := detectLocalProjectBindingFrom(startPath); err != nil {
 		return projectTarget{}, err
 	} else if ok && binding.ProjectID != "" {
+		// A repo-local binding pins both a project and the region that
+		// project lives in. The session context, meanwhile, carries the
+		// region the user last logged into. If the two disagree we must
+		// not silently route the request: the binding's project does not
+		// exist on the session's control plane, so the request would fail
+		// with a confusing "project not found". Fail fast with actionable
+		// guidance instead. A binding without a recorded region is treated
+		// as "no opinion" and does not conflict; the session region is
+		// always a concrete control plane (currentRegionFromContext
+		// normalizes empty/unknown values to "global").
+		bindingRegion := strings.TrimSpace(binding.Region)
+		sessionRegion := currentRegionFromContext(ctx)
+		if bindingRegion != "" && !strings.EqualFold(bindingRegion, sessionRegion) {
+			return projectTarget{}, &cliError{
+				Message: fmt.Sprintf("This repo is bound to a %s project (.agora/project.json), but you are logged into %s. Run `agora login --region %s` to switch, or pass --project to override.", bindingRegion, sessionRegion, bindingRegion),
+				Code:    "PROJECT_REGION_MISMATCH",
+			}
+		}
 		project, err := a.getProject(binding.ProjectID)
 		if err != nil {
 			return projectTarget{}, err
 		}
-		region := binding.Region
+		region := bindingRegion
 		if region == "" {
-			region = ctx.CurrentRegion
-		}
-		if region == "" {
-			region = "global"
-		}
-		if project.Region != nil && *project.Region != "" {
-			region = *project.Region
+			region = sessionRegion
 		}
 		return projectTarget{project: project, region: region}, nil
 	}
@@ -163,11 +165,7 @@ func (a *App) resolveProjectTargetFrom(explicit, startPath string) (projectTarge
 	if err != nil {
 		return projectTarget{}, err
 	}
-	region := ctx.CurrentRegion
-	if project.Region != nil && *project.Region != "" {
-		region = *project.Region
-	}
-	return projectTarget{project: project, region: region}, nil
+	return projectTarget{project: project, region: currentRegionFromContext(ctx)}, nil
 }
 
 func (a *App) getRTM2Config(projectID string) (map[string]any, error) {
@@ -285,17 +283,12 @@ func (a *App) enableProjectFeature(feature string, project projectDetail, region
 	}
 }
 
-func (a *App) projectCreate(name, region, template string, features []string, rtmDataCenter string, idempotencyKey string) (map[string]any, error) {
+func (a *App) projectCreate(name, template string, features []string, rtmDataCenter string, idempotencyKey string) (map[string]any, error) {
 	ctx, err := loadContext(a.env)
 	if err != nil {
 		return nil, err
 	}
-	if region == "" {
-		region = ctx.PreferredRegion
-		if region == "" {
-			region = "global"
-		}
-	}
+	region := currentRegionFromContext(ctx)
 	features = projectCreateFeatures(template, features)
 	rtmDataCenter, err = rtmDataCenterForFeatures(features, rtmDataCenter)
 	if err != nil {
@@ -320,7 +313,6 @@ func (a *App) projectCreate(name, region, template string, features []string, rt
 	ctx.CurrentProjectID = &project.ProjectID
 	ctx.CurrentProjectName = &project.Name
 	ctx.CurrentRegion = region
-	ctx.PreferredRegion = region
 	if err := saveContext(a.env, ctx); err != nil {
 		return nil, err
 	}
@@ -405,19 +397,10 @@ func (a *App) projectUse(projectArg string) (map[string]any, error) {
 	if resolved == nil {
 		return nil, &cliError{Message: fmt.Sprintf("Project %q was not found. Run `agora project list` to see available projects.", projectArg), Code: "PROJECT_NOT_FOUND"}
 	}
-	region := current.CurrentRegion
-	if region == "" {
-		region = current.PreferredRegion
-	}
-	if resolved.Region != nil && *resolved.Region != "" {
-		region = *resolved.Region
-	}
+	region := currentRegionFromContext(current)
 	current.CurrentProjectID = &resolved.ProjectID
 	current.CurrentProjectName = &resolved.Name
 	current.CurrentRegion = region
-	if current.PreferredRegion == "" {
-		current.PreferredRegion = region
-	}
 	if err := saveContext(a.env, current); err != nil {
 		return nil, err
 	}

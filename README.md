@@ -33,7 +33,7 @@ agora init my-nextjs-demo --template nextjs
 ### Install the CLI
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/AgoraIO/cli/main/install.sh | sh
+curl -fsSL https://dl.agora.io/cli/install.sh | sh
 ```
 
 Run the CLI:
@@ -42,14 +42,21 @@ Run the CLI:
 agora --help
 ```
 
-Alternative install paths:
+The script is served from the Agora CDN (`dl.agora.io`, CloudFront). Binaries download from GitHub by default and automatically fall back to the CDN mirror if GitHub is unreachable; downloads are verified against `checksums.txt` regardless of source.
+
+Windows PowerShell:
+
+```powershell
+irm https://dl.agora.io/cli/install.ps1 | iex
+```
+
+Alternative install paths (GitHub-hosted; use `install.ps1` for PowerShell):
 
 ```bash
-# npm (Node 18+, wrapper signed with npm provenance)
-npm install -g agoraio-cli
-
-# Windows PowerShell
-irm https://raw.githubusercontent.com/AgoraIO/cli/main/install.ps1 | iex
+# GitHub Pages
+curl -fsSL https://agoraio.github.io/cli/install.sh | sh
+# raw GitHub
+curl -fsSL https://raw.githubusercontent.com/AgoraIO/cli/main/install.sh | sh
 ```
 
 Locked-down environments that block `curl | sh` can use npm, download a release archive from GitHub, or mirror the binary internally. Every release includes `checksums.txt`, a Cosign keyless signature, and an SBOM; see [docs/install.md](docs/install.md#enterprise--locked-down-environments) for manual tarball, checksum, and Cosign verification steps.
@@ -58,9 +65,23 @@ Notes:
 
 - The shell installer supports macOS, Linux, and Windows POSIX shells such as Git Bash. Use `install.ps1` for native PowerShell installs on Windows.
 - **Shell setup is auto-on**: the installer wires the install directory onto your `PATH` (when needed) and writes a shell completion script for the detected shell (bash, zsh, fish, or PowerShell). Pass `--no-path`, `--no-completion`, or the umbrella `--skip-shell` (PowerShell: `-NoPath` / `-NoCompletion` / `-SkipShell`) to opt out granularly.
-- Installer help is always available with `curl -fsSL https://raw.githubusercontent.com/AgoraIO/cli/main/install.sh | sh -s -- --help`.
+- Installer help is always available with `curl -fsSL https://dl.agora.io/cli/install.sh | sh -s -- --help`.
 - Pinned versions, dry runs, custom install directories, npm details, and source builds are documented in [docs/install.md](docs/install.md).
 - Release artifacts and checksums: [GitHub Releases](https://github.com/AgoraIO/cli/releases). Vulnerability disclosures: [SECURITY.md](SECURITY.md).
+
+### Restricted networks (GitHub blocked)
+
+The default command already fetches the install script from the Agora CDN (`dl.agora.io`), so it works even where GitHub is blocked. Binaries still download from GitHub first (with automatic fallback to the mirror); in a fully-blocked region, add `AGORA_INSTALL_SOURCE=s3` to skip GitHub entirely and avoid the failover delay:
+
+```bash
+# macOS, Linux, and Windows POSIX shells
+curl -fsSL https://dl.agora.io/cli/install.sh | AGORA_INSTALL_SOURCE=s3 sh
+
+# Windows PowerShell
+$env:AGORA_INSTALL_SOURCE = 's3'; irm https://dl.agora.io/cli/install.ps1 | iex
+```
+
+Downloads are still SHA-256 verified against `checksums.txt` regardless of source. `AGORA_INSTALL_SOURCE` accepts `auto` (default; GitHub then mirror), `github`, or `s3`. See [docs/install.md](docs/install.md#mirror-fallback-for-restricted-networks) for details.
 
 ### Build from source
 
@@ -120,6 +141,7 @@ The command model is intentionally layered:
 | Write env to an arbitrary path / non-quickstart repo | `agora project env write <path>` |
 | Install self-test | `agora doctor --json` |
 | Project/workspace readiness | `agora project doctor --json` |
+| Manage feature webhooks | `agora project webhook ... --json` |
 
 ### Env-related commands
 
@@ -166,6 +188,7 @@ Use this when you want to:
 - export project env values with `project env`
 - write credentials to a dotenv file with `project env write`
 - inspect project readiness with `project doctor`
+- manage feature-scoped webhook endpoints with `project webhook`
 
 ### `auth`
 

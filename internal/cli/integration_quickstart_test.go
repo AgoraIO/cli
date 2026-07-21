@@ -49,7 +49,6 @@ func TestCLIQuickstartListAndCreate(t *testing.T) {
 		CurrentProjectID:   &project.ProjectID,
 		CurrentProjectName: &project.Name,
 		CurrentRegion:      "global",
-		PreferredRegion:    "global",
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -333,7 +332,6 @@ func TestCLIQuickstartEnvWriteUsesTargetRepoBindingPrecedence(t *testing.T) {
 		CurrentProjectID:   &beta.ProjectID,
 		CurrentProjectName: &beta.Name,
 		CurrentRegion:      "global",
-		PreferredRegion:    "global",
 	}); err != nil {
 		t.Fatal(err)
 	}

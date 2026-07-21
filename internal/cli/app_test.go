@@ -289,11 +289,11 @@ func TestEnsureAppConfigStateMigratesPreviousDefaults(t *testing.T) {
 		t.Fatal(err)
 	}
 	raw := map[string]any{
-		"apiBaseUrl":       previousAPIBaseURL,
+		"apiBaseUrl":       "https://agora-cli-bff.staging.la3.agoralab.co",
 		"browserAutoOpen":  true,
 		"logLevel":         "info",
-		"oauthBaseUrl":     previousOAuthBaseURL,
-		"oauthClientId":    previousOAuthClientID,
+		"oauthBaseUrl":     "https://staging-sso.agora.io",
+		"oauthClientId":    "cli_demo",
 		"oauthScope":       "basic_info,console",
 		"output":           "pretty",
 		"telemetryEnabled": true,
@@ -312,11 +312,18 @@ func TestEnsureAppConfigStateMigratesPreviousDefaults(t *testing.T) {
 	if state.Status != "migrated" {
 		t.Fatalf("expected migrated, got %s", state.Status)
 	}
-	if state.Config.APIBaseURL != defaultConfig().APIBaseURL {
-		t.Fatalf("expected prod API base URL, got %s", state.Config.APIBaseURL)
+	rewritten, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatal(err)
 	}
-	if state.Config.OAuthBaseURL != defaultConfig().OAuthBaseURL {
-		t.Fatalf("expected prod OAuth base URL, got %s", state.Config.OAuthBaseURL)
+	var rewrittenMap map[string]any
+	if err := json.Unmarshal(rewritten, &rewrittenMap); err != nil {
+		t.Fatal(err)
+	}
+	for _, key := range []string{"apiBaseUrl", "oauthBaseUrl", "oauthClientId", "oauthScope"} {
+		if _, ok := rewrittenMap[key]; ok {
+			t.Fatalf("expected migrated config to drop %s, got %s", key, string(rewritten))
+		}
 	}
 }
 
@@ -463,8 +470,21 @@ func TestEnsureAppConfigStateMigratesPartialAndCustomPreviousConfigs(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
-	if state.Status != "migrated" || state.Config.APIBaseURL != "https://staging.internal.example.com" || state.Config.OAuthClientID != "custom-dev-client" || state.Config.TelemetryEnabled {
+	if state.Status != "migrated" || state.Config.BrowserAutoOpen || state.Config.TelemetryEnabled || state.Config.Output != outputJSON || !state.Config.Debug {
 		t.Fatalf("unexpected migrated custom config: %+v", state)
+	}
+	rewritten, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var rewrittenMap map[string]any
+	if err := json.Unmarshal(rewritten, &rewrittenMap); err != nil {
+		t.Fatal(err)
+	}
+	for _, key := range []string{"apiBaseUrl", "oauthBaseUrl", "oauthClientId", "oauthScope"} {
+		if _, ok := rewrittenMap[key]; ok {
+			t.Fatalf("expected migrated custom config to drop %s, got %s", key, string(rewritten))
+		}
 	}
 }
 
@@ -630,7 +650,6 @@ func TestResolveConfiguredOutputModeAndConfigApplication(t *testing.T) {
 		"AGORA_OUTPUT":       "json",
 	}
 	app := &App{env: env, cfg: defaultConfig()}
-	app.cfg.APIBaseURL = "https://config.example.com"
 	app.cfg.LogLevel = "warn"
 	app.cfg.BrowserAutoOpen = false
 	app.cfg.Debug = true

@@ -1,6 +1,7 @@
 .DS_Store
 
 # Local Go build and test artifacts
+.worktrees/
 .gocache/
 .tmp/
 bin/

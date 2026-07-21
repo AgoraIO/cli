@@ -9,7 +9,12 @@
 #   - Documented exit-code contract (matches install.sh; see docs/install.md)
 #
 # Quick start:
-#   irm https://raw.githubusercontent.com/AgoraIO/cli/main/install.ps1 | iex
+#   irm https://dl.agora.io/cli/install.ps1 | iex
+#
+# Restricted networks (GitHub blocked): the script is served from the dl.agora.io
+# CDN, and binaries auto-fall back to the mirror. In a fully-blocked region, skip
+# GitHub for binaries too:
+#   $env:AGORA_INSTALL_SOURCE='s3'; irm https://dl.agora.io/cli/install.ps1 | iex
 #
 # Pin a version:
 #   $env:VERSION = '0.2.0'; & ([scriptblock]::Create((irm .../install.ps1)))
@@ -48,6 +53,9 @@ $InstallReceiptFileName = 'agora.install.json'
 
 $GitHubApiUrl            = if ($env:GITHUB_API_URL) { $env:GITHUB_API_URL } else { 'https://api.github.com' }
 $ReleasesDownloadBaseUrl = if ($env:RELEASES_DOWNLOAD_BASE_URL) { $env:RELEASES_DOWNLOAD_BASE_URL } else { "https://github.com/$GitHubRepo/releases/download" }
+$S3DownloadBaseUrl       = if ($env:S3_DOWNLOAD_BASE_URL) { $env:S3_DOWNLOAD_BASE_URL } else { 'https://dl.agora.io/cli/releases' }
+$S3LatestUrl             = if ($env:S3_LATEST_URL) { $env:S3_LATEST_URL } else { 'https://dl.agora.io/cli/latest.json' }
+$AgoraInstallSource      = if ($env:AGORA_INSTALL_SOURCE) { $env:AGORA_INSTALL_SOURCE } else { 'auto' }
 $ReleasesPageUrl         = if ($env:RELEASES_PAGE_URL) { $env:RELEASES_PAGE_URL } else { "https://github.com/$GitHubRepo/releases" }
 $DocsUrl                 = if ($env:DOCS_URL) { $env:DOCS_URL } else { "https://github.com/$GitHubRepo#readme" }
 $AuthToken               = if ($env:GITHUB_TOKEN) { $env:GITHUB_TOKEN } elseif ($env:GH_TOKEN) { $env:GH_TOKEN } else { $null }
@@ -127,12 +135,30 @@ function Resolve-Version {
         return
     }
 
-    $latestUrl = "$($GitHubApiUrl.TrimEnd('/'))/repos/$GitHubRepo/releases/latest"
+    $release = $null
+    if ($AgoraInstallSource -ne 's3') {
+        $latestUrl = "$($GitHubApiUrl.TrimEnd('/'))/repos/$GitHubRepo/releases/latest"
+        try {
+            if ($AgoraInstallSource -eq 'github') {
+                $release = Invoke-RestMethod -Uri $latestUrl -Headers (Get-AuthHeaders)
+            } else {
+                $release = Invoke-RestMethod -Uri $latestUrl -Headers (Get-AuthHeaders) -TimeoutSec 5
+            }
+        } catch {
+            if ($AgoraInstallSource -eq 'github') {
+                Fail "Could not resolve the latest release from GitHub. Set VERSION explicitly or provide GITHUB_TOKEN / GH_TOKEN if you are hitting rate limits. Release page: $ReleasesPageUrl" -ExitCode $EXIT_NETWORK
+            }
+            Write-Info 'GitHub unreachable; retrying via dl.agora.io mirror...'
+        }
+    }
 
-    try {
-        $release = Invoke-RestMethod -Uri $latestUrl -Headers (Get-AuthHeaders)
-    } catch {
-        Fail "Could not resolve the latest release. Set VERSION explicitly or provide GITHUB_TOKEN / GH_TOKEN if you are hitting rate limits. Release page: $ReleasesPageUrl" -ExitCode $EXIT_NETWORK
+    if (-not $release) {
+        try {
+            $release = Invoke-RestMethod -Uri $S3LatestUrl -MaximumRetryCount 3 -RetryIntervalSec 2
+        } catch {
+            $sources = if ($AgoraInstallSource -ne 's3') { 'GitHub or the dl.agora.io mirror' } else { 'the dl.agora.io mirror' }
+            Fail "Could not resolve the latest version from $sources. Pin VERSION explicitly to install from the mirror." -ExitCode $EXIT_NETWORK
+        }
     }
 
     $script:Version = Normalize-Version $release.tag_name
@@ -150,6 +176,37 @@ function Download-File {
         Invoke-WebRequest -Uri $Url -OutFile $Destination -Headers (Get-AuthHeaders)
     } catch {
         Fail "Failed to download $Url`nRelease page: $ReleasesPageUrl`nCheck your network or proxy settings, or try again with VERSION pinned." -ExitCode $EXIT_NETWORK
+    }
+}
+
+function Invoke-DownloadWithFallback {
+    param(
+        [Parameter(Mandatory = $true)][string]$GitHubUrl,
+        [Parameter(Mandatory = $true)][string]$S3Url,
+        [Parameter(Mandatory = $true)][string]$Destination
+    )
+
+    if ($AgoraInstallSource -ne 's3') {
+        try {
+            if ($AgoraInstallSource -eq 'github') {
+                Invoke-WebRequest -Uri $GitHubUrl -OutFile $Destination -Headers (Get-AuthHeaders)
+            } else {
+                Invoke-WebRequest -Uri $GitHubUrl -OutFile $Destination -Headers (Get-AuthHeaders) -TimeoutSec 5
+            }
+            return
+        } catch {
+            if ($AgoraInstallSource -eq 'github') {
+                Fail "Failed to download $GitHubUrl`nRelease page: $ReleasesPageUrl`nCheck your network or proxy settings, or try again with VERSION pinned." -ExitCode $EXIT_NETWORK
+            }
+            Write-Info 'GitHub unreachable; retrying via dl.agora.io mirror...'
+        }
+    }
+
+    try {
+        Invoke-WebRequest -Uri $S3Url -OutFile $Destination -MaximumRetryCount 3 -RetryIntervalSec 2
+    } catch {
+        $sources = if ($AgoraInstallSource -ne 's3') { 'GitHub and the dl.agora.io mirror' } else { 'the dl.agora.io mirror' }
+        Fail "Failed to download from ${sources}: $S3Url`nRelease page: $ReleasesPageUrl" -ExitCode $EXIT_NETWORK
     }
 }
 
@@ -440,6 +497,10 @@ if ($Uninstall) {
     exit $EXIT_OK
 }
 
+if ($AgoraInstallSource -notin @('auto', 'github', 's3')) {
+    Fail "AGORA_INSTALL_SOURCE must be one of: auto, github, s3 (got '$AgoraInstallSource')." -ExitCode $EXIT_USAGE
+}
+
 $Version = Normalize-Version $Version
 $arch = Resolve-Architecture
 $tempRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("agora-install-" + [System.Guid]::NewGuid().ToString('N'))
@@ -453,7 +514,9 @@ try {
     $sourceBinary = Join-Path $extractDir 'agora.exe'
     $tempDestinationBinary = Join-Path $InstallDir ('.agora.tmp.' + [System.Guid]::NewGuid().ToString('N') + '.exe')
     $archiveUrl = "$($ReleasesDownloadBaseUrl.TrimEnd('/'))/v$Version/$fileName"
+    $archiveUrlS3 = "$($S3DownloadBaseUrl.TrimEnd('/'))/v$Version/$fileName"
     $checksumsUrl = "$($ReleasesDownloadBaseUrl.TrimEnd('/'))/v$Version/checksums.txt"
+    $checksumsUrlS3 = "$($S3DownloadBaseUrl.TrimEnd('/'))/v$Version/checksums.txt"
 
     Show-ExistingInstall
 
@@ -475,8 +538,8 @@ try {
 
     Write-Info "Installing agora $Version (windows/$arch) -> $destinationBinary"
 
-    Download-File -Url $archiveUrl -Destination $archivePath
-    Download-File -Url $checksumsUrl -Destination $checksumsPath
+    Invoke-DownloadWithFallback -GitHubUrl $archiveUrl -S3Url $archiveUrlS3 -Destination $archivePath
+    Invoke-DownloadWithFallback -GitHubUrl $checksumsUrl -S3Url $checksumsUrlS3 -Destination $checksumsPath
 
     $expectedChecksum = Get-ExpectedChecksum -ChecksumsPath $checksumsPath -FileName $fileName
     if (-not $expectedChecksum) {

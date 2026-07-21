@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"strings"
 	"time"
 
@@ -191,7 +192,6 @@ func mcpTools() []map[string]any {
 		mcpTool("agora.project.use", "Select the current Agora project", map[string]string{"project": "string"}),
 		mcpTool("agora.project.create", "Create a new Agora project and optionally enable features", map[string]string{
 			"name":           "string",
-			"region":         "string",
 			"template":       "string",
 			"features":       "array",
 			"rtmDataCenter":  "string",
@@ -205,6 +205,39 @@ func mcpTools() []map[string]any {
 		mcpTool("agora.project.feature.list", "List feature status for a project", map[string]string{"project": "string"}),
 		mcpTool("agora.project.feature.status", "Show one feature status", map[string]string{"feature": "string", "project": "string"}),
 		mcpTool("agora.project.feature.enable", "Enable one feature for a project", map[string]string{"feature": "string", "project": "string"}),
+
+		// Project webhooks
+		mcpTool("agora.project.webhook.events", "List available webhook events for a feature", map[string]string{"feature": "string"}),
+		mcpTool("agora.project.webhook.list", "List webhook configurations for a project feature", map[string]string{"feature": "string", "project": "string"}),
+		mcpTool("agora.project.webhook.show", "Show one webhook configuration", map[string]string{
+			"configId":   "integer",
+			"feature":    "string",
+			"project":    "string",
+			"withSecret": "boolean",
+		}),
+		mcpTool("agora.project.webhook.create", "Create a webhook configuration", map[string]string{
+			"feature":        "string",
+			"project":        "string",
+			"url":            "string",
+			"events":         "array",
+			"secret":         "string",
+			"deliveryRegion": "string",
+		}),
+		mcpTool("agora.project.webhook.update", "Update a webhook configuration", map[string]string{
+			"configId":       "integer",
+			"feature":        "string",
+			"project":        "string",
+			"url":            "string",
+			"events":         "array",
+			"deliveryRegion": "string",
+			"enabled":        "boolean",
+		}),
+		mcpTool("agora.project.webhook.delete", "Delete a webhook configuration", map[string]string{
+			"configId": "integer",
+			"feature":  "string",
+			"project":  "string",
+			"confirm":  "boolean",
+		}),
 
 		// Quickstart
 		mcpTool("agora.quickstart.list", "List quickstart templates", nil),
@@ -223,7 +256,6 @@ func mcpTools() []map[string]any {
 			"template":      "string",
 			"project":       "string",
 			"newProject":    "boolean",
-			"region":        "string",
 			"rtmDataCenter": "string",
 			"features":      "array",
 		}),
@@ -360,7 +392,6 @@ func (a *App) callMCPTool(name string, args map[string]any, progress progressEmi
 		progress.emit("project:create", "Creating Agora project", map[string]any{"projectName": name, "features": projectCreateFeatures(stringArg(args, "template"), features)})
 		result, err := a.projectCreate(
 			name,
-			stringArg(args, "region"),
 			stringArg(args, "template"),
 			features,
 			rtmDataCenter,
@@ -416,6 +447,63 @@ func (a *App) callMCPTool(name string, args map[string]any, progress progressEmi
 		}
 		return a.projectFeatureEnable(feature, stringArg(args, "project"))
 
+	case "agora.project.webhook.events":
+		return a.projectWebhookEvents(stringArg(args, "feature"))
+
+	case "agora.project.webhook.list":
+		return a.projectWebhookList(stringArg(args, "feature"), stringArg(args, "project"), false)
+
+	case "agora.project.webhook.show":
+		configID, err := configIDArg(args, "configId")
+		if err != nil {
+			return nil, err
+		}
+		return a.projectWebhookShow(
+			configID,
+			stringArg(args, "feature"),
+			stringArg(args, "project"),
+			boolArg(args, "withSecret", false),
+		)
+
+	case "agora.project.webhook.create":
+		return a.projectWebhookCreate(webhookCreateOptions{
+			Feature:        stringArg(args, "feature"),
+			Project:        stringArg(args, "project"),
+			URL:            stringArg(args, "url"),
+			EventInputs:    stringSliceArg(args, "events"),
+			Secret:         stringArg(args, "secret"),
+			DeliveryRegion: stringArg(args, "deliveryRegion"),
+		})
+
+	case "agora.project.webhook.update":
+		configID, err := configIDArg(args, "configId")
+		if err != nil {
+			return nil, err
+		}
+		return a.projectWebhookUpdate(webhookUpdateOptions{
+			ConfigID:       configID,
+			Feature:        stringArg(args, "feature"),
+			Project:        stringArg(args, "project"),
+			URL:            stringArg(args, "url"),
+			EventInputs:    stringSliceArg(args, "events"),
+			DeliveryRegion: stringArg(args, "deliveryRegion"),
+			Enabled:        optionalBoolArg(args, "enabled"),
+		})
+
+	case "agora.project.webhook.delete":
+		configID, err := configIDArg(args, "configId")
+		if err != nil {
+			return nil, err
+		}
+		if !boolArg(args, "confirm", false) {
+			return nil, &cliError{Message: "confirmation required; pass confirm:true to delete this webhook configuration", Code: "CONFIRMATION_REQUIRED"}
+		}
+		return a.projectWebhookDelete(
+			configID,
+			stringArg(args, "feature"),
+			stringArg(args, "project"),
+		)
+
 	case "agora.quickstart.list":
 		items := []map[string]any{}
 		for _, template := range quickstartTemplates() {
@@ -460,7 +548,6 @@ func (a *App) callMCPTool(name string, args map[string]any, progress progressEmi
 			defaultString(stringArg(args, "dir"), name),
 			*template,
 			stringArg(args, "project"),
-			stringArg(args, "region"),
 			stringSliceArg(args, "features"),
 			stringArg(args, "rtmDataCenter"),
 			boolArg(args, "newProject", false),
@@ -498,6 +585,36 @@ func boolArg(args map[string]any, key string, fallback bool) bool {
 		return value
 	}
 	return fallback
+}
+
+func configIDArg(args map[string]any, key string) (int, error) {
+	value, ok := args[key]
+	if !ok || value == nil {
+		return 0, webhookConfigIDRequiredError()
+	}
+	switch v := value.(type) {
+	case int:
+		if v > 0 {
+			return v, nil
+		}
+	case float64:
+		maxInt := int(^uint(0) >> 1)
+		if v > 0 && !math.IsInf(v, 0) && !math.IsNaN(v) && math.Trunc(v) == v && v <= float64(maxInt) {
+			return int(v), nil
+		}
+	}
+	return 0, webhookConfigIDRequiredError()
+}
+
+func webhookConfigIDRequiredError() *cliError {
+	return &cliError{Message: "webhook config ID is required", Code: "WEBHOOK_CONFIG_ID_REQUIRED"}
+}
+
+func optionalBoolArg(args map[string]any, key string) *bool {
+	if value, ok := args[key].(bool); ok {
+		return &value
+	}
+	return nil
 }
 
 // stringSliceArg coerces an "array of string" MCP argument into a Go

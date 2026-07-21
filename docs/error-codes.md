@@ -26,6 +26,7 @@ This catalog is the source of truth for stable codes. CI runs `make snapshot-err
 | `PROJECT_NOT_SELECTED` | 1 | No explicit, repo-local, or global project context is available. | Pass `--project`, work inside a bound quickstart, or run `agora project use <project>`. |
 | `PROJECT_NOT_FOUND` | 1 | The requested project ID or exact name was not found. | Run `agora project list` and retry with the project ID. |
 | `PROJECT_AMBIGUOUS` | 1 | A project name matched multiple projects. | Retry with the project ID. |
+| `PROJECT_REGION_MISMATCH` | 1 | A repo-local `.agora/project.json` binding points to a different region than the active login region. | Run `agora login --region <region>` for the bound project region, or pass `--project` to override the repo-local binding. |
 | `PROJECT_NO_CERTIFICATE` | 1 | The selected project has no app certificate for env seeding. | Enable an app certificate in Console or select another project. |
 | `PROJECT_ENV_TEMPLATE_UNKNOWN` | 1 | The `--template` value for `project env write` is not supported. | Use `nextjs` or `standard`. |
 | `PROJECT_NOT_READY` | 1 | `project doctor` could not surface a more specific issue. | Re-run `project doctor` for details. |
@@ -85,6 +86,23 @@ These codes appear inside `data.checks[].issues[].code` and (for blocking issues
 | Code | Exit | Meaning | Recovery |
 |------|------|---------|----------|
 | `SKILL_NOT_FOUND` | 1 | `agora skills show <id>` was given an unknown skill ID. | Run `agora skills list` to see available IDs. |
+
+### Project webhooks
+
+| Code | Exit | Meaning | Recovery |
+|------|------|---------|----------|
+| `WEBHOOK_FEATURE_REQUIRED` | 1 | A project webhook command that needs `--feature` did not receive one. | Pass `--feature rtc`, `--feature rtm`, or `--feature convoai`. |
+| `WEBHOOK_FEATURE_INVALID` | 1 | The `--feature` value is not a known CLI feature. | Run `agora introspect --json` to inspect `data.enums.features`, then retry with a supported feature. |
+| `WEBHOOK_CONFIG_ID_REQUIRED` | 1 | A webhook command that needs a config ID did not receive a positive integer ID. | Pass the `configId` from `agora project webhook list --feature <feature> --json`. |
+| `WEBHOOK_CONFIG_NOT_FOUND` | 1 | The requested webhook config ID was not found in the backend response. | Run `agora project webhook list --feature <feature>` and retry with an existing `configId`. |
+| `WEBHOOK_URL_REQUIRED` | 1 | `agora project webhook create` did not receive a non-empty webhook endpoint URL. | Pass `--url https://...`. |
+| `WEBHOOK_EVENTS_REQUIRED` | 1 | Create or update received no non-empty webhook event selections. | Run `agora project webhook events --feature <feature>` and pass one or more `--event` values. |
+| `WEBHOOK_EVENT_UNKNOWN` | 1 | An `--event` value did not match an event ID, event key, or exact display name for the selected feature. | Run `agora project webhook events --feature <feature>` and retry with an `items[].id` or `items[].key`. |
+| `WEBHOOK_EVENT_AMBIGUOUS` | 1 | An `--event` value matched multiple webhook events. | Retry with the numeric event ID from `agora project webhook events --feature <feature>`. |
+| `WEBHOOK_SECRET_INVALID` | 1 | The provided `--secret` does not match the backend secret pattern. | Use 7-32 characters from `A-Z`, `a-z`, `0-9`, `_`, or `-`; omit `--secret` to generate one. |
+| `WEBHOOK_DELIVERY_REGION_INVALID` | 1 | The provided `--delivery-region` is not supported. | Use `cn`, `sea`, `na`, or `eu`. |
+| `WEBHOOK_ENABLED_FLAG_CONFLICT` | 1 | `agora project webhook update` received both `--enabled` and `--disabled`. | Pass only one state flag. |
+| `CONFIRMATION_REQUIRED` | 1 | A destructive webhook operation was requested without explicit confirmation. | Pass `--yes` for CLI delete, or `confirm:true` for the MCP delete tool. |
 
 ## Dynamic code families
 

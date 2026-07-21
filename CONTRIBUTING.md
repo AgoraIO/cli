@@ -72,7 +72,7 @@ make docs-preview                           # optional: local Jekyll site + /md 
 Documentation work:
 
 - Run `make docs-commands` after command-tree changes; CI uses `go run ./cmd/gendocs -check`.
-- For GitHub Pages content, use `make docs-preview` (see `scripts/preview-pages-site.sh`). Published docs resolve `@@CLI_DOCS_*@@` tokens via `scripts/prepare-pages-site.py` and `docs/site.env` as documented in `docs/automation.md`.
+- For GitHub Pages content, use `make docs-preview` (see `scripts/preview-pages-site.sh`). Published docs resolve `@@CLI_DOCS_*@@` and `@@CLI_INSTALL_*@@` tokens via `scripts/prepare-pages-site.py` and `internal-docs/pages/site.env` as documented in `docs/automation.md`.
 
 Install `golangci-lint` **v1.64.8** (matches CI). CI builds it with `go install` against your toolchain; locally prefer:
 

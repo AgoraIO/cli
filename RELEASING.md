@@ -82,6 +82,34 @@ Before tagging a real npm release, confirm:
 
 Homebrew and Scoop are not part of the current GoReleaser config. Add `brews:` / `scoops:` blocks before documenting them as automated channels.
 
+## S3 mirror (dl.agora.io)
+
+On every tag push, the `mirror-to-s3` job in `release.yml` copies the release to
+the CloudFront-fronted S3 mirror so installers work where GitHub is blocked:
+
+- Versioned artifacts → `s3://dl-agora-io/cli/releases/v<version>/`
+  (archives, `checksums.txt`, `checksums.txt.sigstore.json`; cached immutable).
+- `install.sh` / `install.ps1` → `s3://dl-agora-io/cli/` (short cache).
+- `latest.json` → `s3://dl-agora-io/cli/latest.json` (stable releases only).
+- CloudFront (`E2U1WWAZBG33XY`) invalidation for the mutable paths.
+
+### Required GitHub secrets
+
+- `AWS_ACCESS_KEY_ID`
+- `AWS_SECRET_ACCESS_KEY`
+
+### Minimal IAM policy for those keys
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    { "Effect": "Allow", "Action": "s3:PutObject", "Resource": "arn:aws:s3:::dl-agora-io/cli/*" },
+    { "Effect": "Allow", "Action": "cloudfront:CreateInvalidation", "Resource": "arn:aws:cloudfront::*:distribution/E2U1WWAZBG33XY" }
+  ]
+}
+```
+
 ## Distribution Channels
 
 | Channel                 | How                                                         |

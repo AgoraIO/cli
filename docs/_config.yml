@@ -11,6 +11,3 @@ defaults:
       path: ""
     values:
       layout: default
-
-exclude:
-  - site.env

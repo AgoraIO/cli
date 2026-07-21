@@ -44,6 +44,7 @@ extract_helpers() {
     /^shell_rc_for_path\(\) \{/,/^\}/ { print }
     /^shell_path_line\(\) \{/,/^\}/ { print }
     /^shell_refresh_command\(\) \{/,/^\}/ { print }
+    /^installer_script_url\(\) \{/,/^\}/ { print }
     /^print_manual_path_block\(\) \{/,/^\}/ { print }
     /^add_to_path\(\) \{/,/^\}/ { print }
   ' "$INSTALLER"
@@ -70,6 +71,8 @@ run_case() {
     DIM=""
     GREEN=""
     DOCS_URL="https://github.com/AgoraIO/cli#readme"
+    GITHUB_REPO="AgoraIO/cli"
+    INSTALLER_BASE_URL="https://dl.agora.io/cli"
     HOME=$home_dir
     SHELL=$shell_path
     INSTALL_DIR=$install_dir
@@ -77,7 +80,7 @@ run_case() {
     DESTINATION="$INSTALL_DIR/$BINARY_NAME"
     DRY_RUN=0
     XDG_CONFIG_HOME=""
-    export HOME SHELL INSTALL_DIR BINARY_NAME DESTINATION DRY_RUN XDG_CONFIG_HOME DOCS_URL
+    export HOME SHELL INSTALL_DIR BINARY_NAME DESTINATION DRY_RUN XDG_CONFIG_HOME DOCS_URL GITHUB_REPO INSTALLER_BASE_URL
     say() { printf '%s\n' "$*"; }
     warn() { printf 'Warning: %s\n' "$*" >&2; }
     . "$helper_file"
@@ -122,5 +125,16 @@ bash_walk_output=$(run_case "bash-walk" "/bin/bash" '
   grep -qF "$INSTALL_DIR" "$HOME/.bash_profile"
 ')
 assert_contains "$bash_walk_output" "Added $TMPROOT/bash-walk/home/.local/bin to PATH in $TMPROOT/bash-walk/home/.bash_profile."
+
+canonical_installer_url_output=$(run_case "canonical-installer-url" "/bin/sh" '
+  installer_script_url
+')
+assert_contains "$canonical_installer_url_output" "https://dl.agora.io/cli/install.sh"
+
+fork_installer_url_output=$(run_case "fork-installer-url" "/bin/sh" '
+  GITHUB_REPO="Example/fork"
+  installer_script_url
+')
+assert_contains "$fork_installer_url_output" "https://raw.githubusercontent.com/Example/fork/main/install.sh"
 
 printf 'OK: %s installer message assertions passed\n' "$ASSERTIONS"

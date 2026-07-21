@@ -151,21 +151,31 @@ func TestQuickstartRepoOverrideKey(t *testing.T) {
 }
 
 func TestQuickstartRepoURLOverride(t *testing.T) {
-	tmpl := quickstartTemplate{ID: "nextjs", RepoURL: "https://default.example/repo"}
-	app := &App{env: map[string]string{}}
+	tmpl := quickstartTemplate{
+		ID:        "nextjs",
+		RepoURL:   "https://default.example/repo",
+		RepoURLCN: "https://cn.example/repo",
+	}
+	app := &App{env: map[string]string{"XDG_CONFIG_HOME": t.TempDir()}}
 
 	url, override, err := app.quickstartRepoURL(tmpl)
 	if err != nil || override != "" || url != tmpl.RepoURL {
 		t.Fatalf("default path: url=%q override=%q err=%v", url, override, err)
 	}
 
-	app.env = map[string]string{"AGORA_QUICKSTART_NEXTJS_REPO_URL": "https://fork.example/repo"}
+	app.env = map[string]string{
+		"AGORA_QUICKSTART_NEXTJS_REPO_URL": "https://fork.example/repo",
+		"XDG_CONFIG_HOME":                  t.TempDir(),
+	}
 	url, override, err = app.quickstartRepoURL(tmpl)
 	if err != nil || override != "AGORA_QUICKSTART_NEXTJS_REPO_URL" || url != "https://fork.example/repo" {
 		t.Fatalf("override path: url=%q override=%q err=%v", url, override, err)
 	}
 
-	app.env = map[string]string{"AGORA_QUICKSTART_NEXTJS_REPO_URL": "-fexploit"}
+	app.env = map[string]string{
+		"AGORA_QUICKSTART_NEXTJS_REPO_URL": "-fexploit",
+		"XDG_CONFIG_HOME":                  t.TempDir(),
+	}
 	if _, _, err := app.quickstartRepoURL(tmpl); err == nil {
 		t.Fatal("expected error for invalid override")
 	} else {
@@ -176,29 +186,28 @@ func TestQuickstartRepoURLOverride(t *testing.T) {
 	}
 }
 
-func TestQuickstartTemplatesIncludeAndroid(t *testing.T) {
-	var android quickstartTemplate
-	found := false
-	for _, tmpl := range quickstartTemplates() {
-		if tmpl.ID == "android" {
-			android = tmpl
-			found = true
-			break
-		}
+func TestQuickstartRepoURLForRegion(t *testing.T) {
+	tmpl := quickstartTemplate{
+		RepoURL:   "https://global.example/repo",
+		RepoURLCN: "https://cn.example/repo",
 	}
-	if !found {
-		t.Fatal("expected android quickstart template to exist")
+	if got := quickstartRepoURLForRegion(tmpl, regionGlobal); got != tmpl.RepoURL {
+		t.Fatalf("global repo url = %q, want %q", got, tmpl.RepoURL)
 	}
-	if android.RepoURL != "https://github.com/AgoraIO-Conversational-AI/agent-quickstart-android" {
-		t.Fatalf("unexpected android repo url: %q", android.RepoURL)
+	if got := quickstartRepoURLForRegion(tmpl, regionCN); got != tmpl.RepoURLCN {
+		t.Fatalf("cn repo url = %q, want %q", got, tmpl.RepoURLCN)
 	}
-	if android.Ref != "" {
-		t.Fatalf("unexpected android default ref: %q", android.Ref)
+}
+
+func TestQuickstartDocsURLForRegion(t *testing.T) {
+	tmpl := quickstartTemplate{
+		DocsURL:   "https://global.example/docs",
+		DocsURLCN: "https://cn.example/docs",
 	}
-	if android.EnvExamplePath != "server/env.example" || android.EnvTargetPath != "server/.env" {
-		t.Fatalf("unexpected android env paths: example=%q target=%q", android.EnvExamplePath, android.EnvTargetPath)
+	if got := quickstartDocsURL(tmpl, regionGlobal); got != tmpl.DocsURL {
+		t.Fatalf("global docs url = %q, want %q", got, tmpl.DocsURL)
 	}
-	if !android.Available || !android.SupportsInit {
-		t.Fatalf("unexpected android flags: available=%v supportsInit=%v", android.Available, android.SupportsInit)
+	if got := quickstartDocsURL(tmpl, regionCN); got != tmpl.DocsURLCN {
+		t.Fatalf("cn docs url = %q, want %q", got, tmpl.DocsURLCN)
 	}
 }
