@@ -52,6 +52,8 @@ func quickstartAppIDKey(templateID string) string {
 		return "NEXT_PUBLIC_AGORA_APP_ID"
 	case "python", "go":
 		return "APP_ID"
+	case "android":
+		return "AGORA_APP_ID"
 	default:
 		return ""
 	}

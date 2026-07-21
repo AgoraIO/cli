@@ -57,6 +57,7 @@ Use --feature to specify which features to enable on a newly created project (re
   agora init my-nextjs-demo --template nextjs
   agora init my-python-demo --template python
   agora init my-go-demo --template go --project my-existing-project
+  agora init my-android-demo --template android
   agora init my-rtm-demo --template nextjs --new-project --rtm-data-center AP
   agora init my-rtm-demo --template nextjs --new-project --feature rtc --feature rtm
 `),

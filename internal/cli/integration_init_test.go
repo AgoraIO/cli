@@ -81,28 +81,36 @@ func TestCLIInitRequiresTemplateWhenNoInputIsSet(t *testing.T) {
 	}
 }
 
-func TestCLIInitRejectsCloneOnlyAndroidTemplateBeforeCreatingProject(t *testing.T) {
+func TestCLIInitCreatesAndroidQuickstart(t *testing.T) {
 	configHome := t.TempDir()
+	rootDir := t.TempDir()
 	api := newFakeCLIBFF()
 	defer api.server.Close()
 	persistSessionForIntegration(t, configHome)
-
-	result := runCLI(t, []string{"init", "android-demo", "--template", "android", "--new-project", "--json"}, cliRunOptions{
-		env: map[string]string{
-			"XDG_CONFIG_HOME":    configHome,
-			"AGORA_API_BASE_URL": api.baseURL,
-			"AGORA_LOG_LEVEL":    "error",
-		},
-		workdir: t.TempDir(),
+	androidRepo := createLocalGitRepo(t, map[string]string{
+		"settings.gradle.kts":                  "rootProject.name = \"android-quickstart\"\n",
+		"gradlew":                              "#!/bin/sh\n",
+		"app/src/main/AndroidManifest.xml": "<manifest />\n",
 	})
-	if result.exitCode != 1 || !strings.Contains(result.stdout, `"code":"QUICKSTART_TEMPLATE_UNAVAILABLE"`) || !strings.Contains(result.stdout, "not supported by `agora init`") {
-		t.Fatalf("expected clone-only template error, got %+v", result)
-	}
+	targetDir := filepath.Join(rootDir, "android-demo")
 
-	api.mu.Lock()
-	projectCount := len(api.projects)
-	api.mu.Unlock()
-	if projectCount != 0 {
-		t.Fatalf("expected android init to create no projects, got %d", projectCount)
+	result := runCLI(t, []string{"init", "android-demo", "--template", "android", "--new-project", "--dir", targetDir, "--json"}, cliRunOptions{
+		env: map[string]string{
+			"XDG_CONFIG_HOME":                   configHome,
+			"AGORA_API_BASE_URL":                api.baseURL,
+			"AGORA_LOG_LEVEL":                   "error",
+			"AGORA_QUICKSTART_ANDROID_REPO_URL": androidRepo,
+		},
+		workdir: rootDir,
+	})
+	if result.exitCode != 0 || !strings.Contains(result.stdout, `"template":"android"`) || !strings.Contains(result.stdout, `"envPath":"local.properties"`) {
+		t.Fatalf("unexpected android init result: %+v", result)
+	}
+	localProperties, err := os.ReadFile(filepath.Join(targetDir, "local.properties"))
+	if err != nil {
+		t.Fatalf("expected Android local.properties: %v", err)
+	}
+	if !strings.Contains(string(localProperties), "AGORA_APP_ID=app_0001") || !strings.Contains(string(localProperties), "AGORA_APP_CERTIFICATE=4854d28b48a9439c9f2546e2216fc07a") {
+		t.Fatalf("unexpected Android local.properties: %s", string(localProperties))
 	}
 }

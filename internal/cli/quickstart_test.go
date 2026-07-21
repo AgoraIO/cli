@@ -202,11 +202,17 @@ func TestQuickstartTemplatesIncludeAndroid(t *testing.T) {
 	if android.RepoURL != "https://github.com/AgoraIO-Conversational-AI/agent-quickstart-android" {
 		t.Fatalf("unexpected android repo url: %q", android.RepoURL)
 	}
-	if android.Ref != "rest-api" {
+	if android.Ref != "main" {
 		t.Fatalf("unexpected android default ref: %q", android.Ref)
 	}
-	if !android.Available || android.SupportsInit {
+	if android.EnvTargetPath != "local.properties" {
+		t.Fatalf("unexpected android env target: %q", android.EnvTargetPath)
+	}
+	if !android.Available || !android.SupportsInit {
 		t.Fatalf("unexpected android flags: available=%v supportsInit=%v", android.Available, android.SupportsInit)
+	}
+	if quickstartAppIDKey("android") != "AGORA_APP_ID" {
+		t.Fatalf("unexpected android doctor app ID key: %q", quickstartAppIDKey("android"))
 	}
 }
 

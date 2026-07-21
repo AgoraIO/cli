@@ -99,13 +99,16 @@ func quickstartTemplates() []quickstartTemplate {
 			Description:    "Clone the official Android conversational AI quickstart.",
 			Runtime:        "android",
 			RepoURL:        "https://github.com/AgoraIO-Conversational-AI/agent-quickstart-android",
-			Ref:            "rest-api",
-			DocsURL:        "https://github.com/AgoraIO-Conversational-AI/agent-quickstart-android/tree/rest-api",
-			DetectPaths:    []string{"settings.gradle", "gradlew", "app/src/main/AndroidManifest.xml"},
-			InstallCommand: "Open in Android Studio",
-			RunCommand:     "Run from Android Studio or Gradle",
-			EnvDocsSummary: "Android quickstart template. Clone-only for now; env seeding is not yet wired into the CLI.",
-			SupportsInit:   false,
+			Ref:            "main",
+			RepoURLCN:      "https://github.com/AgoraIO-Conversational-AI/agent-quickstart-android",
+			DocsURL:        "https://github.com/AgoraIO-Conversational-AI/agent-quickstart-android",
+			DocsURLCN:      "https://github.com/AgoraIO-Conversational-AI/agent-quickstart-android",
+			DetectPaths:    []string{"settings.gradle.kts", "gradlew", "app/src/main/AndroidManifest.xml"},
+			EnvTargetPath:  "local.properties",
+			InstallCommand: "./gradlew :app:assembleDebug",
+			RunCommand:     "Open in Android Studio or run ./gradlew :app:installDebug",
+			EnvDocsSummary: "Writes AGORA_APP_ID and AGORA_APP_CERTIFICATE to local.properties.",
+			SupportsInit:   true,
 			Available:      true,
 		},
 	}
@@ -683,6 +686,8 @@ func conflictingQuickstartEnvKeys(templateID string) []string {
 		return []string{"AGORA_APP_ID", "AGORA_APP_CERTIFICATE", "APP_ID", "APP_CERTIFICATE"}
 	case "python", "go":
 		return []string{"AGORA_APP_ID", "AGORA_APP_CERTIFICATE", "NEXT_PUBLIC_AGORA_APP_ID", "NEXT_AGORA_APP_CERTIFICATE"}
+	case "android":
+		return []string{"APP_ID", "APP_CERTIFICATE", "NEXT_PUBLIC_AGORA_APP_ID", "NEXT_AGORA_APP_CERTIFICATE"}
 	default:
 		return nil
 	}
@@ -699,6 +704,11 @@ func renderQuickstartEnvValues(template quickstartTemplate, project projectDetai
 		return map[string]any{
 			"APP_ID":          project.AppID,
 			"APP_CERTIFICATE": *project.SignKey,
+		}
+	case "android":
+		return map[string]any{
+			"AGORA_APP_ID":          project.AppID,
+			"AGORA_APP_CERTIFICATE": *project.SignKey,
 		}
 	default:
 		return map[string]any{}
