@@ -63,14 +63,15 @@ jobs:
 
       # Prebuilt golangci-lint binaries may be compiled with an older Go than
       # go.mod; loading .golangci.yml then fails ("Go language version used to
-      # build golangci-lint is lower than the targeted Go version"). Building
-      # from source with setup-go matches the project's toolchain.
+      # build golangci-lint is lower than the targeted Go version"). Using
+      # prebuilt mode avoids v9's goinstall path regression for /v2 module
+      # layout while still matching runner toolchain via setup-go.
       - name: golangci-lint
         if: runner.os == 'Linux'
-        uses: golangci/golangci-lint-action@v6
+        uses: golangci/golangci-lint-action@v9
         with:
           version: v1.64.8
-          install-mode: goinstall
+          install-mode: binary
           args: --timeout=5m
 
       - name: Build CLI
