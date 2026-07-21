@@ -80,3 +80,29 @@ func TestCLIInitRequiresTemplateWhenNoInputIsSet(t *testing.T) {
 		t.Fatalf("expected QUICKSTART_TEMPLATE_REQUIRED, got %+v", result)
 	}
 }
+
+func TestCLIInitRejectsCloneOnlyAndroidTemplateBeforeCreatingProject(t *testing.T) {
+	configHome := t.TempDir()
+	api := newFakeCLIBFF()
+	defer api.server.Close()
+	persistSessionForIntegration(t, configHome)
+
+	result := runCLI(t, []string{"init", "android-demo", "--template", "android", "--new-project", "--json"}, cliRunOptions{
+		env: map[string]string{
+			"XDG_CONFIG_HOME":    configHome,
+			"AGORA_API_BASE_URL": api.baseURL,
+			"AGORA_LOG_LEVEL":    "error",
+		},
+		workdir: t.TempDir(),
+	})
+	if result.exitCode != 1 || !strings.Contains(result.stdout, `"code":"QUICKSTART_TEMPLATE_UNAVAILABLE"`) || !strings.Contains(result.stdout, "not supported by `agora init`") {
+		t.Fatalf("expected clone-only template error, got %+v", result)
+	}
+
+	api.mu.Lock()
+	projectCount := len(api.projects)
+	api.mu.Unlock()
+	if projectCount != 0 {
+		t.Fatalf("expected android init to create no projects, got %d", projectCount)
+	}
+}
