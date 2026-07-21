@@ -35,11 +35,10 @@ func TestCLIQuickstartListAndCreate(t *testing.T) {
 	})
 	androidRepo := createLocalGitRepo(t, map[string]string{
 		"README.md":                        "# Android Quickstart\n",
-		"settings.gradle":                  "rootProject.name = \"android-quickstart\"\n",
+		"settings.gradle.kts":              "rootProject.name = \"android-quickstart\"\n",
 		"gradlew":                          "#!/bin/sh\n",
+		"app/build.gradle.kts":             "plugins { id(\"com.android.application\") }\n",
 		"app/src/main/AndroidManifest.xml": "<manifest package=\"io.agora.android.quickstart\" />\n",
-		"server/env.example":               "APP_ID=\nAPP_CERTIFICATE=\nPORT=8000\n",
-		"server/main.py":                   "print('hello from backend')\n",
 	})
 
 	project := buildFakeProject("Project Alpha", "prj_123456", "app_123456", "global")
@@ -192,8 +191,8 @@ func TestCLIQuickstartListAndCreate(t *testing.T) {
 	if createAndroidUnbound.exitCode != 0 || !strings.Contains(createAndroidUnbound.stdout, `"envStatus":"template-only"`) {
 		t.Fatalf("unexpected unbound android quickstart create result: %+v", createAndroidUnbound)
 	}
-	if _, err := os.Stat(filepath.Join(androidUnboundTarget, "server", ".env")); !errors.Is(err, os.ErrNotExist) {
-		t.Fatalf("did not expect backend env in unbound android scaffold, got %v", err)
+	if _, err := os.Stat(filepath.Join(androidUnboundTarget, "local.properties")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("did not expect local.properties in unbound android scaffold, got %v", err)
 	}
 
 	androidBoundTarget := filepath.Join(rootDir, "android-demo")
@@ -209,12 +208,12 @@ func TestCLIQuickstartListAndCreate(t *testing.T) {
 	if createAndroidBound.exitCode != 0 || !strings.Contains(createAndroidBound.stdout, `"envStatus":"configured"`) || !strings.Contains(createAndroidBound.stdout, `"projectId":"prj_123456"`) {
 		t.Fatalf("unexpected bound android quickstart create result: %+v", createAndroidBound)
 	}
-	androidEnv, err := os.ReadFile(filepath.Join(androidBoundTarget, "server", ".env"))
+	androidEnv, err := os.ReadFile(filepath.Join(androidBoundTarget, "local.properties"))
 	if err != nil {
-		t.Fatalf("expected android backend .env in bound scaffold: %v", err)
+		t.Fatalf("expected android local.properties in bound scaffold: %v", err)
 	}
-	if !strings.Contains(string(androidEnv), "APP_ID=app_123456") || !strings.Contains(string(androidEnv), "APP_CERTIFICATE=") || !strings.Contains(string(androidEnv), "PORT=8000") {
-		t.Fatalf("unexpected android backend env contents: %s", string(androidEnv))
+	if !strings.Contains(string(androidEnv), "AGORA_APP_ID=app_123456") || !strings.Contains(string(androidEnv), "AGORA_APP_CERTIFICATE=") {
+		t.Fatalf("unexpected android local.properties contents: %s", string(androidEnv))
 	}
 	androidMetadata, err := os.ReadFile(filepath.Join(androidBoundTarget, ".agora", "project.json"))
 	if err != nil {
@@ -235,12 +234,12 @@ func TestCLIQuickstartListAndCreate(t *testing.T) {
 	if writeAndroidEnv.exitCode != 0 || !strings.Contains(writeAndroidEnv.stdout, `"template":"android"`) {
 		t.Fatalf("unexpected android quickstart env write result: %+v", writeAndroidEnv)
 	}
-	androidEnvAfterWrite, err := os.ReadFile(filepath.Join(androidBoundTarget, "server", ".env"))
+	androidEnvAfterWrite, err := os.ReadFile(filepath.Join(androidBoundTarget, "local.properties"))
 	if err != nil {
-		t.Fatalf("expected android backend .env after env write: %v", err)
+		t.Fatalf("expected android local.properties after env write: %v", err)
 	}
-	if !strings.Contains(string(androidEnvAfterWrite), "APP_ID=app_123456") || !strings.Contains(string(androidEnvAfterWrite), "APP_CERTIFICATE=") {
-		t.Fatalf("unexpected android backend env after env write: %s", string(androidEnvAfterWrite))
+	if !strings.Contains(string(androidEnvAfterWrite), "AGORA_APP_ID=app_123456") || !strings.Contains(string(androidEnvAfterWrite), "AGORA_APP_CERTIFICATE=") {
+		t.Fatalf("unexpected android local.properties after env write: %s", string(androidEnvAfterWrite))
 	}
 
 	initAndroid := runCLI(t, []string{"init", "android-init-demo", "--template", "android", "--project", "prj_123456", "--json"}, cliRunOptions{
@@ -252,7 +251,7 @@ func TestCLIQuickstartListAndCreate(t *testing.T) {
 		},
 		workdir: rootDir,
 	})
-	if initAndroid.exitCode != 0 || !strings.Contains(initAndroid.stdout, `"template":"android"`) || !strings.Contains(initAndroid.stdout, `"envPath":"server/.env"`) {
+	if initAndroid.exitCode != 0 || !strings.Contains(initAndroid.stdout, `"template":"android"`) || !strings.Contains(initAndroid.stdout, `"envPath":"local.properties"`) {
 		t.Fatalf("unexpected android init result: %+v", initAndroid)
 	}
 

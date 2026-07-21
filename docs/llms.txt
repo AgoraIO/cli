@@ -53,6 +53,8 @@ Check project health: agora project doctor --json
 - **Project webhooks**: MCP exposes `agora.project.webhook.{events,list,show,create,update,delete}` for feature-scoped webhook automation; delete requires `confirm: true`.
 - **When shelling out**: run commands like `agora init ... --json` and parse stdout line-by-line (progress events + final envelope).
 - **Capability discovery**: prefer `agora --help --all --json` or `agora introspect --json`.
+- **Agora skills**: before editing Agora integrations, use `agora skills list` and `agora skills show <skill>` to load current Agora workflow guidance.
+- **Android quickstart**: `agora init --template android` uses the Android repo's default branch and writes credentials to root `local.properties`.
 - **Environment catalog**: use `agora env-help --json` to enumerate all supported `AGORA_*` controls.
 
 ## Headless / CI guidance
@@ -78,6 +80,7 @@ agora auth status --json
 ### Project Initialization
 ```
 agora init my-app --template nextjs
+agora init my-android-demo --template android --project <project-id> --json
 agora init my-app --template python --new-project --json
 agora init my-app --template go --project <project-id> --json
 ```

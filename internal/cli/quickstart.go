@@ -99,12 +99,11 @@ func quickstartTemplates() []quickstartTemplate {
 			Runtime:        "android",
 			RepoURL:        "https://github.com/AgoraIO-Conversational-AI/agent-quickstart-android",
 			DocsURL:        "https://github.com/AgoraIO-Conversational-AI/agent-quickstart-android/tree/main",
-			DetectPaths:    []string{"settings.gradle", "gradlew", "server/env.example"},
-			EnvExamplePath: "server/env.example",
-			EnvTargetPath:  "server/.env",
-			InstallCommand: "Install Python backend dependencies and Android Studio",
-			RunCommand:     "Run the Python backend, then launch the Android app",
-			EnvDocsSummary: "Copies server/env.example to server/.env, then writes APP_ID and APP_CERTIFICATE for the Python backend.",
+			DetectPaths:    []string{"settings.gradle.kts", "settings.gradle", "app/build.gradle.kts", "gradlew"},
+			EnvTargetPath:  "local.properties",
+			InstallCommand: "Install Android Studio dependencies or run ./gradlew assembleDebug",
+			RunCommand:     "Open the project in Android Studio and run the app, or use ./gradlew installDebug",
+			EnvDocsSummary: "Writes AGORA_APP_ID and AGORA_APP_CERTIFICATE to local.properties for the Android app.",
 			SupportsInit:   true,
 			Available:      true,
 		},
@@ -206,6 +205,7 @@ If a current project context exists, or if --project is passed, the CLI also wri
   agora quickstart create my-nextjs-demo --template nextjs
   agora quickstart create my-python-demo --template python --project my-agent-demo
   agora quickstart create my-go-demo --template go --project my-agent-demo
+  agora quickstart create my-android-demo --template android --project my-agent-demo
   agora quickstart create demo --template nextjs --dir apps/demo
 `),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -268,7 +268,8 @@ The CLI can infer the quickstart type from the repository layout, or you can for
 		Long: `Write the runtime-specific env file expected by a cloned quickstart repository.
 
 Next.js quickstarts receive NEXT_PUBLIC_* client env vars plus server-only Agora credentials.
-Python, Go, and Android quickstarts receive backend APP_ID and APP_CERTIFICATE values.`,
+Python and Go quickstarts receive backend APP_ID and APP_CERTIFICATE values.
+Android quickstarts receive AGORA_APP_ID and AGORA_APP_CERTIFICATE in local.properties.`,
 		Example: example(`
   agora quickstart env write
   agora quickstart env write apps/my-nextjs-demo
@@ -325,9 +326,6 @@ func (a *App) quickstartCreate(template quickstartTemplate, targetDir, explicitP
 		return nil, err
 	}
 	effectiveRef := strings.TrimSpace(ref)
-	if effectiveRef == "" {
-		effectiveRef = strings.TrimSpace(template.Ref)
-	}
 	if overrideKey != "" {
 		progress.emit("clone:override", fmt.Sprintf("Using repo override from %s", overrideKey), map[string]any{"repoUrl": repoURL, "envVar": overrideKey})
 	}
@@ -684,7 +682,9 @@ func conflictingQuickstartEnvKeys(templateID string) []string {
 	switch templateID {
 	case "nextjs":
 		return []string{"AGORA_APP_ID", "AGORA_APP_CERTIFICATE", "APP_ID", "APP_CERTIFICATE"}
-	case "android", "python", "go":
+	case "android":
+		return []string{"APP_ID", "APP_CERTIFICATE", "NEXT_PUBLIC_AGORA_APP_ID", "NEXT_AGORA_APP_CERTIFICATE"}
+	case "python", "go":
 		return []string{"AGORA_APP_ID", "AGORA_APP_CERTIFICATE", "NEXT_PUBLIC_AGORA_APP_ID", "NEXT_AGORA_APP_CERTIFICATE"}
 	default:
 		return nil
@@ -698,7 +698,12 @@ func renderQuickstartEnvValues(template quickstartTemplate, project projectDetai
 			"NEXT_PUBLIC_AGORA_APP_ID":   project.AppID,
 			"NEXT_AGORA_APP_CERTIFICATE": *project.SignKey,
 		}
-	case "android", "python", "go":
+	case "android":
+		return map[string]any{
+			"AGORA_APP_ID":          project.AppID,
+			"AGORA_APP_CERTIFICATE": *project.SignKey,
+		}
+	case "python", "go":
 		return map[string]any{
 			"APP_ID":          project.AppID,
 			"APP_CERTIFICATE": *project.SignKey,

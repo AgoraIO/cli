@@ -23,6 +23,7 @@ Earlier entries pre-date this convention and only carry their version's compare 
 - **BREAKING**: Update public JSON shapes for region-aware profiles: `auth login --json` and `auth status --json` include `data.region`, while project list/show API models no longer expose a project `region` field because the project APIs do not return it.
 - **BREAKING**: Stop persisting CLI API/OAuth integration values in `config.json`. `apiBaseUrl`, `oauthBaseUrl`, `oauthClientId`, and `oauthScope` are now derived from the selected login region or from explicit environment variable overrides (`AGORA_API_BASE_URL`, `AGORA_OAUTH_BASE_URL`, `AGORA_OAUTH_CLIENT_ID`, `AGORA_OAUTH_SCOPE`). Existing configs auto-migrate to schema version `4` and drop those legacy keys on first load; users who previously pinned custom endpoints in `config.json` should move those values to environment variables.
 - Add `PROJECT_REGION_MISMATCH` when a repo-local `.agora/project.json` binding points to a different region than the active login region.
+- Support Android as a full quickstart template: `quickstart create`, `quickstart env write`, and `init` now bind Agora project credentials into root `local.properties` on the default Android repo branch.
 
 ## [0.2.5] - 2026-06-05
 
@@ -60,7 +61,6 @@ Release signing fix.
 ### Fixed
 
 - Update GoReleaser Cosign signing to emit `checksums.txt.sigstore.json` with `--bundle`, matching Cosign's current bundle-based signing flow.
-- Remove the Android quickstart clone-only behavior so `quickstart create`, `quickstart env write`, and `init` all follow the same project-binding flow as Next.js, Python, and Go.
 
 ## [0.2.2] - 2026-05-26
 

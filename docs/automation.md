@@ -342,11 +342,13 @@ Example:
 ```bash
 ./agora init my-nextjs-demo --template nextjs --json
 ./agora init my-nextjs-demo --template nextjs --new-project --json
-./agora init my-android-demo --template android --json
+./agora init my-android-demo --template android --project my-project --json
 ```
 
 By default `init` reuses an existing project — preferring one named exactly `"Default Project"`. If no default exists, interactive sessions show existing projects with a create-new option and default to the most recently created project; JSON, CI, and non-TTY runs select the most recent project automatically. Pass `--new-project` to force creation. Use `--project <name|id>` to bind to a specific project.
 For deterministic automation, always pass `--project <name|id>` or `--new-project`.
+
+Android uses the same project-binding flow as the other supported quickstarts. It runs directly from the Android app; `init`, `quickstart create --project`, and `quickstart env write --template android` write Agora credentials to root `local.properties`.
 
 Required `data` fields:
 - `action`
@@ -682,8 +684,8 @@ Required `data` fields:
 Env write behavior:
 - quickstart env files contain only the App ID and App Certificate variable names required by the template
 - Next.js uses `NEXT_PUBLIC_AGORA_APP_ID` and `NEXT_AGORA_APP_CERTIFICATE`
-- Python, Go, and Android use `APP_ID` and `APP_CERTIFICATE`
-- Android quickstarts read and write `server/env.example` and `server/.env`
+- Python and Go use `APP_ID` and `APP_CERTIFICATE`
+- Android quickstarts write `AGORA_APP_ID` and `AGORA_APP_CERTIFICATE` to root `local.properties`
 - project metadata such as project ID, project name, region, template, projectType, and env path is stored in `.agora/project.json`
 - existing quickstart env files are preserved; missing credential keys are appended and existing credential keys are updated
 - stale Agora credential aliases for another runtime are commented out to avoid ambiguous dotenv resolution; for example, a Next.js quickstart prefers `NEXT_PUBLIC_AGORA_APP_ID` and comments out old `AGORA_APP_ID` / `APP_ID` entries when replacing them

@@ -19,7 +19,7 @@ agora init my-nextjs-demo --template nextjs
 | Next.js video app | `agora init my-nextjs-demo --template nextjs` | A cloned Next.js quickstart, project binding, and `.env.local` |
 | Python voice agent | `agora init my-python-demo --template python` | A Python quickstart with Agora credentials written for the backend |
 | Go token service | `agora init my-go-demo --template go` | A Go server quickstart with project metadata and env wiring |
-| Android conversational AI app | `agora init my-android-demo --template android` | An Android quickstart with the Python backend env file written to `server/.env` |
+| Android conversational AI app | `agora init my-android-demo --template android` | An Android quickstart with app credentials written to root `local.properties` |
 
 ## Install
 
@@ -234,9 +234,9 @@ Quickstart template behavior:
 - Next.js quickstarts write `.env.local` with `NEXT_PUBLIC_AGORA_APP_ID` plus `NEXT_AGORA_APP_CERTIFICATE`
 - Python quickstarts copy `server/env.example` to `server/.env`, then use `APP_ID` plus `APP_CERTIFICATE`
 - Go quickstarts copy `server-go/env.example` to `server-go/.env`, then use `APP_ID` plus `APP_CERTIFICATE`
-- Android quickstarts copy `server/env.example` to `server/.env`, then use `APP_ID` plus `APP_CERTIFICATE`
+- Android quickstarts write root `local.properties` with `AGORA_APP_ID` plus `AGORA_APP_CERTIFICATE`
 
-`project env write` auto-detects Next.js workspaces (or accepts `--template nextjs|standard`) and writes `AGORA_APP_ID` / `AGORA_APP_CERTIFICATE` or the Next.js equivalents. It does not use `APP_ID` / `APP_CERTIFICATE`; use `quickstart env write` for Python and Go quickstart layouts.
+`project env write` auto-detects Next.js workspaces (or accepts `--template nextjs|standard`) and writes `AGORA_APP_ID` / `AGORA_APP_CERTIFICATE` or the Next.js equivalents. It does not use `APP_ID` / `APP_CERTIFICATE`; use `quickstart env write` for Python and Go quickstart layouts, and for Android `local.properties`.
 
 Existing `.env` and `.env.local` files are preserved: the CLI appends missing credentials, updates existing credential keys, and comments out duplicate or stale Agora credential aliases for the selected runtime.
 
@@ -312,6 +312,7 @@ For scripts, CI, and agentic workflows:
 - prefer `--json` for machine consumption
 - set `AGORA_HOME` to an isolated temporary directory in CI or multi-agent runs
 - prefer `init` for end-to-end setup; decompose with lower-level commands when a workflow must be resumed in stages
+- use `agora skills list` and `agora skills show <skill>` before changing Agora integrations so agent workflows follow the current Agora skill guidance
 - use `agora introspect --json` and [AGENTS.md](AGENTS.md) for agent discovery; [docs/automation.md](docs/automation.md) for the JSON envelope contract
 
 Example:
@@ -319,6 +320,8 @@ Example:
 ```bash
 export AGORA_HOME="$(mktemp -d)"
 agora init my-nextjs-demo --template nextjs --json
+agora init my-android-demo --template android --project my-project --json
+agora skills list --json
 agora quickstart create my-python-demo --template python --project my-project --json
 agora quickstart env write my-python-demo --json
 agora project doctor --json
