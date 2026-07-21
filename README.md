@@ -33,7 +33,7 @@ agora init my-nextjs-demo --template nextjs
 ### Install the CLI
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/AgoraIO/cli/main/install.sh | sh
+curl -fsSL https://dl.agora.io/cli/install.sh | sh
 ```
 
 Run the CLI:
@@ -42,69 +42,83 @@ Run the CLI:
 agora --help
 ```
 
-Alternative install paths:
+The script is served from the Agora CDN (`dl.agora.io`, CloudFront). Binaries download from GitHub by default and automatically fall back to the CDN mirror if GitHub is unreachable; downloads are verified against `checksums.txt` regardless of source.
 
-```bash
-# npm (Node 18+, signed with npm provenance)
-npm install -g agoraio-cli
+Windows PowerShell:
 
-# Windows PowerShell
-irm https://raw.githubusercontent.com/AgoraIO/cli/main/install.ps1 | iex
+```powershell
+irm https://dl.agora.io/cli/install.ps1 | iex
 ```
 
-Locked-down environments that block `curl | sh` can use npm, download a release archive from GitHub, or mirror the binary internally. Every release includes `checksums.txt`, a Cosign keyless signature, and an SBOM; see [docs/install.md](docs/install.md#enterprise--locked-down-environments) for manual tarball and verification steps.
+Alternative install paths (GitHub-hosted; use `install.ps1` for PowerShell):
+
+```bash
+# GitHub Pages
+curl -fsSL https://agoraio.github.io/cli/install.sh | sh
+# raw GitHub
+curl -fsSL https://raw.githubusercontent.com/AgoraIO/cli/main/install.sh | sh
+```
+
+Locked-down environments that block `curl | sh` can use npm, download a release archive from GitHub, or mirror the binary internally. Every release includes `checksums.txt`, a Cosign keyless signature, and an SBOM; see [docs/install.md](docs/install.md#enterprise--locked-down-environments) for manual tarball, checksum, and Cosign verification steps.
 
 Notes:
 
 - The shell installer supports macOS, Linux, and Windows POSIX shells such as Git Bash. Use `install.ps1` for native PowerShell installs on Windows.
 - **Shell setup is auto-on**: the installer wires the install directory onto your `PATH` (when needed) and writes a shell completion script for the detected shell (bash, zsh, fish, or PowerShell). Pass `--no-path`, `--no-completion`, or the umbrella `--skip-shell` (PowerShell: `-NoPath` / `-NoCompletion` / `-SkipShell`) to opt out granularly.
-- Installer help is always available with `curl -fsSL https://raw.githubusercontent.com/AgoraIO/cli/main/install.sh | sh -s -- --help`.
+- Installer help is always available with `curl -fsSL https://dl.agora.io/cli/install.sh | sh -s -- --help`.
 - Pinned versions, dry runs, custom install directories, npm details, and source builds are documented in [docs/install.md](docs/install.md).
+- Release artifacts and checksums: [GitHub Releases](https://github.com/AgoraIO/cli/releases). Vulnerability disclosures: [SECURITY.md](SECURITY.md).
 
-### Verifying release artifacts
+### Restricted networks (GitHub blocked)
 
-Every release ships with a SHA-256 `checksums.txt` and a Cosign keyless signature. The official installers verify the SHA-256 automatically. You can also verify manually:
+The default command already fetches the install script from the Agora CDN (`dl.agora.io`), so it works even where GitHub is blocked. Binaries still download from GitHub first (with automatic fallback to the mirror); in a fully-blocked region, add `AGORA_INSTALL_SOURCE=s3` to skip GitHub entirely and avoid the failover delay:
 
 ```bash
-# Verify SHA-256 against the published checksums.txt
-curl -fsSLO https://github.com/AgoraIO/cli/releases/download/vX.Y.Z/checksums.txt
-sha256sum -c checksums.txt --ignore-missing
+# macOS, Linux, and Windows POSIX shells
+curl -fsSL https://dl.agora.io/cli/install.sh | AGORA_INSTALL_SOURCE=s3 sh
+
+# Windows PowerShell
+$env:AGORA_INSTALL_SOURCE = 's3'; irm https://dl.agora.io/cli/install.ps1 | iex
 ```
 
-For Cosign signature verification and the SBOM workflow, see the **Security** section of [docs/install.md](docs/install.md). Vulnerability disclosures: see [SECURITY.md](SECURITY.md).
+Downloads are still SHA-256 verified against `checksums.txt` regardless of source. `AGORA_INSTALL_SOURCE` accepts `auto` (default; GitHub then mirror), `github`, or `s3`. See [docs/install.md](docs/install.md#mirror-fallback-for-restricted-networks) for details.
 
-## First Run
+### Build from source
+
+```bash
+go build -o agora .
+./agora --help
+```
+
+Requires the Go toolchain pinned in [go.mod](go.mod). For direct installer options and source install notes, see [docs/install.md](docs/install.md).
+
+## Quick Start
 
 ```bash
 agora login
 agora init my-nextjs-demo --template nextjs
+agora project doctor --json
 ```
 
-## Docs
+Command examples use `agora` for the installed CLI. Local source builds use `./agora` from the repo root.
 
-- Human docs (GitHub Pages): [https://agoraio.github.io/cli/](https://agoraio.github.io/cli/)
-- Agent-friendly Markdown mirror: [https://agoraio.github.io/cli/md/](https://agoraio.github.io/cli/md/)
-- Release notes: [CHANGELOG.md](CHANGELOG.md)
-- Install options (direct installer, Windows, source): [docs/install.md](docs/install.md)
-- Full command reference (auto-generated): [docs/commands.md](docs/commands.md)
-- Automation and JSON contract: [docs/automation.md](docs/automation.md)
-- JSON envelope schema (machine-readable): [docs/schema/envelope.v1.json](docs/schema/envelope.v1.json)
-- Stable error codes: [docs/error-codes.md](docs/error-codes.md)
-- Telemetry controls: [docs/telemetry.md](docs/telemetry.md)
-- Troubleshooting: [docs/troubleshooting.md](docs/troubleshooting.md)
-- Security policy: [SECURITY.md](SECURITY.md)
-- Support and contact channels: [SUPPORT.md](SUPPORT.md)
-- Contributor and agent guide: [AGENTS.md](AGENTS.md), plus [CONTRIBUTING.md](CONTRIBUTING.md)
+## What You Can Build Quickly
 
-Command examples use `agora` for the installed CLI. Local source builds are covered in [Build From Source](#build-from-source).
+| Goal | Command | What You Get |
+|------|---------|--------------|
+| Next.js video app | `agora init my-nextjs-demo --template nextjs` | A cloned Next.js quickstart, project binding, and `.env.local` |
+| Python voice agent | `agora init my-python-demo --template python` | A Python quickstart with Agora credentials written for the backend |
+| Go token service | `agora init my-go-demo --template go` | A Go server quickstart with project metadata and env wiring |
+
+Run `agora quickstart list` to see all available templates.
 
 ## Command Model
 
 The command model is intentionally layered:
 
-- `init` for the recommended onboarding path
-- `quickstart` for standalone starter repos
-- `project` for remote Agora resources and env export
+- `init` for the recommended onboarding path (project + clone + env)
+- `quickstart` for local cloned starter repos (requires `git`)
+- `project` for remote Agora control-plane resources (does not clone scaffolds)
 - `auth` for login and session inspection
 - `config` for local CLI defaults
 - `telemetry` for telemetry preferences
@@ -115,6 +129,30 @@ The command model is intentionally layered:
 - `skills` to browse curated workflow recipes for humans and AI agents
 - `mcp` to run the CLI as a local MCP server (`agora mcp serve`) for agent integrations
 - `completion` for shell completion scripts (auto-installed by the installer; see `agora completion --help` for manual setup)
+
+### Which command?
+
+| Goal | Command |
+|------|---------|
+| New user, one shot | `agora init <name> --template <id>` |
+| List available templates | `agora quickstart list` |
+| Clone a starter only | `agora quickstart create ...` |
+| Re-sync env in a cloned quickstart | `agora quickstart env write [dir]` |
+| Write env to an arbitrary path / non-quickstart repo | `agora project env write <path>` |
+| Install self-test | `agora doctor --json` |
+| Project/workspace readiness | `agora project doctor --json` |
+| Manage feature webhooks | `agora project webhook ... --json` |
+
+### Env-related commands
+
+```
+agora init <name>                    # recommended: project + clone + env
+├── project
+│   ├── env                          Print project env values (no file write)
+│   └── env write <path>             Generic dotenv block (AGORA_* or NEXT_*)
+└── quickstart
+    └── env write [dir]              Template-specific env file and key names
+```
 
 Discover the full command tree:
 
@@ -134,6 +172,7 @@ Manages standalone official starter repos and their runtime-specific env files.
 
 Use this when you want to:
 
+- list available templates with `quickstart list`
 - clone a quickstart without creating a project
 - bind a quickstart to an existing project
 - re-sync env files after changing project selection
@@ -146,8 +185,10 @@ Use this when you want to:
 
 - create or inspect projects directly
 - switch the default project context
-- export project env values
+- export project env values with `project env`
+- write credentials to a dotenv file with `project env write`
 - inspect project readiness with `project doctor`
+- manage feature-scoped webhook endpoints with `project webhook`
 
 ### `auth`
 
@@ -173,72 +214,30 @@ Runs the CLI as a local MCP server so MCP-capable clients can call Agora workflo
 
 Prints build metadata. Release binaries include version, commit, and build date.
 
-## Common Workflows
+## Env Files and Project Binding
 
-### Onboard a new demo
+`quickstart env write` and `project env write` both keep dotenv files limited to runtime credentials, but they target different workflows:
 
-```bash
-agora login
-agora init my-nextjs-demo --template nextjs
-```
+| Command | Env path | Key names |
+|---------|----------|-----------|
+| `agora init` / `quickstart env write` | Template-defined (`.env.local`, `server/.env`, etc.) | Template-specific (`NEXT_PUBLIC_*`, `APP_ID`, …) |
+| `agora project env write <path>` | User-supplied path | `AGORA_*` or `NEXT_*` only |
 
-### Use an existing project with a quickstart
+Quickstart template behavior:
 
-```bash
-agora quickstart create my-go-demo --template go --project my-existing-project
-agora quickstart env write my-go-demo --project my-existing-project
-```
-
-### Update env after changing projects
-
-```bash
-agora project use my-agent-demo
-agora quickstart env write my-go-demo
-```
-
-### Inspect project readiness
-
-```bash
-agora project doctor
-agora project doctor --json
-```
-
-### Use low-level commands directly
-
-```bash
-agora project create my-agent-demo --feature rtc --feature convoai
-agora quickstart create my-go-demo --template go --project my-agent-demo
-agora quickstart env write my-go-demo --project my-agent-demo
-```
-
-### Inspect the full command tree
-
-```bash
-agora --help --all
-```
-
-## Quickstart Env Conventions
-
-`quickstart env write` is different from `project env write`, but both keep dotenv files limited to runtime credentials.
-
-- `project env write` writes only App ID and App Certificate keys for the detected or `--template`-selected layout (for example `AGORA_*` for standard Node, `NEXT_PUBLIC_*` / `NEXT_*` for Next.js, or `APP_ID` / `APP_CERTIFICATE` for Python and Go). See [docs/automation.md](docs/automation.md) for the full matrix and JSON fields.
-- `quickstart env write` understands the quickstart type and writes only the App ID and App Certificate variable names the cloned repo expects
-- existing `.env` and `.env.local` files are preserved; the CLI appends missing credentials, updates existing credential keys, and comments out duplicate or stale Agora credential aliases for the selected runtime
-
-Template-specific behavior:
-
-- Generic project env writes use `AGORA_APP_ID` plus `AGORA_APP_CERTIFICATE`
-- Next.js quickstarts write `.env.local` and use `NEXT_PUBLIC_AGORA_APP_ID` plus `NEXT_AGORA_APP_CERTIFICATE`
+- Next.js quickstarts write `.env.local` with `NEXT_PUBLIC_AGORA_APP_ID` plus `NEXT_AGORA_APP_CERTIFICATE`
 - Python quickstarts copy `server/env.example` to `server/.env`, then use `APP_ID` plus `APP_CERTIFICATE`
 - Go quickstarts copy `server-go/env.example` to `server-go/.env`, then use `APP_ID` plus `APP_CERTIFICATE`
 
-The CLI also writes repo-local project metadata to:
+`project env write` auto-detects Next.js workspaces (or accepts `--template nextjs|standard`) and writes `AGORA_APP_ID` / `AGORA_APP_CERTIFICATE` or the Next.js equivalents. It does not use `APP_ID` / `APP_CERTIFICATE`; use `quickstart env write` for Python and Go quickstart layouts.
 
-- `.agora/project.json`
+Existing `.env` and `.env.local` files are preserved: the CLI appends missing credentials, updates existing credential keys, and comments out duplicate or stale Agora credential aliases for the selected runtime.
 
-That allows the CLI to detect which Agora project a cloned demo is bound to even when you are working inside the repo later.
+See [docs/automation.md](docs/automation.md) for JSON fields and the full credential matrix.
 
-## Repo-Local Project Binding
+### Repo-local binding
+
+The CLI writes repo-local project metadata to `.agora/project.json` so it can detect which Agora project a cloned demo is bound to even when you work inside the repo later.
 
 Project resolution precedence is consistent across commands:
 
@@ -275,20 +274,40 @@ agora quickstart env write /abs/path/to/my-go-demo --json
 agora quickstart env write /abs/path/to/my-go-demo --project my-other-project --json
 ```
 
-## Automation / Agent Usage
+## Common Workflows
+
+### Use an existing project with a quickstart
+
+```bash
+agora quickstart create my-go-demo --template go --project my-existing-project
+agora quickstart env write my-go-demo --project my-existing-project
+```
+
+### Update env after changing projects
+
+```bash
+agora project use my-agent-demo
+agora quickstart env write my-go-demo
+```
+
+### Use low-level commands directly
+
+```bash
+agora project create my-agent-demo --feature rtc --feature convoai
+agora quickstart create my-go-demo --template go --project my-agent-demo
+agora quickstart env write my-go-demo --project my-agent-demo
+```
+
+## Automation and Agents
 
 For scripts, CI, and agentic workflows:
 
 - prefer `--json` for machine consumption
 - set `AGORA_HOME` to an isolated temporary directory in CI or multi-agent runs
-- prefer `init` for end-to-end setup
-- use low-level commands when the workflow must be decomposed or resumed in stages
-- use `agora --help --all` to inspect the full command tree
-- use `quickstart env write` to re-sync env files after changing project selection
-- use `project doctor --json` for readiness checks
-- rely on the same JSON envelope for both success and failure
+- prefer `init` for end-to-end setup; decompose with lower-level commands when a workflow must be resumed in stages
+- use `agora introspect --json` and [AGENTS.md](AGENTS.md) for agent discovery; [docs/automation.md](docs/automation.md) for the JSON envelope contract
 
-Examples:
+Example:
 
 ```bash
 export AGORA_HOME="$(mktemp -d)"
@@ -299,21 +318,7 @@ agora project doctor --json
 agora auth status --json
 ```
 
-The JSON envelope and stable result shapes are documented in [docs/automation.md](docs/automation.md). `auth status --json` exits `3` with `error.code` set to `AUTH_UNAUTHENTICATED` when no local session exists.
-
-## CI and Releases
-
-GitHub Actions are configured for:
-
-- push and pull request validation on Linux, macOS, and Windows
-- automated tag-driven releases for `v*` tags
-- cross-platform release artifacts for Linux, macOS, and Windows
-
-Release workflow behavior:
-
-- a pushed tag matching `v*` (for example `v0.2.2`) triggers the release workflow
-- the workflow runs tests, builds release binaries, packages them, and publishes a GitHub release automatically
-- release artifacts include checksums
+`auth status --json` exits `3` with `error.code` set to `AUTH_UNAUTHENTICATED` when no local session exists.
 
 ## Configuration
 
@@ -330,12 +335,12 @@ Built-in default config values are documented in [config.example.json](config.ex
 
 ## Troubleshooting
 
-For a full troubleshooting guide with diagnostic commands, see [docs/troubleshooting.md](docs/troubleshooting.md). The fastest first step is always:
+For a full troubleshooting guide with diagnostic commands, see [docs/troubleshooting.md](docs/troubleshooting.md).
 
-```bash
-agora doctor --json
-agora project doctor --json
-```
+Start with the right doctor command:
+
+- **`agora doctor --json`** — install self-test (PATH, version, network, auth, MCP host)
+- **`agora project doctor --json`** — project and workspace readiness (credentials, `.agora` binding, env consistency; add `--deep` for repo-local checks)
 
 The most common issues:
 
@@ -347,11 +352,18 @@ The most common issues:
 
 Full guide with debug logging, CI tips, completion troubleshooting, and the `--debug` flag: [docs/troubleshooting.md](docs/troubleshooting.md).
 
-## Build From Source
+## Documentation
 
-```bash
-go build -o agora .
-./agora --help
-```
-
-Requires the Go toolchain pinned in [go.mod](go.mod). For direct installer options and source install notes, see [docs/install.md](docs/install.md).
+- Human docs (GitHub Pages): [https://agoraio.github.io/cli/](https://agoraio.github.io/cli/)
+- Agent-friendly Markdown mirror: [https://agoraio.github.io/cli/md/](https://agoraio.github.io/cli/md/)
+- Release notes: [CHANGELOG.md](CHANGELOG.md)
+- Install options (direct installer, Windows, source): [docs/install.md](docs/install.md)
+- Full command reference (auto-generated): [docs/commands.md](docs/commands.md)
+- Automation and JSON contract: [docs/automation.md](docs/automation.md)
+- JSON envelope schema (machine-readable): [docs/schema/envelope.v1.json](docs/schema/envelope.v1.json)
+- Stable error codes: [docs/error-codes.md](docs/error-codes.md)
+- Telemetry controls: [docs/telemetry.md](docs/telemetry.md)
+- Troubleshooting: [docs/troubleshooting.md](docs/troubleshooting.md)
+- Security policy: [SECURITY.md](SECURITY.md)
+- Support and contact channels: [SUPPORT.md](SUPPORT.md)
+- Contributor and agent guide: [AGENTS.md](AGENTS.md), plus [CONTRIBUTING.md](CONTRIBUTING.md)

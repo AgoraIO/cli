@@ -104,7 +104,7 @@ agora
 
 **Design rules — do not break these:**
 - `project` = remote Agora control-plane resource; it never scaffolds local files
-- `quickstart` = local repo clone; requires `git` on the PATH
+- `quickstart` = local repo clone; requires `git` on the PATH; upstream `.git` is removed after clone so demos start without template history
 - `init` = the only command that composes both
 - The `add` namespace is reserved; keep it hidden and return a command-not-found error if invoked
 
@@ -254,12 +254,13 @@ packaging/npm/
 2. Verifies SHA-256 of every archive against `checksums.txt`; fails the job on mismatch
 3. Extracts the binary for each platform into the corresponding package's `bin/`
 4. Stamps the tag version into all `package.json` files (wrapper + 6 platform packages, including `optionalDependencies` values)
-5. Publishes all 6 platform packages, then the wrapper package, all with `npm publish --provenance` (sigstore-backed supply-chain attestations)
+5. Publishes all 6 platform packages with `NPM_TOKEN`, then publishes the wrapper package with `npm publish --provenance` via npm trusted publishing
 6. Smoke-tests the published wrapper with `npx --yes agoraio-cli@<tag> --version` (retry/backoff for registry propagation)
 
 **Prerequisites:**
-- npm **Trusted Publisher** configured on each package (`agoraio-cli` and all `agoraio-cli-*`), pointing at repo `AgoraIO/cli` and workflow `release.yml`.
-- `id-token: write` workflow permission (already set in `release.yml`) — required for trusted publishing and provenance.
+- npm **Trusted Publisher** configured on `agoraio-cli`, pointing at repo `AgoraIO/cli` and workflow `release.yml`.
+- `NPM_TOKEN` GitHub secret with publish access to all six `agoraio-cli-*` platform packages.
+- `id-token: write` workflow permission (already set in `release.yml`) — required for wrapper trusted publishing and provenance.
 
 **Manual dry-run:** the workflow exposes `workflow_dispatch` with a `dry_run` input that runs `npm publish --dry-run` against a synthetic version, validating packaging without publishing.
 

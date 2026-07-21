@@ -39,7 +39,6 @@ func (a *App) buildInitCommand() *cobra.Command {
 	var templateID string
 	var dir string
 	var existingProject string
-	var region string
 	var rtmDataCenter string
 	var features []string
 	var agentRules []string
@@ -90,7 +89,7 @@ Use --feature to specify which features to enable on a newly created project (re
 				!isCIEnvironment(a.osEnv) &&
 				isTTY(os.Stdin)
 			progress := jsonProgressFor(a, cmd, "init")
-			result, err := a.initProject(args[0], targetDir, *template, existingProject, region, features, rtmDataCenter, newProject, promptForReuse, cmd.ErrOrStderr(), os.Stdin, progress)
+			result, err := a.initProject(args[0], targetDir, *template, existingProject, features, rtmDataCenter, newProject, promptForReuse, cmd.ErrOrStderr(), os.Stdin, progress)
 			if err != nil {
 				return err
 			}
@@ -107,7 +106,6 @@ Use --feature to specify which features to enable on a newly created project (re
 	cmd.Flags().StringVar(&templateID, "template", "", "quickstart template ID to use")
 	cmd.Flags().StringVar(&dir, "dir", "", "target directory for the cloned quickstart; defaults to <name>")
 	cmd.Flags().StringVar(&existingProject, "project", "", "existing project ID or exact project name to bind to")
-	cmd.Flags().StringVar(&region, "region", "", "control plane region for newly created projects (global or cn)")
 	cmd.Flags().StringVar(&rtmDataCenter, "rtm-data-center", "", "RTM data center to configure when rtm is enabled on a newly created project (CN, NA, EU, or AP); defaults to NA")
 	cmd.Flags().StringArrayVar(&features, "feature", nil, fmt.Sprintf("enable a feature on the newly created project (repeatable); defaults to %s; convoai also enables rtm", featureListString()))
 	cmd.Flags().StringArrayVar(&agentRules, "add-agent-rules", nil, "write AI agent rules into the quickstart (repeatable: cursor, claude, windsurf)")
@@ -326,20 +324,10 @@ func (a *App) resolveInitProject(ctx projectContext, item projectSummary) (proje
 	if err != nil {
 		return projectTarget{}, err
 	}
-	region := ctx.CurrentRegion
-	if region == "" {
-		region = "global"
-	}
-	if item.Region != nil && *item.Region != "" {
-		region = *item.Region
-	}
-	if project.Region != nil && *project.Region != "" {
-		region = *project.Region
-	}
-	return projectTarget{project: project, region: region}, nil
+	return projectTarget{project: project, region: currentRegionFromContext(ctx)}, nil
 }
 
-func (a *App) initProject(name, targetDir string, template quickstartTemplate, existingProject, region string, features []string, rtmDataCenter string, newProject bool, promptForReuse bool, promptOut io.Writer, promptIn io.Reader, progress progressEmitter) (map[string]any, error) {
+func (a *App) initProject(name, targetDir string, template quickstartTemplate, existingProject string, features []string, rtmDataCenter string, newProject bool, promptForReuse bool, promptOut io.Writer, promptIn io.Reader, progress progressEmitter) (map[string]any, error) {
 	if !template.Available || !template.SupportsInit {
 		return nil, &cliError{Message: fmt.Sprintf("Quickstart template %q is not supported by `agora init`. Use `agora quickstart create` instead.", template.ID), Code: "QUICKSTART_TEMPLATE_UNAVAILABLE"}
 	}
@@ -418,7 +406,7 @@ func (a *App) initProject(name, targetDir string, template quickstartTemplate, e
 	if needsCreate {
 		featuresToEnable := normalizeProjectCreateFeatures(features)
 		progress.emit("project:create", "Creating Agora project", map[string]any{"projectName": name, "features": featuresToEnable})
-		projectResult, err := a.projectCreate(name, region, "", featuresToEnable, rtmDataCenter, "")
+		projectResult, err := a.projectCreate(name, "", featuresToEnable, rtmDataCenter, "")
 		if err != nil {
 			return nil, err
 		}
@@ -449,9 +437,6 @@ func (a *App) initProject(name, targetDir string, template quickstartTemplate, e
 	ctx.CurrentProjectID = &target.project.ProjectID
 	ctx.CurrentProjectName = &target.project.Name
 	ctx.CurrentRegion = target.region
-	if ctx.PreferredRegion == "" {
-		ctx.PreferredRegion = target.region
-	}
 	if err := saveContext(a.env, ctx); err != nil {
 		return nil, err
 	}

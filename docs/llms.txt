@@ -4,7 +4,8 @@
 
 ## Quick Start
 
-Install: curl -fsSL https://raw.githubusercontent.com/AgoraIO/cli/main/install.sh | sh
+Install: curl -fsSL @@CLI_INSTALL_SH_URL@@ | sh
+Direct GitHub fallback: curl -fsSL @@CLI_INSTALL_SH_FALLBACK_URL@@ | sh
 
 Login: agora login
 Initialize project: agora init my-demo --template nextjs --new-project
@@ -39,7 +40,7 @@ Check project health: agora project doctor --json
 - **Project Management**: Initialize, configure, and validate Agora projects
 - **JSON Output**: All commands support --json for automation and scripting (see Automation Notes below for one documented exception)
 - **Stable Exit Codes**: Consistent error codes for CI/CD integration
-- **Template System**: Quick-start templates for Next.js, Python, and Go (see `agora init --help` for the init-capable catalog); Android is clone-only for now and appears in `agora quickstart list`
+- **Template System**: Quick-start templates for Next.js, Python, and Go (see `agora init --help` for the init-capable catalog); Android is clone-only for now and appears in `agora quickstart list`. Quickstart clones drop upstream `.git` metadata so scaffolds start as clean local repos.
 - **Cross-Platform**: macOS, Linux, Windows support
 - **Agentic discovery**: `agora introspect --json` and `agora --help --all --json` emit the same machine-readable command tree
 - **MCP server**: `agora mcp serve` exposes the CLI as Model Context Protocol tools for agents
@@ -49,6 +50,7 @@ Check project health: agora project doctor --json
 - **MCP transport**: `agora mcp serve` uses stdio JSON-RPC.
 - **Auth prerequisite**: `agora.auth.login` is intentionally not exposed over MCP. Run `agora login` on the host first.
 - **Progress over MCP**: Long-running tools emit `notifications/progress` when the MCP `tools/call` params include `_meta.progressToken`.
+- **Project webhooks**: MCP exposes `agora.project.webhook.{events,list,show,create,update,delete}` for feature-scoped webhook automation; delete requires `confirm: true`.
 - **When shelling out**: run commands like `agora init ... --json` and parse stdout line-by-line (progress events + final envelope).
 - **Capability discovery**: prefer `agora --help --all --json` or `agora introspect --json`.
 - **Environment catalog**: use `agora env-help --json` to enumerate all supported `AGORA_*` controls.
@@ -86,6 +88,15 @@ agora project doctor
 agora project doctor --json
 agora project doctor --quiet
 ```
+
+### Project Webhooks
+```
+agora project webhook events --feature rtc --json
+agora project webhook create --project <project-id> --feature rtc --url https://example.com/webhook --events channel-created,user-joined --json
+agora project webhook list --project <project-id> --feature rtc --json
+agora project webhook delete <config-id> --project <project-id> --feature rtc --yes --json
+```
+Run `agora project webhook events --feature <feature> --json` before create/update to discover available event IDs and keys for `--events`.
 
 ### Configuration Management
 ```

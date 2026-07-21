@@ -18,7 +18,7 @@ on:
 permissions:
   contents: write   # create GitHub release artifacts for installers
   packages: write   # push to GitHub Container Registry (Docker)
-  id-token: write   # required for npm trusted publishing and provenance (OIDC)
+  id-token: write   # required for agoraio-cli trusted publishing (OIDC)
 
 jobs:
   goreleaser:
@@ -28,7 +28,7 @@ jobs:
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0   # GoReleaser needs full history for changelog
 
@@ -99,15 +99,17 @@ jobs:
     name: Publish npm packages
     # Run after goreleaser on tag pushes; on workflow_dispatch run independently in dry-run mode.
     needs: [goreleaser]
-    if: |
-      always() &&
-      (github.event_name == 'workflow_dispatch' ||
-       (github.event_name == 'push' && needs.goreleaser.result == 'success'))
+    # DISABLED: npm publishing is turned off. To re-enable, restore the condition:
+    #   if: |
+    #     always() &&
+    #     (github.event_name == 'workflow_dispatch' ||
+    #      (github.event_name == 'push' && needs.goreleaser.result == 'success'))
+    if: false
     runs-on: ubuntu-latest
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Set up Node.js
         uses: actions/setup-node@v6
@@ -258,7 +260,7 @@ jobs:
           ' packaging/npm/agoraio-cli/package.json > "$tmp"
           mv "$tmp" packaging/npm/agoraio-cli/package.json
 
-      - name: Prepare npm for trusted publishing
+      - name: Prepare npm CLI
         if: steps.mode.outputs.mode == 'publish'
         shell: bash
         run: |
@@ -266,18 +268,22 @@ jobs:
           # Trusted publishing requires npm CLI 11.5.1+.
           npm install -g npm@latest
           npm --version
-          # setup-node writes an empty _authToken placeholder when registry-url is set
-          # without NODE_AUTH_TOKEN; remove it so npm uses OIDC trusted publishing.
-          if [ -n "${NPM_CONFIG_USERCONFIG:-}" ] && [ -f "$NPM_CONFIG_USERCONFIG" ]; then
-            sed -i '/^\/\/registry\.npmjs\.org\/:_authToken=/d' "$NPM_CONFIG_USERCONFIG"
-          fi
 
       - name: Publish platform packages
         shell: bash
         env:
           PUBLISH_ARGS: ${{ steps.mode.outputs.publish_args }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           set -euo pipefail
+          if [ -z "$PUBLISH_ARGS" ]; then
+            if [ -z "${NODE_AUTH_TOKEN:-}" ]; then
+              echo "::error::NPM_TOKEN is required to publish platform packages."
+              exit 1
+            fi
+            npm config set //registry.npmjs.org/:_authToken "${NODE_AUTH_TOKEN}"
+          fi
+
           for pkg in \
             packaging/npm/agoraio-cli-darwin-arm64 \
             packaging/npm/agoraio-cli-darwin-x64 \
@@ -292,14 +298,22 @@ jobs:
               continue
             fi
             echo "Publishing $pkg ${PUBLISH_ARGS}"
-            # Authenticates via npm trusted publishing (OIDC) when not in dry-run mode.
-            # --provenance is honored by publishConfig.provenance; passing here for clarity.
             if [ -n "$PUBLISH_ARGS" ]; then
               npm publish "$pkg" --access public $PUBLISH_ARGS
             else
-              npm publish "$pkg" --access public --provenance
+              npm publish "$pkg" --access public
             fi
           done
+
+      - name: Prepare npm for trusted publishing
+        if: steps.mode.outputs.mode == 'publish'
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Remove token auth so npm uses OIDC trusted publishing for the wrapper.
+          if [ -n "${NPM_CONFIG_USERCONFIG:-}" ] && [ -f "$NPM_CONFIG_USERCONFIG" ]; then
+            sed -i '/^\/\/registry\.npmjs\.org\/:_authToken=/d' "$NPM_CONFIG_USERCONFIG"
+          fi
 
       - name: Publish wrapper package
         shell: bash
@@ -354,3 +368,136 @@ jobs:
             sleep "$delay"
             delay=$((delay * 2))
           done
+
+  mirror-to-s3:
+    name: Mirror release to S3
+    needs: [goreleaser]
+    if: github.event_name == 'push' && needs.goreleaser.result == 'success'
+    runs-on: ubuntu-latest
+    env:
+      AWS_REGION: us-east-1
+      S3_BUCKET: dl-agora-io
+      S3_PREFIX: cli
+      CF_DISTRIBUTION_ID: E2U1WWAZBG33XY
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Resolve tag/version
+        id: ver
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME}"
+          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+          echo "version=${tag#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Download release artifacts
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          gh release download "${{ steps.ver.outputs.tag }}" \
+            --pattern "agora-cli_*_linux_*.tar.gz" \
+            --pattern "agora-cli_*_darwin_*.tar.gz" \
+            --pattern "agora-cli_*_windows_*.zip" \
+            --pattern "checksums.txt" \
+            --dir dist
+          # Sigstore bundle is best-effort; its absence must not block mirroring.
+          gh release download "${{ steps.ver.outputs.tag }}" \
+            --pattern "checksums.txt.sigstore.json" \
+            --dir dist || echo "::warning::checksums.txt.sigstore.json not present in release; skipping."
+          echo "Downloaded:"; ls -la dist/
+
+      - name: Verify SHA-256 checksums before upload
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ ! -f dist/checksums.txt ]; then
+            echo "::error::checksums.txt missing; refusing to mirror unverified binaries."
+            exit 1
+          fi
+          cd dist
+          while IFS= read -r line; do
+            [ -z "$line" ] && continue
+            expected="$(echo "$line" | awk '{print $1}')"
+            file="$(echo "$line" | awk '{print $2}')"
+            case "$file" in
+              agora-cli_*_linux_*.tar.gz|agora-cli_*_darwin_*.tar.gz|agora-cli_*_windows_*.zip) ;;
+              *) continue ;;
+            esac
+            [ -f "$file" ] || { echo "::error::missing $file"; exit 1; }
+            actual="$(sha256sum "$file" | awk '{print $1}')"
+            [ "$expected" = "$actual" ] || { echo "::error::checksum mismatch for $file"; exit 1; }
+            echo "  ok: $file"
+          done < checksums.txt
+          echo "All archives verified."
+
+      - name: Determine prerelease flag
+        id: pre
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          is_pre="$(gh release view "${{ steps.ver.outputs.tag }}" --json isPrerelease --jq '.isPrerelease')"
+          echo "is_prerelease=${is_pre}" >> "$GITHUB_OUTPUT"
+          echo "Prerelease: ${is_pre}"
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Upload versioned artifacts (immutable)
+        shell: bash
+        run: |
+          set -euo pipefail
+          dest="s3://${S3_BUCKET}/${S3_PREFIX}/releases/${{ steps.ver.outputs.tag }}/"
+          aws s3 cp dist/ "$dest" --recursive \
+            --exclude "*" \
+            --include "agora-cli_*_linux_*.tar.gz" \
+            --include "agora-cli_*_darwin_*.tar.gz" \
+            --include "agora-cli_*_windows_*.zip" \
+            --include "checksums.txt" \
+            --include "checksums.txt.sigstore.json" \
+            --cache-control "public, max-age=31536000, immutable"
+          echo "Uploaded versioned artifacts to $dest"
+
+      - name: Upload installer scripts (mutable)
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="s3://${S3_BUCKET}/${S3_PREFIX}"
+          aws s3 cp install.sh  "${base}/install.sh"  --cache-control "public, max-age=300" --content-type "text/x-shellscript"
+          aws s3 cp install.ps1 "${base}/install.ps1" --cache-control "public, max-age=300" --content-type "text/plain"
+          echo "Uploaded installer scripts."
+
+      - name: Update latest.json pointer (stable releases only)
+        if: steps.pre.outputs.is_prerelease == 'false'
+        shell: bash
+        run: |
+          set -euo pipefail
+          v="${{ steps.ver.outputs.version }}"
+          printf '{"tag_name":"v%s","version":"%s"}' "$v" "$v" > latest.json
+          cat latest.json; echo
+          aws s3 cp latest.json "s3://${S3_BUCKET}/${S3_PREFIX}/latest.json" \
+            --cache-control "public, max-age=300" --content-type "application/json"
+          echo "Updated latest.json -> v${v}"
+
+      - name: Invalidate CloudFront for mutable paths
+        shell: bash
+        run: |
+          set -euo pipefail
+          paths="/${S3_PREFIX}/install.sh /${S3_PREFIX}/install.ps1"
+          if [ "${{ steps.pre.outputs.is_prerelease }}" = "false" ]; then
+            paths="${paths} /${S3_PREFIX}/latest.json"
+          fi
+          # shellcheck disable=SC2086
+          aws cloudfront create-invalidation \
+            --distribution-id "${CF_DISTRIBUTION_ID}" \
+            --paths $paths
+          echo "Invalidated: ${paths}"

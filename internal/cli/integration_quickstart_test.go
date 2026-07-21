@@ -41,7 +41,6 @@ func TestCLIQuickstartListAndCreate(t *testing.T) {
 		CurrentProjectID:   &project.ProjectID,
 		CurrentProjectName: &project.Name,
 		CurrentRegion:      "global",
-		PreferredRegion:    "global",
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -77,8 +76,11 @@ func TestCLIQuickstartListAndCreate(t *testing.T) {
 	if createUnbound.exitCode != 0 || !strings.Contains(createUnbound.stdout, `"envStatus":"template-only"`) {
 		t.Fatalf("unexpected unbound quickstart create result: %+v", createUnbound)
 	}
-	if _, err := os.Stat(filepath.Join(unboundTarget, ".git")); err != nil {
-		t.Fatalf("expected cloned git repo in unbound scaffold: %v", err)
+	if !strings.Contains(createUnbound.stdout, `"written":[]`) {
+		t.Fatalf("expected unbound quickstart written field to be an empty array, got: %s", createUnbound.stdout)
+	}
+	if _, err := os.Stat(filepath.Join(unboundTarget, ".git")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("did not expect upstream .git in unbound scaffold, got %v", err)
 	}
 	if _, err := os.Stat(filepath.Join(unboundTarget, ".env.local")); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("did not expect .env.local in unbound scaffold, got %v", err)
@@ -246,7 +248,6 @@ func TestCLIQuickstartEnvWriteUsesTargetRepoBindingPrecedence(t *testing.T) {
 		CurrentProjectID:   &beta.ProjectID,
 		CurrentProjectName: &beta.Name,
 		CurrentRegion:      "global",
-		PreferredRegion:    "global",
 	}); err != nil {
 		t.Fatal(err)
 	}

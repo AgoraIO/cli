@@ -65,6 +65,46 @@ where.exe agora    # Windows PowerShell
 Reorder `PATH` so the installer's directory comes first, or remove the
 older binary.
 
+If the older binary came from a global npm install and you want to switch
+to the standalone installer, either migrate in one installer run:
+
+```bash
+curl -fsSL @@CLI_INSTALL_SH_URL@@ | sh -s -- --replace-npm
+```
+
+Or uninstall npm first and then run the standalone installer:
+
+```bash
+npm uninstall -g agoraio-cli
+curl -fsSL @@CLI_INSTALL_SH_URL@@ | sh
+```
+
+Use `--force` only when you intentionally want two installs and understand
+that the first `agora` on `PATH` wins.
+
+## Installer can't reach GitHub (blocked region or rate limit)
+
+The installer downloads from GitHub by default and automatically falls back to
+the Agora mirror at `dl.agora.io` when GitHub is unreachable or rate-limited;
+downloads stay SHA-256 verified either way. Where GitHub is **fully** blocked,
+the GitHub-hosted script URL is unreachable too, so fetch the script from the
+mirror and skip GitHub entirely:
+
+```sh
+curl -fsSL https://dl.agora.io/cli/install.sh | AGORA_INSTALL_SOURCE=s3 sh
+```
+
+PowerShell:
+
+```powershell
+$env:AGORA_INSTALL_SOURCE = 's3'; irm https://dl.agora.io/cli/install.ps1 | iex
+```
+
+`AGORA_INSTALL_SOURCE` accepts `auto` (default), `github`, or `s3`. Note that
+`--prerelease` and version listing require GitHub; pin an explicit `--version`
+to install a specific release from the mirror. See
+[Install](install.html#mirror-fallback-for-restricted-networks) for details.
+
 ## `agora init` or `agora quickstart create` fails on `git clone`
 
 The CLI shells out to `git clone` for quickstarts. Most failures map to a stable error code:
@@ -159,7 +199,7 @@ Re-run the installer once (it always fetches the latest script and archive
 names):
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/AgoraIO/cli/main/install.sh | sh
+curl -fsSL @@CLI_INSTALL_SH_URL@@ | sh
 ```
 
 npm and other package-manager installs are unaffected.

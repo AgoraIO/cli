@@ -15,7 +15,7 @@ import (
 func TestOpenTargetURLsAreWellFormed(t *testing.T) {
 	for _, target := range []string{"console", "docs", "docs-md", "product-docs"} {
 		t.Run(target, func(t *testing.T) {
-			url, err := resolveOpenTarget(target, nil)
+			url, err := resolveOpenTarget(target, regionGlobal, nil)
 			if err != nil {
 				t.Fatalf("resolveOpenTarget(%q) = error %v", target, err)
 			}
@@ -45,7 +45,7 @@ func TestOpenTargetEnvOverridesWin(t *testing.T) {
 		"product-docs": env["AGORA_PRODUCT_DOCS_URL"],
 	} {
 		t.Run(target, func(t *testing.T) {
-			got, err := resolveOpenTarget(target, env)
+			got, err := resolveOpenTarget(target, regionGlobal, env)
 			if err != nil {
 				t.Fatalf("resolveOpenTarget(%q) = error %v", target, err)
 			}
@@ -56,10 +56,28 @@ func TestOpenTargetEnvOverridesWin(t *testing.T) {
 	}
 }
 
+func TestOpenTargetCNDefaults(t *testing.T) {
+	got, err := resolveOpenTarget("console", regionCN, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != consoleURLCN {
+		t.Fatalf("cn console default = %q, want %q", got, consoleURLCN)
+	}
+
+	got, err = resolveOpenTarget("product-docs", regionCN, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != productDocsURLCN {
+		t.Fatalf("cn product docs default = %q, want %q", got, productDocsURLCN)
+	}
+}
+
 // TestOpenTargetUnknownReturnsStructuredError confirms unknown
 // targets fail with the documented message rather than fallthrough.
 func TestOpenTargetUnknownReturnsStructuredError(t *testing.T) {
-	_, err := resolveOpenTarget("nope", nil)
+	_, err := resolveOpenTarget("nope", regionGlobal, nil)
 	if err == nil {
 		t.Fatal("expected error for unknown target")
 	}
@@ -73,7 +91,7 @@ func TestOpenTargetUnknownReturnsStructuredError(t *testing.T) {
 // indistinguishable from "unset" from the user's perspective.
 func TestOpenTargetEmptyOverrideFallsBackToCompiledIn(t *testing.T) {
 	env := map[string]string{"AGORA_DOCS_URL": "   "}
-	got, err := resolveOpenTarget("docs", env)
+	got, err := resolveOpenTarget("docs", regionGlobal, env)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -111,24 +129,24 @@ func TestCLIDocsURLMatchesPagesWorkflow(t *testing.T) {
 	}
 	if !strings.Contains(string(body), "Prepare human and agent docs") ||
 		!strings.Contains(string(body), "scripts/prepare-pages-site.py") ||
-		!strings.Contains(string(body), "docs/site.env") {
+		!strings.Contains(string(body), "internal-docs/pages/site.env") {
 		t.Fatal("pages.yml does not prepare docs with the env-file driven Pages script")
 	}
 }
 
 func TestPagesSiteEnvDefaultsMatchOpenTargets(t *testing.T) {
 	repoRoot := findRepoRootForTest(t)
-	siteEnv := filepath.Join(repoRoot, "docs", "site.env")
+	siteEnv := filepath.Join(repoRoot, "internal-docs", "pages", "site.env")
 	body, err := os.ReadFile(siteEnv)
 	if err != nil {
 		t.Fatalf("could not read %s: %v", siteEnv, err)
 	}
 	content := string(body)
 	if !strings.Contains(content, "CLI_DOCS_BASE_URL="+strings.TrimSuffix(cliDocsURL, "/")) {
-		t.Fatalf("docs/site.env does not match cliDocsURL %q:\n%s", cliDocsURL, content)
+		t.Fatalf("internal-docs/pages/site.env does not match cliDocsURL %q:\n%s", cliDocsURL, content)
 	}
 	if !strings.Contains(content, "CLI_DOCS_MD_BASE_URL="+strings.TrimSuffix(cliDocsURL, "/")+"/md") {
-		t.Fatalf("docs/site.env does not match cliDocsMarkdownURL base %q:\n%s", cliDocsMarkdownURL, content)
+		t.Fatalf("internal-docs/pages/site.env does not match cliDocsMarkdownURL base %q:\n%s", cliDocsMarkdownURL, content)
 	}
 }
 

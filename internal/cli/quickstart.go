@@ -13,13 +13,20 @@ import (
 )
 
 type quickstartTemplate struct {
-	ID             string
-	Title          string
-	Description    string
-	Runtime        string
-	RepoURL        string
-	Ref            string
+	ID          string
+	Title       string
+	Description string
+	Runtime     string
+	RepoURL     string
+	Ref         string
+	// RepoURLCN / DocsURLCN are the cn-region variants. They currently
+	// mirror the global URLs because the conversational-AI quickstarts
+	// have no China-hosted mirror yet; set them to the cn URL when one
+	// exists and quickstartRepoURLForRegion / quickstartDocsURL will pick
+	// it up automatically (an empty value falls back to the global URL).
+	RepoURLCN      string
 	DocsURL        string
+	DocsURLCN      string
 	DetectPaths    []string
 	EnvExamplePath string
 	EnvTargetPath  string
@@ -38,7 +45,9 @@ func quickstartTemplates() []quickstartTemplate {
 			Description:    "Clone the official Next.js conversational AI quickstart.",
 			Runtime:        "node",
 			RepoURL:        "https://github.com/AgoraIO-Conversational-AI/agent-quickstart-nextjs",
+			RepoURLCN:      "https://github.com/AgoraIO-Conversational-AI/agent-quickstart-nextjs",
 			DocsURL:        "https://github.com/AgoraIO-Conversational-AI/agent-quickstart-nextjs",
+			DocsURLCN:      "https://github.com/AgoraIO-Conversational-AI/agent-quickstart-nextjs",
 			DetectPaths:    []string{"env.local.example", "app"},
 			EnvExamplePath: "env.local.example",
 			EnvTargetPath:  ".env.local",
@@ -54,7 +63,9 @@ func quickstartTemplates() []quickstartTemplate {
 			Description:    "Clone the official Python conversational AI quickstart.",
 			Runtime:        "python",
 			RepoURL:        "https://github.com/AgoraIO-Conversational-AI/agent-quickstart-python",
+			RepoURLCN:      "https://github.com/AgoraIO-Conversational-AI/agent-quickstart-python",
 			DocsURL:        "https://github.com/AgoraIO-Conversational-AI/agent-quickstart-python",
+			DocsURLCN:      "https://github.com/AgoraIO-Conversational-AI/agent-quickstart-python",
 			DetectPaths:    []string{"server/env.example", "server", "web-client"},
 			EnvExamplePath: "server/env.example",
 			EnvTargetPath:  "server/.env",
@@ -70,7 +81,9 @@ func quickstartTemplates() []quickstartTemplate {
 			Description:    "Clone the official Go conversational AI quickstart.",
 			Runtime:        "go",
 			RepoURL:        "https://github.com/AgoraIO-Conversational-AI/agent-quickstart-go",
+			RepoURLCN:      "https://github.com/AgoraIO-Conversational-AI/agent-quickstart-go",
 			DocsURL:        "https://github.com/AgoraIO-Conversational-AI/agent-quickstart-go",
+			DocsURLCN:      "https://github.com/AgoraIO-Conversational-AI/agent-quickstart-go",
 			DetectPaths:    []string{"server-go/env.example", "server-go", "web-client"},
 			EnvExamplePath: "server-go/env.example",
 			EnvTargetPath:  "server-go/.env",
@@ -156,10 +169,10 @@ func (a *App) buildQuickstartList() *cobra.Command {
 				items = append(items, map[string]any{
 					"available":    template.Available,
 					"description":  template.Description,
-					"docsUrl":      template.DocsURL,
+					"docsUrl":      quickstartDocsURL(template, a.authRegion()),
 					"envDocs":      template.EnvDocsSummary,
 					"id":           template.ID,
-					"repoUrl":      template.RepoURL,
+					"repoUrl":      quickstartRepoURLForRegion(template, a.authRegion()),
 					"runtime":      template.Runtime,
 					"supportsInit": template.SupportsInit,
 					"title":        template.Title,
@@ -320,8 +333,15 @@ func (a *App) quickstartCreate(template quickstartTemplate, targetDir, explicitP
 		return nil, err
 	}
 	progress.emit("clone:complete", "Quickstart repository cloned", map[string]any{"targetPath": absTarget})
+	if err := stripClonedGitMetadata(absTarget); err != nil {
+		if cleanupErr := os.RemoveAll(absTarget); cleanupErr != nil {
+			return nil, fmt.Errorf("failed to remove quickstart git metadata after clone: %v; cleanup also failed for %s: %v", err, absTarget, cleanupErr)
+		}
+		return nil, fmt.Errorf("failed to remove quickstart git metadata after clone: %v; removed %s", err, absTarget)
+	}
+	progress.emit("clone:strip-git", "Removed quickstart repository history", map[string]any{"targetPath": absTarget})
 
-	written := []string{".git"}
+	written := []string{}
 	envStatus := "template-only"
 	envPath := ""
 	if boundProject != nil {
@@ -353,7 +373,7 @@ func (a *App) quickstartCreate(template quickstartTemplate, targetDir, explicitP
 	result := map[string]any{
 		"action":       "create",
 		"cloneUrl":     repoURL,
-		"docsUrl":      template.DocsURL,
+		"docsUrl":      quickstartDocsURL(template, a.authRegion()),
 		"envPath":      envPath,
 		"envStatus":    envStatus,
 		"metadataPath": "",
@@ -434,6 +454,26 @@ func quickstartRepoOverrideKey(templateID string) string {
 	return "AGORA_QUICKSTART_" + strings.ToUpper(strings.ReplaceAll(templateID, "-", "_")) + "_REPO_URL"
 }
 
+// quickstartRepoURLForRegion returns the default quickstart repository URL
+// for the active login region, falling back to the global URL when no
+// cn-specific repository is configured.
+func quickstartRepoURLForRegion(template quickstartTemplate, region string) string {
+	if normalizeContextRegion(region) == regionCN && strings.TrimSpace(template.RepoURLCN) != "" {
+		return template.RepoURLCN
+	}
+	return template.RepoURL
+}
+
+// quickstartDocsURL returns the default quickstart documentation URL for
+// the active login region, falling back to the global URL when no
+// cn-specific docs page is configured.
+func quickstartDocsURL(template quickstartTemplate, region string) string {
+	if normalizeContextRegion(region) == regionCN && strings.TrimSpace(template.DocsURLCN) != "" {
+		return template.DocsURLCN
+	}
+	return template.DocsURL
+}
+
 // quickstartRepoURL resolves the clone URL for a template, honoring an
 // env override if present. Returns the URL, the env var name that
 // supplied the override (empty when none was used), and an error if the
@@ -449,7 +489,11 @@ func (a *App) quickstartRepoURL(template quickstartTemplate) (string, string, er
 		}
 		return override, key, nil
 	}
-	return template.RepoURL, "", nil
+	return quickstartRepoURLForRegion(template, a.authRegion()), "", nil
+}
+
+func stripClonedGitMetadata(targetDir string) error {
+	return os.RemoveAll(filepath.Join(targetDir, ".git"))
 }
 
 func cloneQuickstartRepo(repoURL, targetDir, ref string) error {

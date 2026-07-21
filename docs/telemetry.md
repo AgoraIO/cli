@@ -16,9 +16,7 @@ key pattern (case-insensitive) and replaces the value with the literal
 > **Status (current release):** the on/off contract below is fully
 > wired. The transport (Sentry SDK) is not yet linked into the binary,
 > so all telemetry calls are no-ops at runtime. The next release will
-> wire Sentry per
-> [`docs/proposals/telemetry-sentry-wireup.md`](proposals/telemetry-sentry-wireup.md);
-> the surface and field schema will not change.
+> wire Sentry; the surface and field schema will not change.
 
 ## Inspect or change the setting
 

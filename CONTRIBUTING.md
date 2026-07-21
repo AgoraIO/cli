@@ -72,7 +72,7 @@ make docs-preview                           # optional: local Jekyll site + /md 
 Documentation work:
 
 - Run `make docs-commands` after command-tree changes; CI uses `go run ./cmd/gendocs -check`.
-- For GitHub Pages content, use `make docs-preview` (see `scripts/preview-pages-site.sh`). Published docs resolve `@@CLI_DOCS_*@@` tokens via `scripts/prepare-pages-site.py` and `docs/site.env` as documented in `docs/automation.md`.
+- For GitHub Pages content, use `make docs-preview` (see `scripts/preview-pages-site.sh`). Published docs resolve `@@CLI_DOCS_*@@` and `@@CLI_INSTALL_*@@` tokens via `scripts/prepare-pages-site.py` and `internal-docs/pages/site.env` as documented in `docs/automation.md`.
 
 Install `golangci-lint` **v1.64.8** (matches CI). CI builds it with `go install` against your toolchain; locally prefer:
 
@@ -127,6 +127,22 @@ change; prefer adding a new code and deprecating the old one over a rename.
 - **Tests:** prefer integration tests in `integration_test.go` for behavior
   that is part of the public contract (JSON shape, exit code, stderr text).
   Use `app_test.go` for isolated helper logic.
+
+## CI and releases
+
+GitHub Actions are configured for:
+
+- push and pull request validation on Linux, macOS, and Windows
+- automated tag-driven releases for `v*` tags
+- cross-platform release artifacts for Linux, macOS, and Windows
+
+Release workflow behavior:
+
+- a pushed tag matching `v*` (for example `v0.2.5`) triggers the release workflow
+- the workflow runs tests, builds release binaries, packages them, and publishes a GitHub release automatically
+- release artifacts include checksums, Cosign signatures, and an SBOM
+
+See [AGENTS.md](AGENTS.md) for the full release pipeline (npm, Homebrew, apt, GitHub Pages).
 
 ## Branching model
 

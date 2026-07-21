@@ -28,6 +28,28 @@ func TestGitQuickstartCloneArgs(t *testing.T) {
 	}
 }
 
+func TestStripClonedGitMetadata(t *testing.T) {
+	repo := createLocalGitRepo(t, map[string]string{
+		"README.md": "# Quickstart\n",
+	})
+	target := filepath.Join(t.TempDir(), "quickstart")
+	if err := cloneQuickstartRepo(repo, target, ""); err != nil {
+		t.Fatalf("cloneQuickstartRepo failed: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(target, ".git")); err != nil {
+		t.Fatalf("expected cloned git repo before strip: %v", err)
+	}
+	if err := stripClonedGitMetadata(target); err != nil {
+		t.Fatalf("stripClonedGitMetadata failed: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(target, ".git")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("expected .git removed after strip, got %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(target, "README.md")); err != nil {
+		t.Fatalf("expected README to remain after strip: %v", err)
+	}
+}
+
 func TestCloneQuickstartRepoLocal(t *testing.T) {
 	repo := createLocalGitRepo(t, map[string]string{
 		"README.md": "# Quickstart\n",
@@ -129,21 +151,31 @@ func TestQuickstartRepoOverrideKey(t *testing.T) {
 }
 
 func TestQuickstartRepoURLOverride(t *testing.T) {
-	tmpl := quickstartTemplate{ID: "nextjs", RepoURL: "https://default.example/repo"}
-	app := &App{env: map[string]string{}}
+	tmpl := quickstartTemplate{
+		ID:        "nextjs",
+		RepoURL:   "https://default.example/repo",
+		RepoURLCN: "https://cn.example/repo",
+	}
+	app := &App{env: map[string]string{"XDG_CONFIG_HOME": t.TempDir()}}
 
 	url, override, err := app.quickstartRepoURL(tmpl)
 	if err != nil || override != "" || url != tmpl.RepoURL {
 		t.Fatalf("default path: url=%q override=%q err=%v", url, override, err)
 	}
 
-	app.env = map[string]string{"AGORA_QUICKSTART_NEXTJS_REPO_URL": "https://fork.example/repo"}
+	app.env = map[string]string{
+		"AGORA_QUICKSTART_NEXTJS_REPO_URL": "https://fork.example/repo",
+		"XDG_CONFIG_HOME":                  t.TempDir(),
+	}
 	url, override, err = app.quickstartRepoURL(tmpl)
 	if err != nil || override != "AGORA_QUICKSTART_NEXTJS_REPO_URL" || url != "https://fork.example/repo" {
 		t.Fatalf("override path: url=%q override=%q err=%v", url, override, err)
 	}
 
-	app.env = map[string]string{"AGORA_QUICKSTART_NEXTJS_REPO_URL": "-fexploit"}
+	app.env = map[string]string{
+		"AGORA_QUICKSTART_NEXTJS_REPO_URL": "-fexploit",
+		"XDG_CONFIG_HOME":                  t.TempDir(),
+	}
 	if _, _, err := app.quickstartRepoURL(tmpl); err == nil {
 		t.Fatal("expected error for invalid override")
 	} else {
@@ -175,5 +207,31 @@ func TestQuickstartTemplatesIncludeAndroid(t *testing.T) {
 	}
 	if !android.Available || android.SupportsInit {
 		t.Fatalf("unexpected android flags: available=%v supportsInit=%v", android.Available, android.SupportsInit)
+	}
+}
+
+func TestQuickstartRepoURLForRegion(t *testing.T) {
+	tmpl := quickstartTemplate{
+		RepoURL:   "https://global.example/repo",
+		RepoURLCN: "https://cn.example/repo",
+	}
+	if got := quickstartRepoURLForRegion(tmpl, regionGlobal); got != tmpl.RepoURL {
+		t.Fatalf("global repo url = %q, want %q", got, tmpl.RepoURL)
+	}
+	if got := quickstartRepoURLForRegion(tmpl, regionCN); got != tmpl.RepoURLCN {
+		t.Fatalf("cn repo url = %q, want %q", got, tmpl.RepoURLCN)
+	}
+}
+
+func TestQuickstartDocsURLForRegion(t *testing.T) {
+	tmpl := quickstartTemplate{
+		DocsURL:   "https://global.example/docs",
+		DocsURLCN: "https://cn.example/docs",
+	}
+	if got := quickstartDocsURL(tmpl, regionGlobal); got != tmpl.DocsURL {
+		t.Fatalf("global docs url = %q, want %q", got, tmpl.DocsURL)
+	}
+	if got := quickstartDocsURL(tmpl, regionCN); got != tmpl.DocsURLCN {
+		t.Fatalf("cn docs url = %q, want %q", got, tmpl.DocsURLCN)
 	}
 }

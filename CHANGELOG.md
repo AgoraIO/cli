@@ -15,6 +15,48 @@ Earlier entries pre-date this convention and only carry their version's compare 
 
 ## [Unreleased]
 
+### Changed
+
+- Add region-aware CLI profile support for `global` and `cn`: `agora login --region` now selects the API/OAuth endpoints, Console/docs links, quickstart URLs, doctor network checks, and project context region used by later commands.
+- **BREAKING**: `agora login` without `--region` now resets the active region to `global` (and clears the session-scoped project context and project-list cache) instead of reusing the previously selected region. Pass `--region cn` to authenticate against the cn control plane.
+- **BREAKING**: Remove `--region` from `agora init` and `agora project create`; new projects now use the active login region instead of a per-command region flag.
+- **BREAKING**: Update public JSON shapes for region-aware profiles: `auth login --json` and `auth status --json` include `data.region`, while project list/show API models no longer expose a project `region` field because the project APIs do not return it.
+- **BREAKING**: Stop persisting CLI API/OAuth integration values in `config.json`. `apiBaseUrl`, `oauthBaseUrl`, `oauthClientId`, and `oauthScope` are now derived from the selected login region or from explicit environment variable overrides (`AGORA_API_BASE_URL`, `AGORA_OAUTH_BASE_URL`, `AGORA_OAUTH_CLIENT_ID`, `AGORA_OAUTH_SCOPE`). Existing configs auto-migrate to schema version `4` and drop those legacy keys on first load; users who previously pinned custom endpoints in `config.json` should move those values to environment variables.
+- Add `PROJECT_REGION_MISMATCH` when a repo-local `.agora/project.json` binding points to a different region than the active login region.
+
+## [0.2.5] - 2026-06-05
+
+Installer migration, quickstart scaffold cleanup, and onboarding doc refresh.
+
+### Added
+
+- Add `install.sh --replace-npm` to migrate from a global npm-managed `agoraio-cli` install to the standalone installer by running `npm uninstall -g agoraio-cli` before installing the binary.
+- Emit a `clone:strip-git` progress event after removing upstream template git metadata during quickstart scaffolds.
+
+### Changed
+
+- Remove upstream `.git` metadata after quickstart scaffolds are cloned so demos start without the template repository's history.
+- Improve managed-install errors with explicit uninstall-and-reinstall guidance so users can switch to the standalone installer without relying on side-by-side PATH shadowing.
+- Update website install and troubleshooting docs with npm-to-standalone migration steps and clearer PATH shadowing guidance.
+- Restructure README quick start, command routing tables, env workflows, and documentation index.
+- Document CI and release workflow expectations in CONTRIBUTING.md.
+
+### Fixed
+
+- Bump the pinned Go toolchain to 1.26.4 so release builds include stdlib fixes for GO-2026-5037 and GO-2026-5039.
+
+## [0.2.4] - 2026-06-01
+
+npm release workflow trigger tag for the v0.2.3 Cosign bundle signing fix.
+
+### Changed
+
+- Split npm release authentication: `agoraio-cli` continues to use npm trusted publishing with provenance, while the six native platform packages publish with `NPM_TOKEN`.
+
+## [0.2.3] - 2026-06-01
+
+Release signing fix.
+
 ### Fixed
 
 - Update GoReleaser Cosign signing to emit `checksums.txt.sigstore.json` with `--bundle`, matching Cosign's current bundle-based signing flow.
@@ -93,7 +135,7 @@ Set `AGORA_ALLOW_UPGRADE_IN_CI=1` only when a CI job intentionally needs to muta
 ### Added
 
 - Add GitHub Pages publishing for generated CLI docs and route `agora open --target docs` to the human CLI docs site, `agora open --target docs-md` to the agent-facing raw Markdown docs under `/md/`, and `product-docs` to Agora product docs.
-- Add `docs/site.env` and Pages build-time URL injection so staging docs can publish with different `CLI_DOCS_BASE_URL` / `CLI_DOCS_MD_BASE_URL` values while keeping predictable human and Markdown paths.
+- Add `internal-docs/pages/site.env` and Pages build-time URL injection so staging docs can publish with different `CLI_DOCS_BASE_URL` / `CLI_DOCS_MD_BASE_URL` values while keeping predictable human and Markdown paths.
 - Add a custom GitHub Pages theme for the human docs with responsive layout, system light/dark mode via `prefers-color-scheme`, and no manual theme toggle.
 - Add `make docs-preview` for a Ruby/Jekyll local docs preview that builds with localhost-friendly paths, injects localhost docs URLs, and serves both the human site and `/md/` Markdown tree.
 - Add global `--yes` / `-y` and `AGORA_NO_INPUT=1` support to accept defaults and suppress prompts.
@@ -122,7 +164,7 @@ Set `AGORA_ALLOW_UPGRADE_IN_CI=1` only when a CI job intentionally needs to muta
 - `agora doctor` now suggests the exact shell-aware command for fixing a missing PATH entry. The `path_resolution` failure suggestion now reads `echo 'export PATH="<dir>:$PATH"' >> ~/.zshrc && source ~/.zshrc` for zsh, the equivalent for bash and `fish_add_path` for fish, the `setx PATH ...` form on Windows, and a generic `~/.profile` fallback for unknown shells. The doctor derives `<dir>` from the running binary's location, so the command is always copy-pasteable.
 - Add a curated `Requirements` and `Verifying release artifacts` section to the README, plus links to `SECURITY.md`, `SUPPORT.md`, the new troubleshooting doc, and `docs/schema/envelope.v1.json` from the Docs index.
 - Add a telemetry stub (`internal/cli/telemetry.go`) with the `telemetryClient` interface, default no-op sink, redaction helper, and `sentryClient` placeholder so the next release wires Sentry by adding the SDK + replacing one constant. The on/off contract (`agora telemetry`, `AGORA_SENTRY_ENABLED`, `DO_NOT_TRACK`) is fully wired; transport is a no-op until Sentry is connected.
-- Add the proposal documents `docs/proposals/supply-chain-hardening.md`, `docs/proposals/ci-matrix-expansion.md`, and `docs/proposals/telemetry-sentry-wireup.md` for the next release.
+- Add the proposal documents `internal-docs/proposals/supply-chain-hardening.md`, `internal-docs/proposals/ci-matrix-expansion.md`, and `internal-docs/proposals/telemetry-sentry-wireup.md` for the next release.
 
 ### Changed
 
@@ -166,7 +208,7 @@ Set `AGORA_ALLOW_UPGRADE_IN_CI=1` only when a CI job intentionally needs to muta
 - README updates land in logical sections (Install requirements, Verifying releases, Docs index, Command Model additions, Troubleshooting redirect) without disturbing the marketing-first opening.
 - `CONTRIBUTING.md` documents the branching model (`main` is releasable, topic branches off `main`), the commit-message convention, the optional DCO sign-off path, and the per-command example requirement for new commands.
 - `docs/automation.md` adds a section documenting the `agora project env` raw-stdout exception and links the new envelope JSON Schema.
-- `docs/proposals/` introduces a new directory for deferred-implementation proposals (supply-chain hardening, CI matrix expansion, Sentry wire-up). Each proposal carries a `status: proposed`, `target-release: next` front-matter so contributors can see what's planned without bisecting branches.
+- `internal-docs/proposals/` introduces a new directory for deferred-implementation proposals (supply-chain hardening, CI matrix expansion, Sentry wire-up). Each proposal carries a `status: proposed`, `target-release: next` front-matter so contributors can see what's planned without bisecting branches.
 
 ## [0.1.9] - 2026-04-30
 
@@ -272,7 +314,10 @@ Set `AGORA_ALLOW_UPGRADE_IN_CI=1` only when a CI job intentionally needs to muta
 - Support machine-readable JSON output for automation and agent workflows.
 - Ship automated release packaging through GoReleaser, including cross-platform archives, Linux packages, Homebrew, Scoop, npm wrapper packages, Docker images, and install scripts.
 
-[Unreleased]: https://github.com/AgoraIO/cli/compare/v0.2.2...HEAD
+[Unreleased]: https://github.com/AgoraIO/cli/compare/v0.2.5...HEAD
+[0.2.5]: https://github.com/AgoraIO/cli/compare/v0.2.4...v0.2.5
+[0.2.4]: https://github.com/AgoraIO/cli/compare/v0.2.3...v0.2.4
+[0.2.3]: https://github.com/AgoraIO/cli/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/AgoraIO/cli/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/AgoraIO/cli/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/AgoraIO/cli/compare/v0.1.9...v0.2.0

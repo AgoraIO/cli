@@ -34,12 +34,15 @@ permissions:
 
 jobs:
   update-apt-repo:
-    if: startsWith(github.ref_name, 'v')
+    # Only run when the GPG signing key is configured. Without APT_SIGNING_KEY /
+    # APT_SIGNING_KEY_ID (the one-time setup documented above), the signing step
+    # fails with "no valid OpenPGP data found"; skip the job cleanly instead.
+    if: startsWith(github.ref_name, 'v') && vars.APT_SIGNING_KEY_ID != ''
     runs-on: ubuntu-latest
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Install apt tools
         run: sudo apt-get install -y --no-install-recommends dpkg-dev apt-utils
