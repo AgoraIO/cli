@@ -61,16 +61,11 @@ jobs:
           # run `make docs-commands` locally and commit the result.
           go run ./cmd/gendocs -check
 
-      # Prebuilt golangci-lint binaries may be compiled with an older Go than
-      # go.mod; loading .golangci.yml then fails ("Go language version used to
-      # build golangci-lint is lower than the targeted Go version"). Using
-      # prebuilt mode avoids v9's goinstall path regression for /v2 module
-      # layout while still matching runner toolchain via setup-go.
       - name: golangci-lint
         if: runner.os == 'Linux'
         uses: golangci/golangci-lint-action@v9
         with:
-          version: v1.64.8
+          version: v2.12.2
           install-mode: binary
           args: --timeout=5m
 
