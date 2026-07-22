@@ -60,23 +60,24 @@ func skillsCatalog() []skill {
 				"cd my-voice-agent/server && pip install -r requirements.txt",
 			},
 			NextSteps: []string{
-				"Configure your model provider keys in server/.env (already created with Agora App ID + Certificate).",
+				"Configure your model provider keys in server/.env.local (already created with Agora App ID + Certificate).",
 				"Run agora project doctor --feature convoai --json before going live.",
 			},
 		},
 		{
-			ID:          "create-go-token-service",
-			Title:       "Create a Go token service",
-			Description: "Stand up a Go server that mints Agora RTC tokens, with project metadata and env wiring.",
+			ID:          "create-go-voice-agent",
+			Title:       "Create a Go voice agent (ConvoAI)",
+			Description: "Bootstrap a Go ConvoAI voice agent with project metadata and env wiring.",
 			Category:    "scaffold",
-			Tags:        []string{"go", "rtc", "token", "backend", "init"},
+			Tags:        []string{"go", "convoai", "voice", "backend", "init"},
 			Steps: []string{
 				"agora login",
-				"agora init my-go-token-service --template go --new-project --feature rtc --json",
-				"cd my-go-token-service/server-go && go run .",
+				"agora init my-go-voice-agent --template go --new-project --feature convoai --json",
+				"cd my-go-voice-agent && make setup && make dev",
 			},
 			NextSteps: []string{
-				"Curl GET /token to verify the service mints tokens against the bound project.",
+				"Configure your model provider keys in server/.env.local (already created with Agora App ID + Certificate).",
+				"Run agora project doctor --feature convoai --json before going live.",
 			},
 		},
 		{

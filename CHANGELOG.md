@@ -24,6 +24,11 @@ Earlier entries pre-date this convention and only carry their version's compare 
 - **BREAKING**: Stop persisting CLI API/OAuth integration values in `config.json`. `apiBaseUrl`, `oauthBaseUrl`, `oauthClientId`, and `oauthScope` are now derived from the selected login region or from explicit environment variable overrides (`AGORA_API_BASE_URL`, `AGORA_OAUTH_BASE_URL`, `AGORA_OAUTH_CLIENT_ID`, `AGORA_OAUTH_SCOPE`). Existing configs auto-migrate to schema version `4` and drop those legacy keys on first load; users who previously pinned custom endpoints in `config.json` should move those values to environment variables.
 - Add `PROJECT_REGION_MISMATCH` when a repo-local `.agora/project.json` binding points to a different region than the active login region.
 
+### Fixed
+
+- Align new Python and Go quickstart env writing with the upstream repositories by targeting `server/.env.local` and `AGORA_APP_ID` / `AGORA_APP_CERTIFICATE`, avoid detecting Go quickstarts as Python quickstarts, and retain compatibility with legacy quickstart env layouts.
+- Correct the Go skills and README quickstart wording from a token-service recipe to the actual Go ConvoAI voice-agent quickstart.
+
 ## [0.2.5] - 2026-06-05
 
 Installer migration, quickstart scaffold cleanup, and onboarding doc refresh.

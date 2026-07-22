@@ -23,15 +23,17 @@ func TestCLIQuickstartListAndCreate(t *testing.T) {
 	})
 	pythonRepo := createLocalGitRepo(t, map[string]string{
 		"README.md":               "# Python Quickstart\n",
-		"server/env.example":      "APP_ID=\nAPP_CERTIFICATE=\nPORT=8000\n",
+		"server/.env.example":     "AGORA_APP_ID=\nAGORA_APP_CERTIFICATE=\nPORT=8000\n",
 		"server/main.py":          "print('hello')\n",
-		"web-client/package.json": `{"name":"python-quickstart-web"}`,
+		"server/requirements.txt": "",
+		"web/package.json":        `{"name":"python-quickstart-web"}`,
 	})
 	goRepo := createLocalGitRepo(t, map[string]string{
-		"README.md":               "# Go Quickstart\n",
-		"server-go/env.example":   "APP_ID=\nAPP_CERTIFICATE=\nPORT=8080\n",
-		"server-go/main.go":       "package main\nfunc main() {}\n",
-		"web-client/package.json": `{"name":"go-quickstart-web"}`,
+		"README.md":           "# Go Quickstart\n",
+		"server/.env.example": "AGORA_APP_ID=\nAGORA_APP_CERTIFICATE=\nPORT=8080\n",
+		"server/go.mod":       "module agent-quickstart-go/server\n",
+		"server/main.go":      "package main\nfunc main() {}\n",
+		"client/package.json": `{"name":"go-quickstart-web"}`,
 	})
 
 	project := buildFakeProject("Project Alpha", "prj_123456", "app_123456", "global")
@@ -96,12 +98,12 @@ func TestCLIQuickstartListAndCreate(t *testing.T) {
 	if createBound.exitCode != 0 || !strings.Contains(createBound.stdout, `"envStatus":"configured"`) || !strings.Contains(createBound.stdout, `"projectId":"prj_123456"`) {
 		t.Fatalf("unexpected bound quickstart create result: %+v", createBound)
 	}
-	localEnv, err := os.ReadFile(filepath.Join(boundTarget, "server", ".env"))
+	localEnv, err := os.ReadFile(filepath.Join(boundTarget, "server", ".env.local"))
 	if err != nil {
-		t.Fatalf("expected .env in bound scaffold: %v", err)
+		t.Fatalf("expected .env.local in bound scaffold: %v", err)
 	}
-	if !strings.Contains(string(localEnv), "APP_ID=app_123456") || !strings.Contains(string(localEnv), "APP_CERTIFICATE=") || !strings.Contains(string(localEnv), "PORT=8000") || strings.Contains(string(localEnv), "# Project ID:") || strings.Contains(string(localEnv), "# Project Name:") || strings.Contains(string(localEnv), "BEGIN AGORA CLI QUICKSTART") {
-		t.Fatalf("unexpected .env contents: %s", string(localEnv))
+	if !strings.Contains(string(localEnv), "AGORA_APP_ID=app_123456") || !strings.Contains(string(localEnv), "AGORA_APP_CERTIFICATE=") || !strings.Contains(string(localEnv), "PORT=8000") || strings.Contains(string(localEnv), "# Project ID:") || strings.Contains(string(localEnv), "# Project Name:") || strings.Contains(string(localEnv), "BEGIN AGORA CLI QUICKSTART") {
+		t.Fatalf("unexpected .env.local contents: %s", string(localEnv))
 	}
 	metadataRaw, err := os.ReadFile(filepath.Join(boundTarget, ".agora", "project.json"))
 	if err != nil {
@@ -196,12 +198,23 @@ func TestCLIQuickstartListAndCreate(t *testing.T) {
 	if createGoBound.exitCode != 0 || !strings.Contains(createGoBound.stdout, `"envStatus":"configured"`) {
 		t.Fatalf("unexpected bound go quickstart create result: %+v", createGoBound)
 	}
-	goEnv, err := os.ReadFile(filepath.Join(goBoundTarget, "server-go", ".env"))
+	goEnv, err := os.ReadFile(filepath.Join(goBoundTarget, "server", ".env.local"))
 	if err != nil {
-		t.Fatalf("expected .env in bound go scaffold: %v", err)
+		t.Fatalf("expected .env.local in bound go scaffold: %v", err)
 	}
-	if !strings.Contains(string(goEnv), "APP_ID=app_123456") || !strings.Contains(string(goEnv), "APP_CERTIFICATE=") || !strings.Contains(string(goEnv), "PORT=8080") {
-		t.Fatalf("unexpected go .env contents: %s", string(goEnv))
+	if !strings.Contains(string(goEnv), "AGORA_APP_ID=app_123456") || !strings.Contains(string(goEnv), "AGORA_APP_CERTIFICATE=") || !strings.Contains(string(goEnv), "PORT=8080") {
+		t.Fatalf("unexpected go .env.local contents: %s", string(goEnv))
+	}
+	writeGoEnv := runCLI(t, []string{"quickstart", "env", "write", goBoundTarget, "--json"}, cliRunOptions{
+		env: map[string]string{
+			"XDG_CONFIG_HOME":    configHome,
+			"AGORA_API_BASE_URL": api.baseURL,
+			"AGORA_LOG_LEVEL":    "error",
+		},
+		workdir: rootDir,
+	})
+	if writeGoEnv.exitCode != 0 || !strings.Contains(writeGoEnv.stdout, `"template":"go"`) || strings.Contains(writeGoEnv.stdout, `"template":"python"`) {
+		t.Fatalf("unexpected go quickstart env write result: %+v", writeGoEnv)
 	}
 
 	noCertProject := buildFakeProject("No Cert", "prj_nocert", "app_nocert", "global")
@@ -284,18 +297,24 @@ func TestCLIQuickstartEnvWriteUsesTargetRepoBindingPrecedence(t *testing.T) {
 	if !strings.Contains(string(envRaw), "APP_ID=app_alpha") || !strings.Contains(string(envRaw), "PORT=8080") || strings.Contains(string(envRaw), "APP_ID=app_beta") {
 		t.Fatalf("expected target repo binding project app id in env, got %s", string(envRaw))
 	}
+	if _, err := os.Stat(filepath.Join(targetDir, "server", ".env.local")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("did not expect a current env file in a legacy scaffold, got %v", err)
+	}
 }
 
 func TestCLIQuickstartEnvWriteMissingBindingEvenWhenEnvExists(t *testing.T) {
 	configHome := t.TempDir()
 	targetDir := filepath.Join(t.TempDir(), "demo-go")
-	if err := os.MkdirAll(filepath.Join(targetDir, "server-go"), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(targetDir, "server"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(targetDir, "server-go", "env.example"), []byte("APP_ID=\nAPP_CERTIFICATE=\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(targetDir, "server", ".env.example"), []byte("AGORA_APP_ID=\nAGORA_APP_CERTIFICATE=\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(targetDir, "server-go", ".env"), []byte("APP_ID=stale\nAPP_CERTIFICATE=stale\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(targetDir, "server", "go.mod"), []byte("module agent-quickstart-go/server\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(targetDir, "server", ".env.local"), []byte("AGORA_APP_ID=stale\nAGORA_APP_CERTIFICATE=stale\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 

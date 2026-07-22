@@ -26,9 +26,7 @@ type quickstartTemplate struct {
 	RepoURLCN      string
 	DocsURL        string
 	DocsURLCN      string
-	DetectPaths    []string
-	EnvExamplePath string
-	EnvTargetPath  string
+	EnvLayouts     []quickstartEnvLayout
 	InstallCommand string
 	RunCommand     string
 	EnvDocsSummary string
@@ -36,20 +34,35 @@ type quickstartTemplate struct {
 	Available      bool
 }
 
+// quickstartEnvLayout describes one supported upstream layout for a
+// quickstart template. The first layout is the current upstream default;
+// later layouts preserve existing scaffolds created by older CLI versions.
+type quickstartEnvLayout struct {
+	DetectPaths       []string
+	EnvExamplePath    string
+	EnvTargetPath     string
+	AppIDKey          string
+	AppCertificateKey string
+}
+
 func quickstartTemplates() []quickstartTemplate {
 	return []quickstartTemplate{
 		{
-			ID:             "nextjs",
-			Title:          "Conversational AI Next.js Quickstart",
-			Description:    "Clone the official Next.js conversational AI quickstart.",
-			Runtime:        "node",
-			RepoURL:        "https://github.com/AgoraIO-Conversational-AI/agent-quickstart-nextjs",
-			RepoURLCN:      "https://github.com/AgoraIO-Conversational-AI/agent-quickstart-nextjs",
-			DocsURL:        "https://github.com/AgoraIO-Conversational-AI/agent-quickstart-nextjs",
-			DocsURLCN:      "https://github.com/AgoraIO-Conversational-AI/agent-quickstart-nextjs",
-			DetectPaths:    []string{"env.local.example", "app"},
-			EnvExamplePath: "env.local.example",
-			EnvTargetPath:  ".env.local",
+			ID:          "nextjs",
+			Title:       "Conversational AI Next.js Quickstart",
+			Description: "Clone the official Next.js conversational AI quickstart.",
+			Runtime:     "node",
+			RepoURL:     "https://github.com/AgoraIO-Conversational-AI/agent-quickstart-nextjs",
+			RepoURLCN:   "https://github.com/AgoraIO-Conversational-AI/agent-quickstart-nextjs",
+			DocsURL:     "https://github.com/AgoraIO-Conversational-AI/agent-quickstart-nextjs",
+			DocsURLCN:   "https://github.com/AgoraIO-Conversational-AI/agent-quickstart-nextjs",
+			EnvLayouts: []quickstartEnvLayout{{
+				DetectPaths:       []string{"env.local.example", "app"},
+				EnvExamplePath:    "env.local.example",
+				EnvTargetPath:     ".env.local",
+				AppIDKey:          "NEXT_PUBLIC_AGORA_APP_ID",
+				AppCertificateKey: "NEXT_AGORA_APP_CERTIFICATE",
+			}},
 			InstallCommand: "pnpm install",
 			RunCommand:     "pnpm dev",
 			EnvDocsSummary: "Writes NEXT_PUBLIC_AGORA_APP_ID for the browser and NEXT_AGORA_APP_CERTIFICATE for server-side runtime use.",
@@ -57,38 +70,64 @@ func quickstartTemplates() []quickstartTemplate {
 			Available:      true,
 		},
 		{
-			ID:             "python",
-			Title:          "Conversational AI Python Quickstart",
-			Description:    "Clone the official Python conversational AI quickstart.",
-			Runtime:        "python",
-			RepoURL:        "https://github.com/AgoraIO-Conversational-AI/agent-quickstart-python",
-			RepoURLCN:      "https://github.com/AgoraIO-Conversational-AI/agent-quickstart-python",
-			DocsURL:        "https://github.com/AgoraIO-Conversational-AI/agent-quickstart-python",
-			DocsURLCN:      "https://github.com/AgoraIO-Conversational-AI/agent-quickstart-python",
-			DetectPaths:    []string{"server/env.example", "server", "web-client"},
-			EnvExamplePath: "server/env.example",
-			EnvTargetPath:  "server/.env",
+			ID:          "python",
+			Title:       "Conversational AI Python Quickstart",
+			Description: "Clone the official Python conversational AI quickstart.",
+			Runtime:     "python",
+			RepoURL:     "https://github.com/AgoraIO-Conversational-AI/agent-quickstart-python",
+			RepoURLCN:   "https://github.com/AgoraIO-Conversational-AI/agent-quickstart-python",
+			DocsURL:     "https://github.com/AgoraIO-Conversational-AI/agent-quickstart-python",
+			DocsURLCN:   "https://github.com/AgoraIO-Conversational-AI/agent-quickstart-python",
+			EnvLayouts: []quickstartEnvLayout{
+				{
+					DetectPaths:       []string{"server/requirements.txt"},
+					EnvExamplePath:    "server/.env.example",
+					EnvTargetPath:     "server/.env.local",
+					AppIDKey:          "AGORA_APP_ID",
+					AppCertificateKey: "AGORA_APP_CERTIFICATE",
+				},
+				{
+					DetectPaths:       []string{"server/env.example"},
+					EnvExamplePath:    "server/env.example",
+					EnvTargetPath:     "server/.env",
+					AppIDKey:          "APP_ID",
+					AppCertificateKey: "APP_CERTIFICATE",
+				},
+			},
 			InstallCommand: "bun install",
 			RunCommand:     "bun run dev",
-			EnvDocsSummary: "Copies server/env.example to server/.env, then writes APP_ID and APP_CERTIFICATE.",
+			EnvDocsSummary: "Copies server/.env.example to server/.env.local, then writes AGORA_APP_ID and AGORA_APP_CERTIFICATE.",
 			SupportsInit:   true,
 			Available:      true,
 		},
 		{
-			ID:             "go",
-			Title:          "Conversational AI Go Quickstart",
-			Description:    "Clone the official Go conversational AI quickstart.",
-			Runtime:        "go",
-			RepoURL:        "https://github.com/AgoraIO-Conversational-AI/agent-quickstart-go",
-			RepoURLCN:      "https://github.com/AgoraIO-Conversational-AI/agent-quickstart-go",
-			DocsURL:        "https://github.com/AgoraIO-Conversational-AI/agent-quickstart-go",
-			DocsURLCN:      "https://github.com/AgoraIO-Conversational-AI/agent-quickstart-go",
-			DetectPaths:    []string{"server-go/env.example", "server-go", "web-client"},
-			EnvExamplePath: "server-go/env.example",
-			EnvTargetPath:  "server-go/.env",
+			ID:          "go",
+			Title:       "Conversational AI Go Quickstart",
+			Description: "Clone the official Go conversational AI quickstart.",
+			Runtime:     "go",
+			RepoURL:     "https://github.com/AgoraIO-Conversational-AI/agent-quickstart-go",
+			RepoURLCN:   "https://github.com/AgoraIO-Conversational-AI/agent-quickstart-go",
+			DocsURL:     "https://github.com/AgoraIO-Conversational-AI/agent-quickstart-go",
+			DocsURLCN:   "https://github.com/AgoraIO-Conversational-AI/agent-quickstart-go",
+			EnvLayouts: []quickstartEnvLayout{
+				{
+					DetectPaths:       []string{"server/go.mod"},
+					EnvExamplePath:    "server/.env.example",
+					EnvTargetPath:     "server/.env.local",
+					AppIDKey:          "AGORA_APP_ID",
+					AppCertificateKey: "AGORA_APP_CERTIFICATE",
+				},
+				{
+					DetectPaths:       []string{"server-go/env.example"},
+					EnvExamplePath:    "server-go/env.example",
+					EnvTargetPath:     "server-go/.env",
+					AppIDKey:          "APP_ID",
+					AppCertificateKey: "APP_CERTIFICATE",
+				},
+			},
 			InstallCommand: "make setup",
 			RunCommand:     "make dev",
-			EnvDocsSummary: "Copies server-go/env.example to server-go/.env, then writes APP_ID and APP_CERTIFICATE.",
+			EnvDocsSummary: "Copies server/.env.example to server/.env.local, then writes AGORA_APP_ID and AGORA_APP_CERTIFICATE.",
 			SupportsInit:   true,
 			Available:      true,
 		},
@@ -250,7 +289,7 @@ The CLI can infer the quickstart type from the repository layout, or you can for
 		Long: `Write the runtime-specific env file expected by a cloned quickstart repository.
 
 Next.js quickstarts receive NEXT_PUBLIC_* client env vars plus server-only Agora credentials.
-Python and Go quickstarts receive backend APP_ID and APP_CERTIFICATE values.`,
+Python and Go quickstarts receive backend AGORA_APP_ID and AGORA_APP_CERTIFICATE values.`,
 		Example: example(`
   agora quickstart env write
   agora quickstart env write apps/my-nextjs-demo
@@ -325,7 +364,11 @@ func (a *App) quickstartCreate(template quickstartTemplate, targetDir, explicitP
 	envStatus := "template-only"
 	envPath := ""
 	if boundProject != nil {
-		writtenPath, _, err := seedQuickstartEnv(absTarget, template, boundProject.project)
+		layout, ok := template.defaultEnvLayout()
+		if !ok {
+			return nil, &cliError{Message: fmt.Sprintf("Quickstart template %q does not define an env target yet.", template.ID), Code: "QUICKSTART_TEMPLATE_ENV_UNSUPPORTED"}
+		}
+		writtenPath, _, err := seedQuickstartEnv(absTarget, template, layout, boundProject.project)
 		if err != nil {
 			if cleanupErr := os.RemoveAll(absTarget); cleanupErr != nil {
 				return nil, fmt.Errorf("failed to configure quickstart env after clone: %v; cleanup also failed for %s: %v", err, absTarget, cleanupErr)
@@ -389,7 +432,7 @@ func (a *App) quickstartEnvWrite(targetDir, templateID, explicitProject string) 
 		return nil, fmt.Errorf("%s is not a directory.", absTarget)
 	}
 
-	template, err := resolveQuickstartTemplateForPath(absTarget, templateID)
+	template, layout, err := resolveQuickstartEnvWriteTarget(absTarget, templateID)
 	if err != nil {
 		return nil, err
 	}
@@ -401,7 +444,7 @@ func (a *App) quickstartEnvWrite(targetDir, templateID, explicitProject string) 
 		return nil, errNoProjectSelected
 	}
 
-	envPath, status, err := seedQuickstartEnv(absTarget, template, target.project)
+	envPath, status, err := seedQuickstartEnv(absTarget, template, layout, target.project)
 	if err != nil {
 		return nil, err
 	}
@@ -593,8 +636,8 @@ func resolveQuickstartTemplateForPath(root, explicitTemplate string) (quickstart
 	var hints []string
 	var ids []string
 	for _, t := range quickstartTemplates() {
-		if len(t.DetectPaths) > 0 {
-			hints = append(hints, fmt.Sprintf("%s (%s)", t.ID, t.DetectPaths[0]))
+		if layout, ok := t.defaultEnvLayout(); ok && len(layout.DetectPaths) > 0 {
+			hints = append(hints, fmt.Sprintf("%s (%s)", t.ID, layout.DetectPaths[0]))
 		}
 		ids = append(ids, t.ID)
 	}
@@ -606,26 +649,94 @@ func resolveQuickstartTemplateForPath(root, explicitTemplate string) (quickstart
 }
 
 func matchesQuickstartTemplate(root string, template quickstartTemplate) bool {
-	if len(template.DetectPaths) == 0 {
-		return false
-	}
-	for _, rel := range template.DetectPaths {
-		if _, err := os.Stat(filepath.Join(root, filepath.FromSlash(rel))); err == nil {
-			return true
-		}
-	}
-	return false
+	_, ok := quickstartEnvLayoutForPath(root, template)
+	return ok
 }
 
-func seedQuickstartEnv(root string, template quickstartTemplate, project projectDetail) (string, string, error) {
-	if template.EnvTargetPath == "" {
+func (template quickstartTemplate) defaultEnvLayout() (quickstartEnvLayout, bool) {
+	if len(template.EnvLayouts) == 0 {
+		return quickstartEnvLayout{}, false
+	}
+	return template.EnvLayouts[0], true
+}
+
+func quickstartEnvLayoutForPath(root string, template quickstartTemplate) (quickstartEnvLayout, bool) {
+	for _, layout := range template.EnvLayouts {
+		if matchesQuickstartEnvLayout(root, layout) {
+			return layout, true
+		}
+	}
+	return quickstartEnvLayout{}, false
+}
+
+func matchesQuickstartEnvLayout(root string, layout quickstartEnvLayout) bool {
+	if len(layout.DetectPaths) == 0 {
+		return false
+	}
+	for _, rel := range layout.DetectPaths {
+		if _, err := os.Stat(filepath.Join(root, filepath.FromSlash(rel))); err == nil {
+			continue
+		}
+		return false
+	}
+	return true
+}
+
+func quickstartEnvLayoutForEnvPath(template quickstartTemplate, envPath string) (quickstartEnvLayout, bool) {
+	wanted := filepath.ToSlash(filepath.Clean(envPath))
+	for _, layout := range template.EnvLayouts {
+		if filepath.ToSlash(filepath.Clean(layout.EnvTargetPath)) == wanted {
+			return layout, true
+		}
+	}
+	return quickstartEnvLayout{}, false
+}
+
+func resolveQuickstartEnvWriteTarget(root, explicitTemplate string) (quickstartTemplate, quickstartEnvLayout, error) {
+	binding, foundBinding, bindingRoot, err := detectLocalProjectBindingFrom(root)
+	if err != nil {
+		return quickstartTemplate{}, quickstartEnvLayout{}, err
+	}
+
+	var template quickstartTemplate
+	if strings.TrimSpace(explicitTemplate) == "" && foundBinding && bindingRoot == root && strings.TrimSpace(binding.Template) != "" {
+		found, ok := findQuickstartTemplate(binding.Template)
+		if !ok {
+			return quickstartTemplate{}, quickstartEnvLayout{}, &cliError{Message: fmt.Sprintf("unknown quickstart template %q. Run `agora quickstart list` to see available templates.", binding.Template), Code: "QUICKSTART_TEMPLATE_UNKNOWN"}
+		}
+		template = *found
+	} else {
+		resolved, resolveErr := resolveQuickstartTemplateForPath(root, explicitTemplate)
+		if resolveErr != nil {
+			return quickstartTemplate{}, quickstartEnvLayout{}, resolveErr
+		}
+		template = resolved
+	}
+
+	if foundBinding && bindingRoot == root && strings.TrimSpace(binding.EnvPath) != "" {
+		if layout, ok := quickstartEnvLayoutForEnvPath(template, binding.EnvPath); ok {
+			return template, layout, nil
+		}
+	}
+	if layout, ok := quickstartEnvLayoutForPath(root, template); ok {
+		return template, layout, nil
+	}
+	layout, ok := template.defaultEnvLayout()
+	if !ok {
+		return quickstartTemplate{}, quickstartEnvLayout{}, &cliError{Message: fmt.Sprintf("Quickstart template %q does not define an env target yet.", template.ID), Code: "QUICKSTART_TEMPLATE_ENV_UNSUPPORTED"}
+	}
+	return template, layout, nil
+}
+
+func seedQuickstartEnv(root string, template quickstartTemplate, layout quickstartEnvLayout, project projectDetail) (string, string, error) {
+	if layout.EnvTargetPath == "" {
 		return "", "", &cliError{Message: fmt.Sprintf("Quickstart template %q does not define an env target yet.", template.ID), Code: "QUICKSTART_TEMPLATE_ENV_UNSUPPORTED"}
 	}
 	if project.SignKey == nil || *project.SignKey == "" {
 		return "", "", &cliError{Message: fmt.Sprintf("project %q does not have an app certificate. Enable one in Agora Console or use a different project with `agora project use`.", project.Name), Code: "PROJECT_NO_CERTIFICATE"}
 	}
 
-	targetPath := filepath.Join(root, filepath.FromSlash(template.EnvTargetPath))
+	targetPath := filepath.Join(root, filepath.FromSlash(layout.EnvTargetPath))
 
 	existingContent := ""
 	status := "created"
@@ -634,8 +745,8 @@ func seedQuickstartEnv(root string, template quickstartTemplate, project project
 		status = ""
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return "", "", err
-	} else if template.EnvExamplePath != "" {
-		examplePath := filepath.Join(root, filepath.FromSlash(template.EnvExamplePath))
+	} else if layout.EnvExamplePath != "" {
+		examplePath := filepath.Join(root, filepath.FromSlash(layout.EnvExamplePath))
 		if raw, err := os.ReadFile(examplePath); err == nil {
 			existingContent = string(raw)
 		} else if !errors.Is(err, os.ErrNotExist) {
@@ -643,8 +754,8 @@ func seedQuickstartEnv(root string, template quickstartTemplate, project project
 		}
 	}
 
-	values := renderQuickstartEnvValues(template, project)
-	content, mergeStatus := mergeEnvAssignments(existingContent, values, [][2]string{{"# BEGIN AGORA CLI QUICKSTART", "# END AGORA CLI QUICKSTART"}}, conflictingQuickstartEnvKeys(template.ID))
+	values := renderQuickstartEnvValues(layout, project)
+	content, mergeStatus := mergeEnvAssignments(existingContent, values, [][2]string{{"# BEGIN AGORA CLI QUICKSTART", "# END AGORA CLI QUICKSTART"}}, conflictingQuickstartEnvKeys(layout))
 	if status == "" {
 		status = mergeStatus
 	}
@@ -654,33 +765,30 @@ func seedQuickstartEnv(root string, template quickstartTemplate, project project
 	if err := os.WriteFile(targetPath, []byte(content), 0o644); err != nil {
 		return "", "", err
 	}
-	return filepath.ToSlash(template.EnvTargetPath), status, nil
+	return filepath.ToSlash(layout.EnvTargetPath), status, nil
 }
 
-func conflictingQuickstartEnvKeys(templateID string) []string {
-	switch templateID {
-	case "nextjs":
-		return []string{"AGORA_APP_ID", "AGORA_APP_CERTIFICATE", "APP_ID", "APP_CERTIFICATE"}
-	case "python", "go":
-		return []string{"AGORA_APP_ID", "AGORA_APP_CERTIFICATE", "NEXT_PUBLIC_AGORA_APP_ID", "NEXT_AGORA_APP_CERTIFICATE"}
-	default:
-		return nil
+func conflictingQuickstartEnvKeys(layout quickstartEnvLayout) []string {
+	allCredentialKeys := []string{
+		"NEXT_PUBLIC_AGORA_APP_ID",
+		"NEXT_AGORA_APP_CERTIFICATE",
+		"AGORA_APP_ID",
+		"AGORA_APP_CERTIFICATE",
+		"APP_ID",
+		"APP_CERTIFICATE",
 	}
+	conflicts := make([]string, 0, len(allCredentialKeys)-2)
+	for _, key := range allCredentialKeys {
+		if key != layout.AppIDKey && key != layout.AppCertificateKey {
+			conflicts = append(conflicts, key)
+		}
+	}
+	return conflicts
 }
 
-func renderQuickstartEnvValues(template quickstartTemplate, project projectDetail) map[string]any {
-	switch template.ID {
-	case "nextjs":
-		return map[string]any{
-			"NEXT_PUBLIC_AGORA_APP_ID":   project.AppID,
-			"NEXT_AGORA_APP_CERTIFICATE": *project.SignKey,
-		}
-	case "python", "go":
-		return map[string]any{
-			"APP_ID":          project.AppID,
-			"APP_CERTIFICATE": *project.SignKey,
-		}
-	default:
-		return map[string]any{}
+func renderQuickstartEnvValues(layout quickstartEnvLayout, project projectDetail) map[string]any {
+	return map[string]any{
+		layout.AppIDKey:          project.AppID,
+		layout.AppCertificateKey: *project.SignKey,
 	}
 }
