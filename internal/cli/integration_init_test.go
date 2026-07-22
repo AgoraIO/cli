@@ -80,3 +80,37 @@ func TestCLIInitRequiresTemplateWhenNoInputIsSet(t *testing.T) {
 		t.Fatalf("expected QUICKSTART_TEMPLATE_REQUIRED, got %+v", result)
 	}
 }
+
+func TestCLIInitCreatesAndroidQuickstart(t *testing.T) {
+	configHome := t.TempDir()
+	rootDir := t.TempDir()
+	api := newFakeCLIBFF()
+	defer api.server.Close()
+	persistSessionForIntegration(t, configHome)
+	androidRepo := createLocalGitRepo(t, map[string]string{
+		"settings.gradle.kts":              "rootProject.name = \"android-quickstart\"\n",
+		"gradlew":                          "#!/bin/sh\n",
+		"app/src/main/AndroidManifest.xml": "<manifest />\n",
+	})
+	targetDir := filepath.Join(rootDir, "android-demo")
+
+	result := runCLI(t, []string{"init", "android-demo", "--template", "android", "--new-project", "--dir", targetDir, "--json"}, cliRunOptions{
+		env: map[string]string{
+			"XDG_CONFIG_HOME":                   configHome,
+			"AGORA_API_BASE_URL":                api.baseURL,
+			"AGORA_LOG_LEVEL":                   "error",
+			"AGORA_QUICKSTART_ANDROID_REPO_URL": androidRepo,
+		},
+		workdir: rootDir,
+	})
+	if result.exitCode != 0 || !strings.Contains(result.stdout, `"template":"android"`) || !strings.Contains(result.stdout, `"envPath":"local.properties"`) {
+		t.Fatalf("unexpected android init result: %+v", result)
+	}
+	localProperties, err := os.ReadFile(filepath.Join(targetDir, "local.properties"))
+	if err != nil {
+		t.Fatalf("expected Android local.properties: %v", err)
+	}
+	if !strings.Contains(string(localProperties), "AGORA_APP_ID=app_0001") || !strings.Contains(string(localProperties), "AGORA_APP_CERTIFICATE=4854d28b48a9439c9f2546e2216fc07a") {
+		t.Fatalf("unexpected Android local.properties: %s", string(localProperties))
+	}
+}

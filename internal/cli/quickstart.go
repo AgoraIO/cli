@@ -18,6 +18,7 @@ type quickstartTemplate struct {
 	Description string
 	Runtime     string
 	RepoURL     string
+	Ref         string
 	// RepoURLCN / DocsURLCN are the cn-region variants. They currently
 	// mirror the global URLs because the conversational-AI quickstarts
 	// have no China-hosted mirror yet; set them to the cn URL when one
@@ -89,6 +90,24 @@ func quickstartTemplates() []quickstartTemplate {
 			InstallCommand: "make setup",
 			RunCommand:     "make dev",
 			EnvDocsSummary: "Copies server-go/env.example to server-go/.env, then writes APP_ID and APP_CERTIFICATE.",
+			SupportsInit:   true,
+			Available:      true,
+		},
+		{
+			ID:             "android",
+			Title:          "Conversational AI Android Quickstart",
+			Description:    "Clone the official Android conversational AI quickstart.",
+			Runtime:        "android",
+			RepoURL:        "https://github.com/AgoraIO-Conversational-AI/agent-quickstart-android",
+			Ref:            "main",
+			RepoURLCN:      "https://github.com/AgoraIO-Conversational-AI/agent-quickstart-android",
+			DocsURL:        "https://github.com/AgoraIO-Conversational-AI/agent-quickstart-android",
+			DocsURLCN:      "https://github.com/AgoraIO-Conversational-AI/agent-quickstart-android",
+			DetectPaths:    []string{"settings.gradle.kts", "gradlew", "app/src/main/AndroidManifest.xml"},
+			EnvTargetPath:  "local.properties",
+			InstallCommand: "./gradlew :app:assembleDebug",
+			RunCommand:     "Open in Android Studio or run ./gradlew :app:installDebug",
+			EnvDocsSummary: "Writes AGORA_APP_ID and AGORA_APP_CERTIFICATE to local.properties.",
 			SupportsInit:   true,
 			Available:      true,
 		},
@@ -305,11 +324,15 @@ func (a *App) quickstartCreate(template quickstartTemplate, targetDir, explicitP
 	if err != nil {
 		return nil, err
 	}
+	effectiveRef := strings.TrimSpace(ref)
+	if effectiveRef == "" {
+		effectiveRef = strings.TrimSpace(template.Ref)
+	}
 	if overrideKey != "" {
 		progress.emit("clone:override", fmt.Sprintf("Using repo override from %s", overrideKey), map[string]any{"repoUrl": repoURL, "envVar": overrideKey})
 	}
-	progress.emit("clone:start", "Cloning quickstart repository", map[string]any{"repoUrl": repoURL, "targetPath": absTarget, "ref": ref})
-	if err := cloneQuickstartRepo(repoURL, absTarget, ref); err != nil {
+	progress.emit("clone:start", "Cloning quickstart repository", map[string]any{"repoUrl": repoURL, "targetPath": absTarget, "ref": effectiveRef})
+	if err := cloneQuickstartRepo(repoURL, absTarget, effectiveRef); err != nil {
 		return nil, err
 	}
 	progress.emit("clone:complete", "Quickstart repository cloned", map[string]any{"targetPath": absTarget})
@@ -366,7 +389,7 @@ func (a *App) quickstartCreate(template quickstartTemplate, targetDir, explicitP
 		"title":        template.Title,
 		"written":      written,
 		"nextSteps":    initNextSteps(template, absTarget),
-		"ref":          ref,
+		"ref":          effectiveRef,
 	}
 	if boundProject != nil {
 		result["projectId"] = boundProject.project.ProjectID
@@ -663,6 +686,8 @@ func conflictingQuickstartEnvKeys(templateID string) []string {
 		return []string{"AGORA_APP_ID", "AGORA_APP_CERTIFICATE", "APP_ID", "APP_CERTIFICATE"}
 	case "python", "go":
 		return []string{"AGORA_APP_ID", "AGORA_APP_CERTIFICATE", "NEXT_PUBLIC_AGORA_APP_ID", "NEXT_AGORA_APP_CERTIFICATE"}
+	case "android":
+		return []string{"APP_ID", "APP_CERTIFICATE", "NEXT_PUBLIC_AGORA_APP_ID", "NEXT_AGORA_APP_CERTIFICATE"}
 	default:
 		return nil
 	}
@@ -679,6 +704,11 @@ func renderQuickstartEnvValues(template quickstartTemplate, project projectDetai
 		return map[string]any{
 			"APP_ID":          project.AppID,
 			"APP_CERTIFICATE": *project.SignKey,
+		}
+	case "android":
+		return map[string]any{
+			"AGORA_APP_ID":          project.AppID,
+			"AGORA_APP_CERTIFICATE": *project.SignKey,
 		}
 	default:
 		return map[string]any{}

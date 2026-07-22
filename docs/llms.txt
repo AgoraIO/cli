@@ -40,7 +40,7 @@ Check project health: agora project doctor --json
 - **Project Management**: Initialize, configure, and validate Agora projects
 - **JSON Output**: All commands support --json for automation and scripting (see Automation Notes below for one documented exception)
 - **Stable Exit Codes**: Consistent error codes for CI/CD integration
-- **Template System**: Quick-start templates for Next.js, Python, and Go (see `agora init --help` for the current catalog). Quickstart clones drop upstream `.git` metadata so scaffolds start as clean local repos.
+- **Template System**: Quick-start templates for Next.js, Python, Go, and Android (see `agora init --help` for the current catalog). Quickstart clones drop upstream `.git` metadata so scaffolds start as clean local repos.
 - **Cross-Platform**: macOS, Linux, Windows support
 - **Agentic discovery**: `agora introspect --json` and `agora --help --all --json` emit the same machine-readable command tree
 - **MCP server**: `agora mcp serve` exposes the CLI as Model Context Protocol tools for agents

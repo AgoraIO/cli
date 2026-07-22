@@ -57,6 +57,7 @@ Use --feature to specify which features to enable on a newly created project (re
   agora init my-nextjs-demo --template nextjs
   agora init my-python-demo --template python
   agora init my-go-demo --template go --project my-existing-project
+  agora init my-android-demo --template android
   agora init my-rtm-demo --template nextjs --new-project --rtm-data-center AP
   agora init my-rtm-demo --template nextjs --new-project --feature rtc --feature rtm
 `),
@@ -328,6 +329,10 @@ func (a *App) resolveInitProject(ctx projectContext, item projectSummary) (proje
 }
 
 func (a *App) initProject(name, targetDir string, template quickstartTemplate, existingProject string, features []string, rtmDataCenter string, newProject bool, promptForReuse bool, promptOut io.Writer, promptIn io.Reader, progress progressEmitter) (map[string]any, error) {
+	if !template.Available || !template.SupportsInit {
+		return nil, &cliError{Message: fmt.Sprintf("Quickstart template %q is not supported by `agora init`. Use `agora quickstart create` instead.", template.ID), Code: "QUICKSTART_TEMPLATE_UNAVAILABLE"}
+	}
+
 	var target projectTarget
 	projectAction := "existing"
 	projectSelectionReason := "explicit_project"

@@ -52,11 +52,14 @@ func TestCLIQuickstartListAndCreate(t *testing.T) {
 	if list.exitCode != 0 || !strings.Contains(list.stdout, `"id":"nextjs"`) || !strings.Contains(list.stdout, `"id":"python"`) || !strings.Contains(list.stdout, `"id":"go"`) {
 		t.Fatalf("unexpected quickstart list result: %+v", list)
 	}
+	if !strings.Contains(list.stdout, `"id":"android"`) {
+		t.Fatalf("expected android quickstart in list result: %+v", list)
+	}
 	listAll := runCLI(t, []string{"quickstart", "list", "--show-all", "--json"}, cliRunOptions{env: map[string]string{
 		"XDG_CONFIG_HOME": configHome,
 		"AGORA_LOG_LEVEL": "error",
 	}})
-	if listAll.exitCode != 0 || !strings.Contains(listAll.stdout, `"id":"go"`) {
+	if listAll.exitCode != 0 || !strings.Contains(listAll.stdout, `"id":"go"`) || !strings.Contains(listAll.stdout, `"id":"android"`) {
 		t.Fatalf("unexpected quickstart list --show-all result: %+v", listAll)
 	}
 
@@ -308,5 +311,49 @@ func TestCLIQuickstartEnvWriteMissingBindingEvenWhenEnvExists(t *testing.T) {
 	})
 	if result.exitCode != 1 || !strings.Contains(result.stdout, `"ok":false`) || !strings.Contains(result.stdout, ".agora/project.json") || !strings.Contains(result.stdout, "--project") || !strings.Contains(result.stdout, "agora project use") {
 		t.Fatalf("unexpected missing binding result: %+v", result)
+	}
+}
+
+func TestCLIAndroidQuickstartEnvWrite(t *testing.T) {
+	configHome := t.TempDir()
+	rootDir := t.TempDir()
+	api := newFakeCLIBFF()
+	defer api.server.Close()
+	project := buildFakeProject("Android Project", "prj_android", "app_android", "global")
+	project.FeatureState.RTMEnabled = true
+	project.FeatureState.ConvoAIEnabled = true
+	api.projects[project.ProjectID] = &project
+	persistSessionForIntegration(t, configHome)
+
+	if err := os.WriteFile(filepath.Join(rootDir, "settings.gradle.kts"), []byte("rootProject.name = \"android-quickstart\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(rootDir, "gradlew"), []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(rootDir, "app", "src", "main"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(rootDir, "app", "src", "main", "AndroidManifest.xml"), []byte("<manifest />\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	result := runCLI(t, []string{"quickstart", "env", "write", rootDir, "--template", "android", "--project", project.ProjectID, "--json"}, cliRunOptions{
+		env: map[string]string{
+			"XDG_CONFIG_HOME":    configHome,
+			"AGORA_API_BASE_URL": api.baseURL,
+			"AGORA_LOG_LEVEL":    "error",
+		},
+		workdir: t.TempDir(),
+	})
+	if result.exitCode != 0 || !strings.Contains(result.stdout, `"template":"android"`) || !strings.Contains(result.stdout, `"envPath":"local.properties"`) {
+		t.Fatalf("unexpected Android env write result: %+v", result)
+	}
+	localProperties, err := os.ReadFile(filepath.Join(rootDir, "local.properties"))
+	if err != nil {
+		t.Fatalf("expected Android local.properties: %v", err)
+	}
+	if !strings.Contains(string(localProperties), "AGORA_APP_ID=app_android") || !strings.Contains(string(localProperties), "AGORA_APP_CERTIFICATE=4854d28b48a9439c9f2546e2216fc07a") {
+		t.Fatalf("unexpected Android local.properties: %s", string(localProperties))
 	}
 }

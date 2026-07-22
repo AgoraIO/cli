@@ -7,6 +7,20 @@
 
 Native Agora CLI for authentication, project management, quickstart setup, and developer onboarding. Use it to go from an Agora account to a runnable app with one command.
 
+```bash
+agora login
+agora init my-nextjs-demo --template nextjs
+```
+
+## What You Can Build Quickly
+
+| Goal | Command | What You Get |
+|------|---------|--------------|
+| Next.js video app | `agora init my-nextjs-demo --template nextjs` | A cloned Next.js quickstart, project binding, and `.env.local` |
+| Python voice agent | `agora init my-python-demo --template python` | A Python quickstart with Agora credentials written for the backend |
+| Go token service | `agora init my-go-demo --template go` | A Go server quickstart with project metadata and env wiring |
+| Android conversational AI app | `agora init my-android-demo --template android` | An Android quickstart with project metadata and credentials in `local.properties` |
+
 ## Install
 
 ### Requirements

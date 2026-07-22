@@ -324,7 +324,7 @@ func createLocalGitRepo(t *testing.T, files map[string]string) string {
 			t.Fatal(err)
 		}
 	}
-	init := exec.Command("git", "init")
+	init := exec.Command("git", "init", "--initial-branch=main")
 	init.Dir = repoDir
 	if output, err := init.CombinedOutput(); err != nil {
 		t.Fatalf("git init failed: %v output=%s", err, string(output))
