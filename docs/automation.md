@@ -682,6 +682,7 @@ Env write behavior:
 - quickstart env files contain only the App ID and App Certificate variable names required by the template
 - Next.js uses `NEXT_PUBLIC_AGORA_APP_ID` and `NEXT_AGORA_APP_CERTIFICATE`
 - Python and Go use `AGORA_APP_ID` and `AGORA_APP_CERTIFICATE`
+- existing Python and Go quickstarts retain their recorded env path and legacy `APP_ID` / `APP_CERTIFICATE` keys when reconfigured
 - project metadata such as project ID, project name, region, template, projectType, and env path is stored in `.agora/project.json`
 - existing quickstart env files are preserved; missing credential keys are appended and existing credential keys are updated
 - stale Agora credential aliases for another runtime are commented out to avoid ambiguous dotenv resolution; for example, a Next.js quickstart prefers `NEXT_PUBLIC_AGORA_APP_ID` and comments out old `AGORA_APP_ID` / `APP_ID` entries when replacing them

@@ -5,8 +5,158 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 )
+
+func TestResolveQuickstartEnvWriteTargetSupportsCurrentAndLegacyLayouts(t *testing.T) {
+	tests := []struct {
+		name               string
+		files              map[string]string
+		wantTemplate       string
+		wantEnvPath        string
+		wantAppIDKey       string
+		wantCertificateKey string
+	}{
+		{
+			name: "current python",
+			files: map[string]string{
+				"server/requirements.txt": "",
+				"web/package.json":        "{}",
+			},
+			wantTemplate:       "python",
+			wantEnvPath:        "server/.env.local",
+			wantAppIDKey:       "AGORA_APP_ID",
+			wantCertificateKey: "AGORA_APP_CERTIFICATE",
+		},
+		{
+			name: "legacy python",
+			files: map[string]string{
+				"server/env.example":      "APP_ID=\nAPP_CERTIFICATE=\n",
+				"web-client/package.json": "{}",
+			},
+			wantTemplate:       "python",
+			wantEnvPath:        "server/.env",
+			wantAppIDKey:       "APP_ID",
+			wantCertificateKey: "APP_CERTIFICATE",
+		},
+		{
+			name: "current go",
+			files: map[string]string{
+				"server/go.mod":       "module example/server",
+				"client/package.json": "{}",
+			},
+			wantTemplate:       "go",
+			wantEnvPath:        "server/.env.local",
+			wantAppIDKey:       "AGORA_APP_ID",
+			wantCertificateKey: "AGORA_APP_CERTIFICATE",
+		},
+		{
+			name: "legacy go is not python",
+			files: map[string]string{
+				"server-go/env.example":   "APP_ID=\nAPP_CERTIFICATE=\n",
+				"web-client/package.json": "{}",
+			},
+			wantTemplate:       "go",
+			wantEnvPath:        "server-go/.env",
+			wantAppIDKey:       "APP_ID",
+			wantCertificateKey: "APP_CERTIFICATE",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			root := t.TempDir()
+			for path, content := range tt.files {
+				filePath := filepath.Join(root, filepath.FromSlash(path))
+				if err := os.MkdirAll(filepath.Dir(filePath), 0o755); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(filePath, []byte(content), 0o644); err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			template, layout, err := resolveQuickstartEnvWriteTarget(root, "")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if template.ID != tt.wantTemplate || layout.EnvTargetPath != tt.wantEnvPath || layout.AppIDKey != tt.wantAppIDKey || layout.AppCertificateKey != tt.wantCertificateKey {
+				t.Fatalf("resolved template=%q layout=%+v, want template=%q envPath=%q appIDKey=%q certificateKey=%q", template.ID, layout, tt.wantTemplate, tt.wantEnvPath, tt.wantAppIDKey, tt.wantCertificateKey)
+			}
+		})
+	}
+}
+
+func TestResolveQuickstartEnvWriteTargetPreservesBoundLegacyLayout(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, "server"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "server", "go.mod"), []byte("module example/server\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := writeLocalProjectBinding(root, localProjectBinding{Template: "go", EnvPath: "server-go/.env"}); err != nil {
+		t.Fatal(err)
+	}
+
+	template, layout, err := resolveQuickstartEnvWriteTarget(root, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if template.ID != "go" || layout.EnvTargetPath != "server-go/.env" || layout.AppIDKey != "APP_ID" {
+		t.Fatalf("expected bound legacy go layout, got template=%q layout=%+v", template.ID, layout)
+	}
+}
+
+func TestSeedQuickstartEnvPreservesLegacyCredentialNames(t *testing.T) {
+	template, ok := findQuickstartTemplate("go")
+	if !ok {
+		t.Fatal("go template not found")
+	}
+	layout, ok := quickstartEnvLayoutForEnvPath(*template, "server-go/.env")
+	if !ok {
+		t.Fatal("legacy go layout not found")
+	}
+	certificate := "cert_123"
+	project := projectDetail{AppID: "app_123", SignKey: &certificate}
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, "server-go"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "server-go", "env.example"), []byte("APP_ID=\nAPP_CERTIFICATE=\nPORT=8080\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	envPath, _, err := seedQuickstartEnv(root, *template, layout, project)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if envPath != "server-go/.env" {
+		t.Fatalf("env path = %q, want server-go/.env", envPath)
+	}
+	raw, err := os.ReadFile(filepath.Join(root, "server-go", ".env"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	content := string(raw)
+	if !strings.Contains(content, "APP_ID=app_123") || !strings.Contains(content, "APP_CERTIFICATE=cert_123") || strings.Contains(content, "AGORA_APP_ID=") || !strings.Contains(content, "PORT=8080") {
+		t.Fatalf("unexpected legacy env contents: %s", content)
+	}
+}
+
+func TestGoVoiceAgentSkillUsesQuickstartWorkflow(t *testing.T) {
+	for _, skill := range skillsCatalog() {
+		if skill.ID != "create-go-voice-agent" {
+			continue
+		}
+		if len(skill.Steps) != 3 || skill.Steps[2] != "cd my-go-voice-agent && make setup && make dev" {
+			t.Fatalf("unexpected Go voice agent steps: %#v", skill.Steps)
+		}
+		return
+	}
+	t.Fatal("Go voice agent skill not found")
+}
 
 func TestGitQuickstartCloneArgs(t *testing.T) {
 	args := gitQuickstartCloneArgs("https://github.com/AgoraIO/example", "/tmp/example", "")

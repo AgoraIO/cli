@@ -252,7 +252,7 @@ func TestCLIProjectDoctorDeepDetectsWorkspaceDrift(t *testing.T) {
 	}
 
 	repoRoot := t.TempDir()
-	if err := os.MkdirAll(filepath.Join(repoRoot, "server"), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(repoRoot, "server-go"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	if err := writeLocalProjectBinding(repoRoot, localProjectBinding{
@@ -268,12 +268,12 @@ func TestCLIProjectDoctorDeepDetectsWorkspaceDrift(t *testing.T) {
 		"# BEGIN AGORA CLI QUICKSTART",
 		"# Project ID: prj_other",
 		"# Project Name: Project Other",
-		"AGORA_APP_ID=app_other",
-		"AGORA_APP_CERTIFICATE=other",
+		"APP_ID=app_other",
+		"APP_CERTIFICATE=other",
 		"# END AGORA CLI QUICKSTART",
 		"",
 	}, "\n")
-	if err := os.WriteFile(filepath.Join(repoRoot, "server", ".env.local"), []byte(mismatched), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(repoRoot, "server-go", ".env"), []byte(mismatched), 0o644); err != nil {
 		t.Fatal(err)
 	}
 

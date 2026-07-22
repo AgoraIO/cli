@@ -263,13 +263,10 @@ func TestCLIQuickstartEnvWriteUsesTargetRepoBindingPrecedence(t *testing.T) {
 	}
 
 	targetDir := filepath.Join(rootDir, "demo-go")
-	if err := os.MkdirAll(filepath.Join(targetDir, "server"), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(targetDir, "server-go"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(targetDir, "server", ".env.example"), []byte("AGORA_APP_ID=\nAGORA_APP_CERTIFICATE=\nPORT=8080\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(targetDir, "server", "go.mod"), []byte("module agent-quickstart-go/server\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(targetDir, "server-go", "env.example"), []byte("APP_ID=\nAPP_CERTIFICATE=\nPORT=8080\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if err := writeLocalProjectBinding(targetDir, localProjectBinding{
@@ -277,7 +274,7 @@ func TestCLIQuickstartEnvWriteUsesTargetRepoBindingPrecedence(t *testing.T) {
 		ProjectName: alpha.Name,
 		Region:      "global",
 		Template:    "go",
-		EnvPath:     "server/.env.local",
+		EnvPath:     "server-go/.env",
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -293,12 +290,15 @@ func TestCLIQuickstartEnvWriteUsesTargetRepoBindingPrecedence(t *testing.T) {
 	if result.exitCode != 0 || !strings.Contains(result.stdout, `"projectId":"prj_alpha"`) {
 		t.Fatalf("expected repo-local project binding precedence, got %+v", result)
 	}
-	envRaw, err := os.ReadFile(filepath.Join(targetDir, "server", ".env.local"))
+	envRaw, err := os.ReadFile(filepath.Join(targetDir, "server-go", ".env"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(envRaw), "AGORA_APP_ID=app_alpha") || !strings.Contains(string(envRaw), "PORT=8080") || strings.Contains(string(envRaw), "AGORA_APP_ID=app_beta") {
+	if !strings.Contains(string(envRaw), "APP_ID=app_alpha") || !strings.Contains(string(envRaw), "PORT=8080") || strings.Contains(string(envRaw), "APP_ID=app_beta") {
 		t.Fatalf("expected target repo binding project app id in env, got %s", string(envRaw))
+	}
+	if _, err := os.Stat(filepath.Join(targetDir, "server", ".env.local")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("did not expect a current env file in a legacy scaffold, got %v", err)
 	}
 }
 

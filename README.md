@@ -214,6 +214,7 @@ Quickstart template behavior:
 - Next.js quickstarts write `.env.local` with `NEXT_PUBLIC_AGORA_APP_ID` plus `NEXT_AGORA_APP_CERTIFICATE`
 - Python quickstarts copy `server/.env.example` to `server/.env.local`, then use `AGORA_APP_ID` plus `AGORA_APP_CERTIFICATE`
 - Go quickstarts copy `server/.env.example` to `server/.env.local`, then use `AGORA_APP_ID` plus `AGORA_APP_CERTIFICATE`
+- Existing Python and Go quickstarts keep their recorded env path and legacy `APP_ID` / `APP_CERTIFICATE` keys when reconfigured.
 
 `project env write` auto-detects Next.js workspaces (or accepts `--template nextjs|standard`) and writes `AGORA_APP_ID` / `AGORA_APP_CERTIFICATE` or the Next.js equivalents. Use `quickstart env write` when you want the CLI to choose the official quickstart's env path.
 

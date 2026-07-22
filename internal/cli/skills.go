@@ -73,7 +73,7 @@ func skillsCatalog() []skill {
 			Steps: []string{
 				"agora login",
 				"agora init my-go-voice-agent --template go --new-project --feature convoai --json",
-				"cd my-go-voice-agent/server && go run .",
+				"cd my-go-voice-agent && make setup && make dev",
 			},
 			NextSteps: []string{
 				"Configure your model provider keys in server/.env.local (already created with Agora App ID + Certificate).",

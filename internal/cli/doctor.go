@@ -46,17 +46,6 @@ func summarizeCategoryStatus(items []doctorCheckItem) string {
 	return "skipped"
 }
 
-func quickstartAppIDKey(templateID string) string {
-	switch templateID {
-	case "nextjs":
-		return "NEXT_PUBLIC_AGORA_APP_ID"
-	case "python", "go":
-		return "AGORA_APP_ID"
-	default:
-		return ""
-	}
-}
-
 func lookupDotenvValue(content, key string) (string, bool) {
 	for _, line := range strings.Split(content, "\n") {
 		trimmed := strings.TrimSpace(line)
@@ -196,8 +185,21 @@ func buildWorkspaceDoctorDetails(target projectTarget) (doctorCheckCategory, map
 
 	template, found := findQuickstartTemplate(templateID)
 	envRel := strings.TrimSpace(binding.EnvPath)
+	layout := quickstartEnvLayout{}
 	if found {
-		envRel = template.EnvTargetPath
+		if envRel != "" {
+			layout, _ = quickstartEnvLayoutForEnvPath(*template, envRel)
+		}
+		if layout.EnvTargetPath == "" {
+			if detected, ok := quickstartEnvLayoutForPath(root, *template); ok {
+				layout = detected
+			} else if fallback, ok := template.defaultEnvLayout(); ok {
+				layout = fallback
+			}
+		}
+		if envRel == "" {
+			envRel = layout.EnvTargetPath
+		}
 	}
 	if envRel == "" {
 		items = append(items, doctorCheckItem{Name: "workspace_env_path", Message: "Could not determine quickstart env target path", Status: "warn"})
@@ -270,7 +272,7 @@ func buildWorkspaceDoctorDetails(target projectTarget) (doctorCheckCategory, map
 		warnings = append(warnings, doctorIssue{Code: "WORKSPACE_ENV_METADATA_MISSING", Message: "Quickstart env file is missing Agora-managed project metadata comments"})
 	}
 
-	appIDKey := quickstartAppIDKey(templateID)
+	appIDKey := layout.AppIDKey
 	if appIDKey != "" {
 		if envAppID, ok := lookupDotenvValue(envContent, appIDKey); !ok {
 			items = append(items, doctorCheckItem{
