@@ -172,17 +172,17 @@ make lint            # gofmt + golangci-lint + error-code audit
 golangci-lint run    # standalone (config: .golangci.yml)
 ```
 
-CI uses `golangci-lint v1.64.8`, installed via `go install` so the linter is built with the same Go version as `go.mod`. Install locally to match:
+CI uses `golangci-lint v2.12.2` through the v9 action. Install locally to match:
 
 ```bash
-go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.64.8
+go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.12.2
 ```
 
 Alternatively, download the release binary (must be built with a Go version ≥ `go.mod`; if config load fails, prefer `go install` above):
 
 ```bash
-curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh \
-  | sh -s -- -b "$(go env GOPATH)/bin" v1.64.8
+curl -sSfL https://golangci-lint.run/install.sh \
+  | sh -s -- -b "$(go env GOPATH)/bin" v2.12.2
 ```
 
 The ruleset is intentionally conservative (errcheck, govet, staticcheck, ineffassign, unused, gosec, bodyclose, errorlint, misspell, unconvert). When a finding is a false positive, prefer narrowing the rule via `.golangci.yml` `exclude-rules` over adding inline `//nolint` directives.
