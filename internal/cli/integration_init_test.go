@@ -88,8 +88,8 @@ func TestCLIInitCreatesAndroidQuickstart(t *testing.T) {
 	defer api.server.Close()
 	persistSessionForIntegration(t, configHome)
 	androidRepo := createLocalGitRepo(t, map[string]string{
-		"settings.gradle.kts":                  "rootProject.name = \"android-quickstart\"\n",
-		"gradlew":                              "#!/bin/sh\n",
+		"settings.gradle.kts":              "rootProject.name = \"android-quickstart\"\n",
+		"gradlew":                          "#!/bin/sh\n",
 		"app/src/main/AndroidManifest.xml": "<manifest />\n",
 	})
 	targetDir := filepath.Join(rootDir, "android-demo")
