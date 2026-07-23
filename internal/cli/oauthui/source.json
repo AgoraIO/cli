@@ -1,0 +1,14 @@
+{
+  "repository": "AgoraIO/agora-cli-login-redirect",
+  "commit": "7ad4e1d1a44767c6bce02a4eb77a48223c0d66f4",
+  "artifact": "oauth-success.html",
+  "sha256": "bd47c3d7f687767d0f8b7172706d7b9e06b78d5a1472ca6f57cafc8cc8d4e61a",
+  "artifacts": {
+    "oauth-success.html": {
+      "sha256": "bd47c3d7f687767d0f8b7172706d7b9e06b78d5a1472ca6f57cafc8cc8d4e61a"
+    },
+    "oauth-success-cn.html": {
+      "sha256": "3f9a22263a44780b1845945fdacc825c419f938311cbbaa82b3b99deb5c47fcb"
+    }
+  }
+}

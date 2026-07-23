@@ -33,7 +33,7 @@ func agoraEnvCatalog() []agoraEnvVar {
 		// Interaction
 		{Name: "AGORA_NO_INPUT", Category: "interaction", Description: "When set, accept default for confirmation prompts (alias of --yes). Never starts a new interactive OAuth flow in JSON/CI/non-TTY contexts.", Default: "0", Effect: "0 | 1 | true | yes | y"},
 		{Name: "AGORA_BROWSER_AUTO_OPEN", Category: "interaction", Description: "When 0, never auto-open a browser for OAuth login (forces --no-browser semantics).", Default: "1", Effect: "0 | 1"},
-		{Name: "AGORA_LOGIN_TIMEOUT_MS", Category: "interaction", Description: "How long to wait for the OAuth callback before giving up.", Default: "300000", Effect: "milliseconds"},
+		{Name: "AGORA_LOGIN_TIMEOUT_MS", Category: "interaction", Description: "How long to wait for the OAuth callback before giving up.", Default: "120000", Effect: "milliseconds"},
 		{Name: "AGORA_ALLOW_UPGRADE_IN_CI", Category: "interaction", Description: "When 1, allow installer-managed `agora upgrade` to mutate the binary in CI environments.", Default: "0", Effect: "0 | 1 | true | yes | y"},
 		// Storage / paths
 		{Name: "AGORA_HOME", Category: "storage", Description: "Override the directory the CLI uses for config, session, context, cache, and logs.", Effect: "absolute path"},

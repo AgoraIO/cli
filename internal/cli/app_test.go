@@ -328,7 +328,7 @@ func TestEnsureAppConfigStateMigratesPreviousDefaults(t *testing.T) {
 }
 
 func TestWaitForOAuthCallbackAdvertisesLocalhost(t *testing.T) {
-	server, err := waitForOAuthCallback("expected-state", 2_000_000_000)
+	server, err := waitForOAuthCallback("expected-state", 2*time.Second)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -336,11 +336,11 @@ func TestWaitForOAuthCallbackAdvertisesLocalhost(t *testing.T) {
 	if !strings.Contains(server.RedirectURI, "http://localhost:") {
 		t.Fatalf("expected localhost redirect URI, got %s", server.RedirectURI)
 	}
-	resp, err := http.Get(server.RedirectURI + "?code=test-code&state=expected-state")
-	if err != nil {
-		t.Fatal(err)
-	}
-	resp.Body.Close()
+	response := make(chan callbackHTTPResult, 1)
+	go func() {
+		resp, requestErr := http.Get(server.RedirectURI + "?code=test-code&state=expected-state")
+		response <- callbackHTTPResult{response: resp, err: requestErr}
+	}()
 	payload, err := server.Wait()
 	if err != nil {
 		t.Fatal(err)
@@ -348,6 +348,26 @@ func TestWaitForOAuthCallbackAdvertisesLocalhost(t *testing.T) {
 	if payload.Code != "test-code" {
 		t.Fatalf("unexpected code: %s", payload.Code)
 	}
+	if err := server.CompleteSuccess(oauthSuccessPageData{AuthenticatedAt: "2026-07-22 14:30 UTC", ExpiresAt: "2026-07-22 16:30 UTC", CLIVersion: "dev"}); err != nil {
+		t.Fatal(err)
+	}
+	result := <-response
+	if result.err != nil {
+		t.Fatal(result.err)
+	}
+	resp := result.response
+	for header, want := range map[string]string{
+		"Cache-Control":           "no-store",
+		"Content-Security-Policy": "default-src 'none'",
+		"Content-Type":            "text/html; charset=utf-8",
+		"Referrer-Policy":         "no-referrer",
+		"X-Content-Type-Options":  "nosniff",
+	} {
+		if got := resp.Header.Get(header); !strings.Contains(got, want) {
+			t.Fatalf("expected %s header to contain %q, got %q", header, want, got)
+		}
+	}
+	resp.Body.Close()
 }
 
 func TestExchangeTokenLogsSanitizedInvalidShape(t *testing.T) {
@@ -743,6 +763,11 @@ func TestWaitForOAuthCallbackMismatchAndTimeout(t *testing.T) {
 	}
 }
 
+type callbackHTTPResult struct {
+	response *http.Response
+	err      error
+}
+
 func TestWaitForOAuthCallbackAcceptsIPv4WhenRedirectUsesLocalhost(t *testing.T) {
 	server, err := waitForOAuthCallback("expected-state", time.Second)
 	if err != nil {
@@ -759,17 +784,99 @@ func TestWaitForOAuthCallbackAcceptsIPv4WhenRedirectUsesLocalhost(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	resp, err := http.Get("http://127.0.0.1:" + parsed.Port() + "/oauth/callback?code=test-code&state=expected-state")
-	if err != nil {
-		t.Fatal(err)
-	}
-	resp.Body.Close()
+	response := make(chan callbackHTTPResult, 1)
+	go func() {
+		resp, requestErr := http.Get("http://127.0.0.1:" + parsed.Port() + "/oauth/callback?code=test-code&state=expected-state")
+		response <- callbackHTTPResult{response: resp, err: requestErr}
+	}()
 	payload, err := server.Wait()
 	if err != nil {
 		t.Fatal(err)
 	}
 	if payload.Code != "test-code" || payload.State != "expected-state" {
 		t.Fatalf("unexpected callback payload: %+v", payload)
+	}
+	select {
+	case result := <-response:
+		if result.response != nil {
+			result.response.Body.Close()
+		}
+		t.Fatal("success response was written before authentication completed")
+	case <-time.After(25 * time.Millisecond):
+	}
+	if err := server.CompleteSuccess(oauthSuccessPageData{AuthenticatedAt: "2026-07-22 14:30 UTC", ExpiresAt: "2026-07-22 16:30 UTC", CLIVersion: "dev"}); err != nil {
+		t.Fatal(err)
+	}
+	result := <-response
+	if result.err != nil {
+		t.Fatal(result.err)
+	}
+	defer result.response.Body.Close()
+	if result.response.StatusCode != http.StatusOK {
+		t.Fatalf("expected success status, got %d", result.response.StatusCode)
+	}
+	for name, want := range map[string]string{
+		"Cache-Control":           "no-store",
+		"Referrer-Policy":         "no-referrer",
+		"X-Content-Type-Options":  "nosniff",
+		"Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; img-src data:; font-src data:; script-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
+	} {
+		if got := result.response.Header.Get(name); got != want {
+			t.Fatalf("expected %s=%q, got %q", name, want, got)
+		}
+	}
+	body, err := io.ReadAll(result.response.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, forbidden := range []string{"test-code", "expected-state", "access-token", "refresh-token"} {
+		if strings.Contains(string(body), forbidden) {
+			t.Fatalf("callback response leaked %q", forbidden)
+		}
+	}
+}
+
+func TestOAuthCallbackFailureAndDuplicateDoNotBlock(t *testing.T) {
+	server, err := waitForOAuthCallback("expected-state", time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer server.Close()
+	first := make(chan callbackHTTPResult, 1)
+	go func() {
+		resp, requestErr := http.Get(server.RedirectURI + "?code=first-code&state=expected-state")
+		first <- callbackHTTPResult{response: resp, err: requestErr}
+	}()
+	if _, err := server.Wait(); err != nil {
+		t.Fatal(err)
+	}
+
+	duplicate, err := http.Get(server.RedirectURI + "?code=second-code&state=expected-state")
+	if err != nil {
+		t.Fatal(err)
+	}
+	duplicate.Body.Close()
+	if duplicate.StatusCode != http.StatusConflict {
+		t.Fatalf("expected duplicate callback conflict, got %d", duplicate.StatusCode)
+	}
+
+	if err := server.Complete(errors.New("token exchange failed")); err != nil {
+		t.Fatal(err)
+	}
+	result := <-first
+	if result.err != nil {
+		t.Fatal(result.err)
+	}
+	defer result.response.Body.Close()
+	if result.response.StatusCode != http.StatusInternalServerError {
+		t.Fatalf("expected failure status, got %d", result.response.StatusCode)
+	}
+	body, err := io.ReadAll(result.response.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(body), "token exchange failed") || strings.Contains(string(body), "Authentication successful") {
+		t.Fatal("failure response exposed internal error details or success UI")
 	}
 }
 
