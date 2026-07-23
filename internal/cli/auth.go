@@ -18,6 +18,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -81,16 +82,23 @@ func (a *App) login(noBrowser bool, region string, progress progressEmitter) (ma
 	if err != nil {
 		return nil, err
 	}
+	completeWithError := func(authErr error) (map[string]any, error) {
+		_ = callback.Complete(authErr)
+		return nil, authErr
+	}
 	progress.emit("oauth:received", "Authorization code received; exchanging for token", nil)
 	token, err := a.exchangeAuthorizationCode(config.TokenURL, config.ClientID, payload.Code, pair.CodeVerifier, callback.RedirectURI)
 	if err != nil {
-		return nil, err
+		return completeWithError(err)
 	}
 	if err := saveSession(a.env, token); err != nil {
-		return nil, err
+		return completeWithError(err)
+	}
+	if err := a.resetSessionRuntimeState(loginRegion); err != nil {
+		return completeWithError(err)
 	}
 	progress.emit("oauth:complete", "Session stored", nil)
-	if err := a.resetSessionRuntimeState(loginRegion); err != nil {
+	if err := callback.CompleteSuccess(oauthSuccessDataForSession(token)); err != nil {
 		return nil, err
 	}
 	return map[string]any{"action": "login", "expiresAt": token.ExpiresAt, "region": loginRegion, "scope": token.Scope, "status": "authenticated"}, nil
@@ -272,12 +280,22 @@ func browserOpenCommand(goos, target string) (string, []string) {
 	}
 }
 
+type callbackResult struct {
+	Err      error
+	PageData oauthSuccessPageData
+}
+
 type callbackServer struct {
-	RedirectURI string
-	wait        chan callbackPayload
-	errs        chan error
-	server      *http.Server
-	listeners   []net.Listener
+	RedirectURI     string
+	wait            chan callbackPayload
+	errs            chan error
+	results         chan callbackResult
+	responseWritten chan error
+	server          *http.Server
+	listeners       []net.Listener
+	deadline        time.Time
+	callbackOnce    sync.Once
+	completeOnce    sync.Once
 }
 
 type callbackPayload struct {
@@ -292,6 +310,8 @@ func waitForOAuthCallback(expectedState string, timeout time.Duration) (*callbac
 func waitForOAuthCallbackWithPage(expectedState string, timeout time.Duration, page callbackPageConfig) (*callbackServer, error) {
 	wait := make(chan callbackPayload, 1)
 	errs := make(chan error, 1)
+	results := make(chan callbackResult, 1)
+	responseWritten := make(chan error, 1)
 	mux := http.NewServeMux()
 	srv := &http.Server{
 		Handler: mux,
@@ -309,11 +329,14 @@ func waitForOAuthCallbackWithPage(expectedState string, timeout time.Duration, p
 		listeners = append(listeners, ln6)
 	}
 	cs := &callbackServer{
-		RedirectURI: fmt.Sprintf("http://localhost:%d/oauth/callback", port),
-		wait:        wait,
-		errs:        errs,
-		server:      srv,
-		listeners:   listeners,
+		RedirectURI:     fmt.Sprintf("http://localhost:%d/oauth/callback", port),
+		wait:            wait,
+		errs:            errs,
+		results:         results,
+		responseWritten: responseWritten,
+		server:          srv,
+		listeners:       listeners,
+		deadline:        time.Now().Add(timeout),
 	}
 	mux.HandleFunc("/oauth/callback", func(w http.ResponseWriter, r *http.Request) {
 		code := r.URL.Query().Get("code")
@@ -323,23 +346,55 @@ func waitForOAuthCallbackWithPage(expectedState string, timeout time.Duration, p
 		w.Header().Set("Cache-Control", "no-store")
 		w.Header().Set("Referrer-Policy", "no-referrer")
 		w.Header().Set("X-Content-Type-Options", "nosniff")
-		w.Header().Set("Content-Security-Policy", "default-src 'none'; img-src https://cdn.prod.website-files.com; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'")
+		w.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; img-src data:; font-src data:; script-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'")
 		switch {
 		case oauthErr != "":
 			w.WriteHeader(http.StatusBadRequest)
 			_, _ = io.WriteString(w, renderOAuthCallbackErrorPage(page, "Agora CLI login failed", "Return to the terminal for details."))
-			errs <- fmt.Errorf("OAuth authorization failed: %s", oauthErr)
+			cs.reportError(fmt.Errorf("OAuth authorization failed: %s", oauthErr))
 		case code == "" || state == "":
 			w.WriteHeader(http.StatusBadRequest)
 			_, _ = io.WriteString(w, renderOAuthCallbackErrorPage(page, "Missing callback fields", "The OAuth callback did not include the required code and state fields."))
+			cs.reportError(errors.New("OAuth callback did not include the required code and state fields."))
 		case state != expectedState:
 			w.WriteHeader(http.StatusBadRequest)
 			_, _ = io.WriteString(w, renderOAuthCallbackErrorPage(page, "Login state mismatch", "Return to the terminal and restart login to protect this session."))
-			errs <- errors.New("OAuth state mismatch.")
+			cs.reportError(errors.New("OAuth state mismatch."))
 		default:
-			w.WriteHeader(http.StatusOK)
-			_, _ = io.WriteString(w, renderOAuthCallbackSuccessPage(page))
-			wait <- callbackPayload{Code: code, State: state}
+			accepted := false
+			cs.callbackOnce.Do(func() {
+				accepted = true
+				wait <- callbackPayload{Code: code, State: state}
+			})
+			if !accepted {
+				w.WriteHeader(http.StatusConflict)
+				_, _ = io.WriteString(w, renderOAuthCallbackErrorPage(page, "Login callback already received", "Return to the terminal for details."))
+				return
+			}
+
+			remaining := time.Until(cs.deadline)
+			if remaining <= 0 {
+				w.WriteHeader(http.StatusGatewayTimeout)
+				_, _ = io.WriteString(w, renderOAuthCallbackErrorPage(page, "Login timed out", "Return to the terminal and restart login."))
+				cs.responseWritten <- errors.New("OAuth callback timed out before authentication completed.")
+				return
+			}
+			select {
+			case result := <-results:
+				var writeErr error
+				if result.Err != nil {
+					w.WriteHeader(http.StatusInternalServerError)
+					_, writeErr = io.WriteString(w, renderOAuthCallbackErrorPage(page, "Agora CLI login failed", "Return to the terminal for details."))
+				} else {
+					w.WriteHeader(http.StatusOK)
+					_, writeErr = io.WriteString(w, renderOAuthCallbackSuccessPage(page, result.PageData))
+				}
+				cs.responseWritten <- writeErr
+			case <-time.After(remaining):
+				w.WriteHeader(http.StatusGatewayTimeout)
+				_, _ = io.WriteString(w, renderOAuthCallbackErrorPage(page, "Login timed out", "Return to the terminal and restart login."))
+				cs.responseWritten <- errors.New("OAuth callback timed out before authentication completed.")
+			}
 		}
 	})
 	for _, listener := range listeners {
@@ -349,7 +404,7 @@ func waitForOAuthCallbackWithPage(expectedState string, timeout time.Duration, p
 	}
 	go func() {
 		<-time.After(timeout)
-		errs <- errors.New("Timed out waiting for the OAuth callback. Re-run with --no-browser to copy the URL manually, or check that your browser completed the login flow.")
+		cs.reportError(errors.New("Timed out waiting for the OAuth callback. Re-run with --no-browser to copy the URL manually, or check that your browser completed the login flow."))
 	}()
 	return cs, nil
 }
@@ -360,6 +415,52 @@ func (c *callbackServer) Wait() (callbackPayload, error) {
 		return payload, nil
 	case err := <-c.errs:
 		return callbackPayload{}, err
+	}
+}
+
+func (c *callbackServer) reportError(err error) {
+	select {
+	case c.errs <- err:
+	default:
+	}
+}
+
+// Complete releases the pending browser request only after the login flow has
+// exchanged the authorization code, stored the session, and reset runtime state.
+func (c *callbackServer) Complete(err error) error {
+	return c.complete(callbackResult{Err: err})
+}
+
+// CompleteSuccess releases the browser only after the session has been stored,
+// and supplies the non-sensitive runtime values rendered into the success page.
+func (c *callbackServer) CompleteSuccess(data oauthSuccessPageData) error {
+	return c.complete(callbackResult{PageData: data})
+}
+
+func (c *callbackServer) complete(result callbackResult) error {
+	completed := false
+	c.completeOnce.Do(func() {
+		completed = true
+		c.results <- result
+	})
+	if !completed {
+		return errors.New("OAuth callback was already completed.")
+	}
+
+	select {
+	case writeErr := <-c.responseWritten:
+		return writeErr
+	default:
+	}
+	remaining := time.Until(c.deadline)
+	if remaining <= 0 {
+		return errors.New("Timed out writing the OAuth callback response.")
+	}
+	select {
+	case writeErr := <-c.responseWritten:
+		return writeErr
+	case <-time.After(remaining):
+		return errors.New("Timed out writing the OAuth callback response.")
 	}
 }
 

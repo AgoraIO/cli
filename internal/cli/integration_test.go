@@ -355,6 +355,8 @@ type fakeOAuthServer struct {
 	authorizeRedirectURIs []string
 	authorizeRawQueries   []string
 	tokenRequests         []string
+	tokenStatus           int
+	tokenBody             string
 }
 
 func newFakeOAuthServer() *fakeOAuthServer {
@@ -376,6 +378,11 @@ func newFakeOAuthServer() *fakeOAuthServer {
 			_ = r.Body.Close()
 			oauth.tokenRequests = append(oauth.tokenRequests, string(body))
 			w.Header().Set("content-type", "application/json")
+			if oauth.tokenStatus != 0 {
+				w.WriteHeader(oauth.tokenStatus)
+				_, _ = io.WriteString(w, oauth.tokenBody)
+				return
+			}
 			values := string(body)
 			if strings.Contains(values, "grant_type=authorization_code") {
 				_, _ = io.WriteString(w, `{"access_token":"access-token-value","token_type":"Bearer","expires_in":7199,"refresh_token":"refresh-token-value","scope":"basic_info,console"}`)

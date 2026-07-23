@@ -1,14 +1,31 @@
 package cli
 
 import (
+	"bytes"
 	"html"
+	"html/template"
 	"strings"
+	"time"
 )
 
 // callbackPageConfig carries the login region used to brand the browser callback page.
 type callbackPageConfig struct {
 	Region string
 }
+
+// oauthSuccessPageData contains the small, non-sensitive runtime snapshot
+// rendered after the token is stored. It must never contain credentials,
+// authorization codes, OAuth state, or local file contents.
+type oauthSuccessPageData struct {
+	AuthenticatedAt string
+	ExpiresAt       string
+	CLIVersion      string
+}
+
+var (
+	oauthSuccessPageGlobalTemplate = template.Must(template.New("oauth-success-global").Parse(oauthSuccessPageHTML))
+	oauthSuccessPageCNTemplate     = template.Must(template.New("oauth-success-cn").Parse(oauthSuccessPageCNHTML))
+)
 
 // loginPageContent contains the region-specific copy rendered on the OAuth callback page.
 type loginPageContent struct {
@@ -22,9 +39,36 @@ type loginPageContent struct {
 }
 
 // renderOAuthCallbackSuccessPage renders the browser page shown after a successful OAuth callback.
-func renderOAuthCallbackSuccessPage(config callbackPageConfig) string {
-	content := loginPageContentForRegion(config.Region)
-	return renderOAuthCallbackPage(content, false, "", "")
+func renderOAuthCallbackSuccessPage(config callbackPageConfig, data oauthSuccessPageData) string {
+	pageTemplate := oauthSuccessPageGlobalTemplate
+	if normalizeContextRegion(config.Region) == regionCN {
+		pageTemplate = oauthSuccessPageCNTemplate
+	}
+	var rendered bytes.Buffer
+	if err := pageTemplate.Execute(&rendered, data); err != nil {
+		return ""
+	}
+	return rendered.String()
+}
+
+func oauthSuccessDataForSession(token session) oauthSuccessPageData {
+	cliVersion := strings.TrimSpace(version)
+	if cliVersion == "" {
+		cliVersion = "dev"
+	}
+	return oauthSuccessPageData{
+		AuthenticatedAt: formatOAuthPageTimestamp(token.ObtainedAt),
+		ExpiresAt:       formatOAuthPageTimestamp(token.ExpiresAt),
+		CLIVersion:      cliVersion,
+	}
+}
+
+func formatOAuthPageTimestamp(value string) string {
+	parsed, err := time.Parse(time.RFC3339, strings.TrimSpace(value))
+	if err != nil {
+		return "—"
+	}
+	return parsed.UTC().Format("2006-01-02 15:04 UTC")
 }
 
 // renderOAuthCallbackErrorPage renders a branded browser page for OAuth callback errors.
@@ -148,7 +192,7 @@ func brandLogoHTML(pageClass string) string {
 		return `<span class="brand-logo brand-logo-cn" aria-hidden="true"><svg viewBox="0 0 52 27" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M24.326 3.90545V1.16386H13.9235V-0.480469L13.6627 -0.44245C12.7048 -0.304103 11.7427 0.232389 11.2115 1.16491H0.375V3.90545H10.7922V5.73248H1.81972V8.47302H22.896V5.73248H13.9235V3.90545H24.326Z"/><path d="M51.7478 3.9912C51.5683 2.49895 50.3633 1.31719 48.8552 1.16406H27.7969V25.4223L28.0577 25.3843C29.4866 25.1773 30.9282 24.0864 30.9282 22.1136V3.9046H47.8921C48.2923 3.9046 48.6165 4.22671 48.6165 4.62485C48.6165 4.62485 48.6176 20.9878 48.6176 20.9899C48.6176 22.3586 47.8921 23.5615 46.8032 24.2374L48.9312 26.5576C50.6389 25.2914 51.7468 23.2669 51.7468 20.9899L51.7478 3.9912Z"/><path d="M47.8279 6.98899L47.6082 6.91507C46.4053 6.50953 44.836 6.79256 44.045 8.33867L43.1114 10.1615L42.1493 8.2827C42.1482 8.28164 42.1482 8.28164 42.1482 8.28059C41.8832 7.7631 41.5304 7.38714 41.1344 7.13156C41.1302 7.1284 41.1249 7.12523 41.1196 7.12206C40.7257 6.88444 40.2631 6.74609 39.7699 6.74609C39.2767 6.74609 38.8142 6.88339 38.4202 7.12206C38.4044 7.13157 38.3896 7.14107 38.3738 7.15163C37.9925 7.40615 37.6535 7.77155 37.3958 8.27214C37.3948 8.27319 37.3948 8.27425 37.3948 8.27531C37.3937 8.27742 37.3937 8.27847 37.3916 8.28059L36.4285 10.1604L35.4949 8.33761C34.7028 6.79045 33.1345 6.50742 31.9306 6.91401L31.7109 6.98794L34.8824 13.1798L31.7109 19.3716L31.9306 19.4455C33.1345 19.8511 34.7028 19.568 35.4949 18.0219L36.4285 16.1991L37.3916 18.0789C37.3927 18.0811 37.3937 18.0821 37.3948 18.0842C37.3958 18.0853 37.3958 18.0853 37.3958 18.0874C37.6535 18.588 37.9925 18.9534 38.3738 19.2079C38.3896 19.2174 38.4044 19.228 38.4202 19.2375C38.8142 19.4751 39.2767 19.6134 39.7699 19.6134C40.2631 19.6134 40.7257 19.4761 41.1196 19.2375C41.1249 19.2343 41.1302 19.2311 41.1344 19.228C41.5304 18.9724 41.8832 18.5964 42.1482 18.0789C42.1493 18.0779 42.1493 18.0779 42.1493 18.0768L43.1114 16.1981L44.045 18.0209C44.837 19.568 46.4053 19.8511 47.6082 19.4445L47.8279 19.3705L44.6564 13.1787L47.8279 6.98899ZM39.7699 16.6839L37.9756 13.1808L39.7699 9.67779L41.5642 13.1808L39.7699 16.6839Z"/><path d="M22.8896 10.3047H1.8133C1.8133 10.3047 1.81435 20.9807 1.81435 20.9944C1.81435 22.3631 1.08882 23.5659 0 24.2418L2.12801 26.5621C3.8357 25.2958 4.94353 23.2724 4.94353 20.9944V18.3954H19.9896C21.4924 18.2433 22.6974 17.0657 22.8822 15.5798L22.8896 10.3047ZM4.94459 13.0452H10.7858V15.6538H4.94459V13.0452ZM19.7509 14.9684C19.7509 15.3475 19.4425 15.6538 19.0613 15.6538H13.9171V13.0452H19.752L19.7509 14.9684Z"/></svg></span>`
 	}
 
-	return `<span class="brand-logo brand-logo-agora" aria-hidden="true"><img src="https://cdn.prod.website-files.com/660affa848e8af81bdd03909/66ab7f671fb90c022fb7f1dc_Agora%20Logo%20Crisp.webp" alt=""></span>`
+	return `<span class="brand-logo brand-logo-agora" aria-label="Agora">Agora</span>`
 }
 
 // escapeText escapes user-visible text before it is inserted into HTML.
