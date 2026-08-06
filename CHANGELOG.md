@@ -15,6 +15,10 @@ Earlier entries pre-date this convention and only carry their version's compare 
 
 ## [Unreleased]
 
+### Documentation
+
+- Add `docs/env-local.md` explaining that Quickstart env files are created by the CLI from the template example plus the selected project's App ID and App Certificate (not downloaded from Console); link it from `README.md`, `docs/llms.txt`, and `docs/sitemap.xml`.
+
 ## [0.2.8] - 2026-07-28
 
 Region-aware authentication, OAuth UX, quickstart compatibility, and installer and documentation delivery improvements.

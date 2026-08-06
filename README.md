@@ -216,6 +216,8 @@ Quickstart template behavior:
 
 Existing `.env` and `.env.local` files are preserved: the CLI appends missing credentials, updates existing credential keys, and comments out duplicate or stale Agora credential aliases for the selected runtime.
 
+See [Using `.env.local`](docs/env-local.md) for how the CLI creates and updates env files from Quickstart examples and the selected project's credentials.
+
 See [docs/automation.md](docs/automation.md) for JSON fields and the full credential matrix.
 
 ### Repo-local binding

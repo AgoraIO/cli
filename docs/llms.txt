@@ -19,6 +19,7 @@ Check project health: agora project doctor --json
 - Command reference: /cli/commands.html
 - Automation (JSON contract): /cli/automation.html
 - Error codes: /cli/error-codes.html
+- Environment files: /cli/env-local.html
 - Telemetry controls: /cli/telemetry.html
 
 ### Agent-Friendly Markdown
@@ -26,6 +27,7 @@ Check project health: agora project doctor --json
 - Commands: /cli/md/commands.md
 - Automation: /cli/md/automation.md
 - Error codes: /cli/md/error-codes.md
+- Environment files: /cli/md/env-local.md
 - Install guide: /cli/md/install.md
 - Telemetry: /cli/md/telemetry.md
 - Agent rules: /cli/md/agents/README.md
