@@ -1,4 +1,4 @@
-.PHONY: build test lint lint-go lint-fmt snapshot snapshot-error-codes release release-snapshot docs-commands docs-commands-check docs-preview
+.PHONY: build test lint lint-go lint-fmt snapshot snapshot-error-codes release release-snapshot docs-commands docs-commands-check docs-preview playground-build playground-check
 
 # Build a local agora binary with stripped paths.
 build:
@@ -11,7 +11,7 @@ test:
 # Aggregate lint target. Runs gofmt, golangci-lint (if installed), the
 # error-code coverage audit, and the docs/commands.md drift check. Use
 # this in CI and pre-commit.
-lint: lint-fmt lint-go snapshot-error-codes docs-commands-check
+lint: lint-fmt lint-go snapshot-error-codes docs-commands-check playground-check
 
 lint-fmt:
 	@unformatted="$$(gofmt -l .)"; \
@@ -73,3 +73,14 @@ docs-commands-check:
 # Uses an empty local baseurl so assets resolve from http://localhost:4000/.
 docs-preview:
 	./scripts/preview-pages-site.sh
+
+# Build the embedded playground frontend and stamp the source hash.
+# Requires Node/npm (only needed to regenerate the committed webassets).
+playground-build:
+	cd frontend && npm ci && npm run build
+	go run ./cmd/playgroundhash -write
+
+# Drift guard (pure Go, runs in lint): fails if frontend/ changed without
+# rebuilding the committed webassets. Fix by running `make playground-build`.
+playground-check:
+	go run ./cmd/playgroundhash -check
