@@ -94,7 +94,7 @@ func quickstartTemplates() []quickstartTemplate {
 					AppCertificateKey: "APP_CERTIFICATE",
 				},
 			},
-			InstallCommand: "bun install",
+			InstallCommand: "bun run setup",
 			RunCommand:     "bun run dev",
 			EnvDocsSummary: "Copies server/.env.example to server/.env.local, then writes AGORA_APP_ID and AGORA_APP_CERTIFICATE.",
 			SupportsInit:   true,

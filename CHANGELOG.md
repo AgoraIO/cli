@@ -15,6 +15,14 @@ Earlier entries pre-date this convention and only carry their version's compare 
 
 ## [Unreleased]
 
+### Changed
+
+- Align the Python quickstart `nextSteps` install command with the upstream template (`bun run setup` instead of `bun install`).
+
+### Documentation
+
+- Clarify the README Quick Start around `agora init` project selection (including `Default Project` reuse vs interactive picker), `--project` / `--new-project`, `.agora/project.json` vs `project use`, and that env files are written by the CLI rather than downloaded from Console.
+
 ## [0.2.8] - 2026-07-28
 
 Region-aware authentication, OAuth UX, quickstart compatibility, and installer and documentation delivery improvements.

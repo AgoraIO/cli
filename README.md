@@ -76,11 +76,46 @@ Requires the Go toolchain pinned in [go.mod](go.mod). For direct installer optio
 
 ## Quick Start
 
+Recommended path: install the CLI, log in, then run `agora init`. The CLI binds a project, clones an official quickstart, writes the runtime env file (App ID and App Certificate), and creates `.agora/project.json`. You do **not** need to download an env file from Agora Console for this flow.
+
 ```bash
+# 1) Log in
 agora login
+
+# 2) Create a local demo bound to a project
+# Interactive (TTY): reuses "Default Project" if present; otherwise prompts to pick or create
 agora init my-nextjs-demo --template nextjs
+# Non-interactive / scripts / --json / CI: pass an existing project, or force-create one
+# agora init my-nextjs-demo --template nextjs --project <project-id-or-name>
+# agora init my-nextjs-demo --template nextjs --new-project
+
+# 3) Install deps and start the app (follow nextSteps from init; Next.js example:)
+cd my-nextjs-demo
+pnpm install
+# Newer pnpm may block dependency build scripts (ERR_PNPM_IGNORED_BUILDS). If so:
+# pnpm approve-builds --all
+# pnpm rebuild
+pnpm dev
+# Other templates print their own commands, e.g. python: bun run setup && bun run dev
+# go: make setup && make dev
+
+# 4) Open the app in a browser (Next.js default: http://localhost:3000)
+open http://localhost:3000
+# Linux: xdg-open http://localhost:3000
+# Windows: start http://localhost:3000
+
+# 5) Optional: check project/workspace readiness
 agora project doctor --json
 ```
+
+`init` also prints template-specific next steps in its output. Refresh credentials or rebind the repo later with:
+
+```bash
+cd my-nextjs-demo
+agora quickstart env write . --project <project-id-or-name>
+```
+
+If a command reports `No project selected`, pass `--project`, run `agora project use <project>`, or work inside a directory that already has `.agora/project.json`. That is expected when none of those contexts exist—not a missing Console env download.
 
 Command examples use `agora` for the installed CLI. Local source builds use `./agora` from the repo root.
 
@@ -88,11 +123,11 @@ Command examples use `agora` for the installed CLI. Local source builds use `./a
 
 | Goal | Command | What You Get |
 |------|---------|--------------|
-| Next.js video app | `agora init my-nextjs-demo --template nextjs` | A cloned Next.js quickstart, project binding, and `.env.local` |
-| Python voice agent | `agora init my-python-demo --template python` | A Python quickstart with Agora credentials written for the backend |
-| Go voice agent | `agora init my-go-demo --template go` | A Go quickstart with Agora credentials written for the backend |
+| Next.js video app | `agora init my-nextjs-demo --template nextjs` | A cloned Next.js quickstart, `.agora` binding, and `.env.local` |
+| Python voice agent | `agora init my-python-demo --template python` | A Python quickstart with `server/.env.local` credentials |
+| Go voice agent | `agora init my-go-demo --template go` | A Go quickstart with `server/.env.local` credentials |
 
-Run `agora quickstart list` to see all available templates.
+By default `init` reuses a project named `Default Project` when present. In an interactive TTY without that project, it prompts you to pick an existing project or create a new one. Non-interactive/`--json`/CI runs fall back to the most recent project (or create one when none exist). Pass `--project <id-or-name>` or `--new-project` to control selection explicitly. Run `agora quickstart list` to see all available templates.
 
 ## Command Model
 
@@ -116,13 +151,14 @@ The command model is intentionally layered:
 
 | Goal | Command |
 |------|---------|
-| New user, one shot | `agora init <name> --template <id>` |
+| New user, one shot | `agora init <name> --template <id>` (reuses `Default Project` / interactive picker; or `--project` / `--new-project`) |
 | List available templates | `agora quickstart list` |
 | Clone a starter only | `agora quickstart create ...` |
-| Re-sync env in a cloned quickstart | `agora quickstart env write [dir]` |
+| Re-sync / rebind env in a cloned quickstart | `agora quickstart env write [dir]` (optional `--project` to rebind) |
 | Write env to an arbitrary path / non-quickstart repo | `agora project env write <path>` |
+| Set machine-wide default project | `agora project use <project>` |
 | Install self-test | `agora doctor --json` |
-| Project/workspace readiness | `agora project doctor --json` |
+| Project/workspace readiness | `agora project doctor --json` (add `--deep` in a bound repo) |
 | Manage feature webhooks | `agora project webhook ... --json` |
 
 ### Env-related commands
@@ -146,7 +182,7 @@ agora introspect --json
 
 ### `init`
 
-Recommended onboarding command. It creates or binds a project, clones a quickstart, writes env, persists context, and prints next steps.
+Recommended onboarding command. By default it reuses a project named `Default Project` when present. In an interactive TTY without that project, it prompts you to pick or create one. Non-interactive/`--json`/CI runs fall back to the most recent project (or create one when none exist). Prefer `--project <id-or-name>` or `--new-project` for explicit selection. It clones a quickstart, writes the template env file from the project API, writes `.agora/project.json`, updates global context, and prints next steps.
 
 ### `quickstart`
 
@@ -198,7 +234,9 @@ Prints build metadata. Release binaries include version, commit, and build date.
 
 ## Env Files and Project Binding
 
-`quickstart env write` and `project env write` both keep dotenv files limited to runtime credentials, but they target different workflows:
+Env files hold runtime credentials. Project selection is separate: use `--project`, `.agora/project.json`, or `agora project use`. The CLI writes App ID and App Certificate from the selected project's API response into the template env file. It does **not** download a ready-made dotenv from Agora Console.
+
+Prefer `agora quickstart env write` inside official quickstarts. Use `agora project env write <path>` only when you need a specific dotenv path outside that layout.
 
 | Command | Env path | Key names |
 |---------|----------|-----------|
@@ -212,7 +250,7 @@ Quickstart template behavior:
 - Go quickstarts copy `server/.env.example` to `server/.env.local`, then use `AGORA_APP_ID` plus `AGORA_APP_CERTIFICATE`
 - Existing Python and Go quickstarts keep their recorded env path and legacy `APP_ID` / `APP_CERTIFICATE` keys when reconfigured.
 
-`project env write` auto-detects Next.js workspaces (or accepts `--template nextjs|standard`) and writes `AGORA_APP_ID` / `AGORA_APP_CERTIFICATE` or the Next.js equivalents. Use `quickstart env write` when you want the CLI to choose the official quickstart's env path.
+`project env write` auto-detects Next.js workspaces (or accepts `--template nextjs|standard`) and writes `AGORA_APP_ID` / `AGORA_APP_CERTIFICATE` or the Next.js equivalents.
 
 Existing `.env` and `.env.local` files are preserved: the CLI appends missing credentials, updates existing credential keys, and comments out duplicate or stale Agora credential aliases for the selected runtime.
 
@@ -220,7 +258,7 @@ See [docs/automation.md](docs/automation.md) for JSON fields and the full creden
 
 ### Repo-local binding
 
-The CLI writes repo-local project metadata to `.agora/project.json` so it can detect which Agora project a cloned demo is bound to even when you work inside the repo later.
+`.agora/project.json` is the **repo-local** project binding (not the env file). It lets the CLI know which Agora project a cloned demo uses when you work inside that repo later. `agora project use` only sets a **machine-wide** default and does not rewrite `.agora/project.json`.
 
 Project resolution precedence is consistent across commands:
 
@@ -331,7 +369,8 @@ The most common issues:
 - **OAuth browser does not open**: `agora login --no-browser` prints the URL so you can open it elsewhere; or `agora config update --browser-auto-open=false`.
 - **`git` is missing**: `agora init` and `agora quickstart create` shell out to `git clone`. Install `git` and retry.
 - **Project has no app certificate**: `quickstart env write`, `init`, and `project env --with-secrets` need a project with an App Certificate. Pick another project or enable one in [Agora Console](https://console.agora.io).
-- **No project selected**: pass `--project <name>`, run `agora project use <name>`, or run from a repo that already has `.agora/project.json`.
+- **No project selected**: the command has no project context. Pass `--project <name>`, run `agora project use <name>`, or work inside a repo with `.agora/project.json` (created by `init` / `quickstart env write`). Do not expect the CLI to infer a project from `.env.local` alone.
+- **Wrong or stale credentials in a quickstart**: re-run `agora quickstart env write . --project <id>` from the demo directory instead of pasting a Console-downloaded env file.
 
 Full guide with debug logging, CI tips, completion troubleshooting, and the `--debug` flag: [docs/troubleshooting.md](docs/troubleshooting.md).
 
