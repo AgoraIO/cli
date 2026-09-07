@@ -218,7 +218,7 @@ func (a *App) initRecipeProject(name, targetDir string, recipe recipeDetail, exi
 	if err != nil {
 		return nil, err
 	}
-	resolution, err := a.resolveInitProjectForScaffold(name, existingProject, features, rtmDataCenter, newProject, promptForReuse, promptOut, promptIn, progress)
+	resolution, err := a.resolveInitProjectForScaffold(name, defaultInitFeatures(), existingProject, features, rtmDataCenter, newProject, promptForReuse, promptOut, promptIn, progress)
 	if err != nil {
 		return nil, err
 	}

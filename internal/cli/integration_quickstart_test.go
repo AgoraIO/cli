@@ -11,6 +11,139 @@ import (
 	"testing"
 )
 
+func TestCLIRTCVideoCallQuickstartScenario(t *testing.T) {
+	configHome := t.TempDir()
+	rootDir := t.TempDir()
+	api := newFakeCLIBFF()
+	defer api.server.Close()
+	project := buildFakeProject("RTC Project", "prj_rtc", "app_rtc", "global")
+	api.projects[project.ProjectID] = &project
+	persistSessionForIntegration(t, configHome)
+
+	repo := createLocalGitRepo(t, map[string]string{
+		"agora.quickstart.json": `{"schemaVersion":1,"template":"nextjs","scenario":"video-call"}`,
+		"env.local.example":     "NEXT_PUBLIC_AGORA_APP_ID=\nNEXT_AGORA_APP_CERTIFICATE=\n",
+		"package.json":          `{"packageManager":"pnpm@9.15.9","scripts":{"dev":"next dev"}}`,
+	})
+	commonEnv := map[string]string{
+		"XDG_CONFIG_HOME":    configHome,
+		"AGORA_API_BASE_URL": api.baseURL,
+		"AGORA_LOG_LEVEL":    "error",
+		"AGORA_QUICKSTART_NEXTJS_VIDEO_CALL_REPO_URL": repo,
+	}
+
+	list := runCLI(t, []string{"quickstart", "list", "--json"}, cliRunOptions{env: commonEnv, workdir: rootDir})
+	if list.exitCode != 0 || !strings.Contains(list.stdout, `"id":"nextjs-video-call"`) || !strings.Contains(list.stdout, `"scenario":"video-call"`) || !strings.Contains(list.stdout, `"requiredFeatures":["rtc"]`) {
+		t.Fatalf("unexpected quickstart list result: %+v", list)
+	}
+
+	target := filepath.Join(rootDir, "rtc-demo")
+	create := runCLI(t, []string{"quickstart", "create", "rtc-demo", "--template", "nextjs", "--scenario", "video-call", "--project", project.ProjectID, "--dir", target, "--json"}, cliRunOptions{env: commonEnv, workdir: rootDir})
+	if create.exitCode != 0 || !strings.Contains(create.stdout, `"template":"nextjs"`) || !strings.Contains(create.stdout, `"scenario":"video-call"`) || !strings.Contains(create.stdout, `"requiredFeatures":["rtc"]`) {
+		t.Fatalf("unexpected rtc quickstart create result: %+v", create)
+	}
+	if !strings.Contains(create.stdout, `"packageManager":{"name":"pnpm","requiredVersion":"9.15.9"`) {
+		t.Fatalf("rtc quickstart create is missing package manager setup metadata: %+v", create)
+	}
+	binding, err := loadLocalProjectBinding(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if binding.Template != "nextjs" || binding.Scenario != "video-call" || binding.EnvPath != ".env.local" {
+		t.Fatalf("unexpected rtc quickstart binding: %+v", binding)
+	}
+	envRaw, err := os.ReadFile(filepath.Join(target, ".env.local"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(envRaw), "NEXT_PUBLIC_AGORA_APP_ID=app_rtc") || !strings.Contains(string(envRaw), "NEXT_AGORA_APP_CERTIFICATE=") {
+		t.Fatalf("unexpected rtc env: %s", envRaw)
+	}
+	if project.SignKey != nil && strings.Contains(create.stdout, *project.SignKey) {
+		t.Fatal("quickstart JSON leaked the app certificate")
+	}
+
+	write := runCLI(t, []string{"quickstart", "env", "write", target, "--json"}, cliRunOptions{env: commonEnv, workdir: rootDir})
+	if write.exitCode != 0 || !strings.Contains(write.stdout, `"scenario":"video-call"`) {
+		t.Fatalf("unexpected rtc quickstart env write result: %+v", write)
+	}
+
+	doctor := runCLI(t, []string{"project", "doctor", "--feature", "rtc", "--deep", "--json"}, cliRunOptions{env: commonEnv, workdir: target})
+	if doctor.exitCode != 0 || !strings.Contains(doctor.stdout, `"status":"healthy"`) || !strings.Contains(doctor.stdout, `"scenario":"video-call"`) {
+		t.Fatalf("unexpected rtc deep doctor result: %+v", doctor)
+	}
+}
+
+func TestCLIVideoCallQuickstartValidatesManifestBeforeSetup(t *testing.T) {
+	for _, tt := range []struct {
+		name  string
+		files map[string]string
+		code  string
+	}{
+		{
+			name: "missing manifest",
+			files: map[string]string{
+				"env.local.example": "NEXT_PUBLIC_AGORA_APP_ID=\nNEXT_AGORA_APP_CERTIFICATE=\n",
+			},
+			code: "QUICKSTART_MANIFEST_INVALID",
+		},
+		{
+			name: "mismatched manifest",
+			files: map[string]string{
+				"agora.quickstart.json": `{"schemaVersion":1,"template":"nextjs","scenario":"voice-agent"}`,
+				"env.local.example":     "NEXT_PUBLIC_AGORA_APP_ID=\nNEXT_AGORA_APP_CERTIFICATE=\n",
+			},
+			code: "QUICKSTART_SELECTION_MISMATCH",
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			configHome := t.TempDir()
+			rootDir := t.TempDir()
+			api := newFakeCLIBFF()
+			defer api.server.Close()
+			project := buildFakeProject("RTC Project", "prj_manifest", "app_manifest", "global")
+			api.projects[project.ProjectID] = &project
+			persistSessionForIntegration(t, configHome)
+			repo := createLocalGitRepo(t, tt.files)
+			target := filepath.Join(rootDir, "rtc-demo")
+
+			result := runCLI(t, []string{"quickstart", "create", "rtc-demo", "--template", "nextjs", "--scenario", "video-call", "--project", project.ProjectID, "--dir", target, "--json"}, cliRunOptions{env: map[string]string{
+				"XDG_CONFIG_HOME":    configHome,
+				"AGORA_API_BASE_URL": api.baseURL,
+				"AGORA_LOG_LEVEL":    "error",
+				"AGORA_QUICKSTART_NEXTJS_VIDEO_CALL_REPO_URL": repo,
+			}, workdir: rootDir})
+			if result.exitCode != 1 || !strings.Contains(result.stdout, `"code":"`+tt.code+`"`) {
+				t.Fatalf("unexpected manifest validation result: %+v", result)
+			}
+			if _, err := os.Stat(target); !os.IsNotExist(err) {
+				t.Fatalf("invalid clone target must be removed, stat err=%v", err)
+			}
+		})
+	}
+}
+
+func TestCLIDefaultQuickstartDoesNotRequireManifest(t *testing.T) {
+	rootDir := t.TempDir()
+	repo := createLocalGitRepo(t, map[string]string{
+		"env.local.example": "NEXT_PUBLIC_AGORA_APP_ID=\nNEXT_AGORA_APP_CERTIFICATE=\n",
+		"app/page.tsx":      "export default function Page() { return null }\n",
+	})
+	target := filepath.Join(rootDir, "voice-agent-demo")
+
+	result := runCLI(t, []string{"quickstart", "create", "voice-agent-demo", "--template", "nextjs", "--template-only", "--dir", target, "--json"}, cliRunOptions{env: map[string]string{
+		"XDG_CONFIG_HOME":                  t.TempDir(),
+		"AGORA_LOG_LEVEL":                  "error",
+		"AGORA_QUICKSTART_NEXTJS_REPO_URL": repo,
+	}, workdir: rootDir})
+	if result.exitCode != 0 || !strings.Contains(result.stdout, `"scenario":"voice-agent"`) {
+		t.Fatalf("default quickstart without manifest failed: %+v", result)
+	}
+	if _, err := os.Stat(target); err != nil {
+		t.Fatalf("expected default quickstart target to remain: %v", err)
+	}
+}
+
 func TestCLIQuickstartListAndCreate(t *testing.T) {
 	configHome := t.TempDir()
 	api := newFakeCLIBFF()

@@ -610,7 +610,10 @@ func (a *App) buildProjectCreate() *cobra.Command {
 				return err
 			}
 			if dryRun {
-				plannedFeatures := projectCreateFeatures(template, features)
+				plannedFeatures, err := resolveProjectCreateFeatures(template, features)
+				if err != nil {
+					return err
+				}
 				plannedRTMDataCenter, err := rtmDataCenterForFeatures(plannedFeatures, normalizedRTMDataCenter)
 				if err != nil {
 					return err
@@ -638,10 +641,11 @@ func (a *App) buildProjectCreate() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&rtmDataCenter, "rtm-data-center", "", "RTM data center to configure when rtm is enabled (CN, NA, EU, or AP); defaults to NA")
-	cmd.Flags().StringVar(&template, "template", "", "apply a higher-level project preset such as voice-agent")
+	cmd.Flags().StringVar(&template, "template", "", "apply a project scenario preset: "+strings.Join(projectPresetIDs(), ", "))
 	cmd.Flags().StringArrayVar(&features, "feature", nil, fmt.Sprintf("enable one or more features after creation; defaults to %s; convoai also enables rtm", featureListString()))
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "return the planned project create result without creating remote resources")
 	cmd.Flags().StringVar(&idempotencyKey, "idempotency-key", "", "caller-provided key for safe retries when supported by the API")
+	_ = cmd.RegisterFlagCompletionFunc("template", completeProjectPresetIDs)
 	return cmd
 }
 

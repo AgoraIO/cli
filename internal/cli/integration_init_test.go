@@ -10,6 +10,65 @@ import (
 	"testing"
 )
 
+func TestCLIInitRTCVideoCallCreatesRTCOnlyProject(t *testing.T) {
+	configHome := t.TempDir()
+	rootDir := t.TempDir()
+	api := newFakeCLIBFF()
+	defer api.server.Close()
+	persistSessionForIntegration(t, configHome)
+	repo := createLocalGitRepo(t, map[string]string{
+		"agora.quickstart.json": `{"schemaVersion":1,"template":"nextjs","scenario":"video-call"}`,
+		"env.local.example":     "NEXT_PUBLIC_AGORA_APP_ID=\nNEXT_AGORA_APP_CERTIFICATE=\n",
+		"package.json":          `{"packageManager":"pnpm@9.15.9","scripts":{"dev":"next dev"}}`,
+	})
+	target := filepath.Join(rootDir, "rtc-init")
+	result := runCLI(t, []string{"init", "rtc-init", "--template", "nextjs", "--scenario", "video-call", "--new-project", "--dir", target, "--json"}, cliRunOptions{env: map[string]string{
+		"XDG_CONFIG_HOME":    configHome,
+		"AGORA_API_BASE_URL": api.baseURL,
+		"AGORA_LOG_LEVEL":    "error",
+		"AGORA_QUICKSTART_NEXTJS_VIDEO_CALL_REPO_URL": repo,
+	}, workdir: rootDir})
+	if result.exitCode != 0 || !strings.Contains(result.stdout, `"enabledFeatures":["rtc"]`) || !strings.Contains(result.stdout, `"scenario":"video-call"`) || !strings.Contains(result.stdout, `"requiredFeatures":["rtc"]`) {
+		t.Fatalf("unexpected rtc init result: %+v", result)
+	}
+	if !strings.Contains(result.stdout, `"packageManager":{"name":"pnpm","requiredVersion":"9.15.9"`) {
+		t.Fatalf("rtc init is missing package manager setup metadata: %+v", result)
+	}
+	if strings.Contains(result.stdout, `"rtmDataCenter"`) || strings.Contains(result.stdout, `"convoai"`) {
+		t.Fatalf("rtc init enabled unrelated features: %+v", result)
+	}
+	binding, err := loadLocalProjectBinding(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if binding.Template != "nextjs" || binding.Scenario != "video-call" {
+		t.Fatalf("unexpected rtc init binding: %+v", binding)
+	}
+}
+
+func TestCLIInitChecksExistingProjectFeaturesBeforeClone(t *testing.T) {
+	configHome := t.TempDir()
+	rootDir := t.TempDir()
+	api := newFakeCLIBFF()
+	defer api.server.Close()
+	project := buildFakeProject("RTC Only", "prj_rtc_only", "app_rtc_only", "global")
+	api.projects[project.ProjectID] = &project
+	persistSessionForIntegration(t, configHome)
+	target := filepath.Join(rootDir, "must-not-exist")
+
+	result := runCLI(t, []string{"init", "reuse-demo", "--template", "nextjs", "--scenario", "video-call", "--project", project.ProjectID, "--feature", "rtm", "--dir", target, "--json"}, cliRunOptions{env: map[string]string{
+		"XDG_CONFIG_HOME":    configHome,
+		"AGORA_API_BASE_URL": api.baseURL,
+		"AGORA_LOG_LEVEL":    "error",
+	}, workdir: rootDir})
+	if result.exitCode != 1 || !strings.Contains(result.stdout, `"code":"QUICKSTART_REQUIRED_FEATURE_MISSING"`) || !strings.Contains(result.stdout, "agora project feature enable rtm") {
+		t.Fatalf("unexpected missing feature result: %+v", result)
+	}
+	if _, err := os.Stat(target); !os.IsNotExist(err) {
+		t.Fatalf("feature validation must happen before clone, stat err=%v", err)
+	}
+}
+
 func TestCLIInitCreatesProjectAndQuickstart(t *testing.T) {
 	configHome := t.TempDir()
 	rootDir := t.TempDir()

@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bufio"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -15,12 +16,24 @@ import (
 	"github.com/spf13/cobra"
 )
 
+const quickstartManifestFileName = "agora.quickstart.json"
+
+type quickstartManifest struct {
+	SchemaVersion int    `json:"schemaVersion"`
+	Template      string `json:"template"`
+	Scenario      string `json:"scenario"`
+}
+
 type quickstartTemplate struct {
-	ID          string
-	Title       string
-	Description string
-	Runtime     string
-	RepoURL     string
+	ID               string
+	Template         string
+	Scenario         string
+	DefaultScenario  bool
+	RequiredFeatures []string
+	Title            string
+	Description      string
+	Runtime          string
+	RepoURL          string
 	// RepoURLCN / DocsURLCN are the cn-region variants. They currently
 	// mirror the global URLs because the conversational-AI quickstarts
 	// have no China-hosted mirror yet; set them to the cn URL when one
@@ -52,14 +65,18 @@ type quickstartEnvLayout struct {
 func quickstartTemplates() []quickstartTemplate {
 	return []quickstartTemplate{
 		{
-			ID:          "nextjs",
-			Title:       "Conversational AI Next.js Quickstart",
-			Description: "Clone the official Next.js conversational AI quickstart.",
-			Runtime:     "node",
-			RepoURL:     "https://github.com/AgoraIO-Conversational-AI/agent-quickstart-nextjs",
-			RepoURLCN:   "https://github.com/AgoraIO-Conversational-AI/agent-quickstart-nextjs",
-			DocsURL:     "https://github.com/AgoraIO-Conversational-AI/agent-quickstart-nextjs",
-			DocsURLCN:   "https://github.com/AgoraIO-Conversational-AI/agent-quickstart-nextjs",
+			ID:               "nextjs",
+			Template:         "nextjs",
+			Scenario:         "voice-agent",
+			DefaultScenario:  true,
+			RequiredFeatures: []string{"rtc", "rtm", "convoai"},
+			Title:            "Conversational AI Next.js Quickstart",
+			Description:      "Clone the official Next.js conversational AI quickstart.",
+			Runtime:          "node",
+			RepoURL:          "https://github.com/AgoraIO-Conversational-AI/agent-quickstart-nextjs",
+			RepoURLCN:        "https://github.com/AgoraIO-Conversational-AI/agent-quickstart-nextjs",
+			DocsURL:          "https://github.com/AgoraIO-Conversational-AI/agent-quickstart-nextjs",
+			DocsURLCN:        "https://github.com/AgoraIO-Conversational-AI/agent-quickstart-nextjs",
 			EnvLayouts: []quickstartEnvLayout{{
 				DetectPaths:       []string{"env.local.example", "app"},
 				EnvExamplePath:    "env.local.example",
@@ -74,14 +91,18 @@ func quickstartTemplates() []quickstartTemplate {
 			Available:      true,
 		},
 		{
-			ID:          "python",
-			Title:       "Conversational AI Python Quickstart",
-			Description: "Clone the official Python conversational AI quickstart.",
-			Runtime:     "python",
-			RepoURL:     "https://github.com/AgoraIO-Conversational-AI/agent-quickstart-python",
-			RepoURLCN:   "https://github.com/AgoraIO-Conversational-AI/agent-quickstart-python",
-			DocsURL:     "https://github.com/AgoraIO-Conversational-AI/agent-quickstart-python",
-			DocsURLCN:   "https://github.com/AgoraIO-Conversational-AI/agent-quickstart-python",
+			ID:               "python",
+			Template:         "python",
+			Scenario:         "voice-agent",
+			DefaultScenario:  true,
+			RequiredFeatures: []string{"rtc", "rtm", "convoai"},
+			Title:            "Conversational AI Python Quickstart",
+			Description:      "Clone the official Python conversational AI quickstart.",
+			Runtime:          "python",
+			RepoURL:          "https://github.com/AgoraIO-Conversational-AI/agent-quickstart-python",
+			RepoURLCN:        "https://github.com/AgoraIO-Conversational-AI/agent-quickstart-python",
+			DocsURL:          "https://github.com/AgoraIO-Conversational-AI/agent-quickstart-python",
+			DocsURLCN:        "https://github.com/AgoraIO-Conversational-AI/agent-quickstart-python",
 			EnvLayouts: []quickstartEnvLayout{
 				{
 					DetectPaths:       []string{"server/requirements.txt"},
@@ -105,14 +126,18 @@ func quickstartTemplates() []quickstartTemplate {
 			Available:      true,
 		},
 		{
-			ID:          "go",
-			Title:       "Conversational AI Go Quickstart",
-			Description: "Clone the official Go conversational AI quickstart.",
-			Runtime:     "go",
-			RepoURL:     "https://github.com/AgoraIO-Conversational-AI/agent-quickstart-go",
-			RepoURLCN:   "https://github.com/AgoraIO-Conversational-AI/agent-quickstart-go",
-			DocsURL:     "https://github.com/AgoraIO-Conversational-AI/agent-quickstart-go",
-			DocsURLCN:   "https://github.com/AgoraIO-Conversational-AI/agent-quickstart-go",
+			ID:               "go",
+			Template:         "go",
+			Scenario:         "voice-agent",
+			DefaultScenario:  true,
+			RequiredFeatures: []string{"rtc", "rtm", "convoai"},
+			Title:            "Conversational AI Go Quickstart",
+			Description:      "Clone the official Go conversational AI quickstart.",
+			Runtime:          "go",
+			RepoURL:          "https://github.com/AgoraIO-Conversational-AI/agent-quickstart-go",
+			RepoURLCN:        "https://github.com/AgoraIO-Conversational-AI/agent-quickstart-go",
+			DocsURL:          "https://github.com/AgoraIO-Conversational-AI/agent-quickstart-go",
+			DocsURLCN:        "https://github.com/AgoraIO-Conversational-AI/agent-quickstart-go",
 			EnvLayouts: []quickstartEnvLayout{
 				{
 					DetectPaths:       []string{"server/go.mod"},
@@ -136,14 +161,18 @@ func quickstartTemplates() []quickstartTemplate {
 			Available:      true,
 		},
 		{
-			ID:          "android",
-			Title:       "Conversational AI Android Quickstart",
-			Description: "Clone the official Android client and Python server quickstart.",
-			Runtime:     "android",
-			RepoURL:     "https://github.com/AgoraIO-Conversational-AI/agent-quickstart-android",
-			RepoURLCN:   "https://github.com/AgoraIO-Conversational-AI/agent-quickstart-android",
-			DocsURL:     "https://github.com/AgoraIO-Conversational-AI/agent-quickstart-android",
-			DocsURLCN:   "https://github.com/AgoraIO-Conversational-AI/agent-quickstart-android",
+			ID:               "android",
+			Template:         "android",
+			Scenario:         "voice-agent",
+			DefaultScenario:  true,
+			RequiredFeatures: []string{"rtc", "rtm", "convoai"},
+			Title:            "Conversational AI Android Quickstart",
+			Description:      "Clone the official Android client and Python server quickstart.",
+			Runtime:          "android",
+			RepoURL:          "https://github.com/AgoraIO-Conversational-AI/agent-quickstart-android",
+			RepoURLCN:        "https://github.com/AgoraIO-Conversational-AI/agent-quickstart-android",
+			DocsURL:          "https://github.com/AgoraIO-Conversational-AI/agent-quickstart-android",
+			DocsURLCN:        "https://github.com/AgoraIO-Conversational-AI/agent-quickstart-android",
 			EnvLayouts: []quickstartEnvLayout{{
 				DetectPaths:       []string{"server/.env.example", "server/requirements-dev.txt", "app/src/main/AndroidManifest.xml"},
 				EnvExamplePath:    "server/.env.example",
@@ -162,17 +191,96 @@ func quickstartTemplates() []quickstartTemplate {
 			SupportsInit:   true,
 			Available:      true,
 		},
+		{
+			ID:               "nextjs-video-call",
+			Template:         "nextjs",
+			Scenario:         "video-call",
+			RequiredFeatures: []string{"rtc"},
+			Title:            "Next.js Video Call Quickstart",
+			Description:      "Build a one-to-one RTC audio and video call.",
+			Runtime:          "node",
+			RepoURL:          "https://github.com/littleDogWang/agora-rtc-nextjs-quickstart",
+			DocsURL:          "https://github.com/littleDogWang/agora-rtc-nextjs-quickstart",
+			EnvLayouts: []quickstartEnvLayout{{
+				DetectPaths:       []string{"agora.quickstart.json", "env.local.example"},
+				EnvExamplePath:    "env.local.example",
+				EnvTargetPath:     ".env.local",
+				AppIDKey:          "NEXT_PUBLIC_AGORA_APP_ID",
+				AppCertificateKey: "NEXT_AGORA_APP_CERTIFICATE",
+			}},
+			InstallCommand: "pnpm install",
+			RunCommand:     "pnpm dev",
+			EnvDocsSummary: "Writes NEXT_PUBLIC_AGORA_APP_ID for the browser and NEXT_AGORA_APP_CERTIFICATE for server-side token generation.",
+			SupportsInit:   true,
+			Available:      true,
+		},
 	}
 }
 
 func findQuickstartTemplate(id string) (*quickstartTemplate, bool) {
 	for _, template := range quickstartTemplates() {
-		if template.ID == id {
+		if template.ID == id || (template.Template == id && template.DefaultScenario) {
 			copy := template
 			return &copy, true
 		}
 	}
 	return nil, false
+}
+
+func quickstartTemplateIDs() []string {
+	ids := []string{}
+	seen := map[string]bool{}
+	for _, definition := range quickstartTemplates() {
+		if !seen[definition.Template] {
+			ids = append(ids, definition.Template)
+			seen[definition.Template] = true
+		}
+	}
+	return ids
+}
+
+func quickstartScenarioIDs() []string {
+	ids := []string{}
+	seen := map[string]bool{}
+	for _, definition := range quickstartTemplates() {
+		if !seen[definition.Scenario] {
+			ids = append(ids, definition.Scenario)
+			seen[definition.Scenario] = true
+		}
+	}
+	return ids
+}
+
+func selectQuickstartDefinition(templateID, scenario string) (quickstartTemplate, error) {
+	templateID = strings.TrimSpace(templateID)
+	scenario = strings.TrimSpace(scenario)
+	knownTemplate := false
+	knownScenario := false
+	for _, definition := range quickstartTemplates() {
+		if definition.Scenario == scenario {
+			knownScenario = true
+		}
+		if definition.Template != templateID {
+			continue
+		}
+		knownTemplate = true
+		if scenario == "" && definition.DefaultScenario {
+			return definition, nil
+		}
+		if scenario != "" && definition.Scenario == scenario {
+			return definition, nil
+		}
+	}
+	if !knownTemplate {
+		return quickstartTemplate{}, &cliError{Message: fmt.Sprintf("Unknown quickstart template %q. Run `agora quickstart list` to see valid templates.", templateID), Code: "QUICKSTART_TEMPLATE_UNKNOWN"}
+	}
+	if scenario == "" {
+		return quickstartTemplate{}, &cliError{Message: fmt.Sprintf("Quickstart template %q has no default scenario.", templateID), Code: "QUICKSTART_SCENARIO_UNKNOWN"}
+	}
+	if knownScenario {
+		return quickstartTemplate{}, &cliError{Message: fmt.Sprintf("Scenario %q is not supported by template %q. Run `agora quickstart list` to see supported combinations.", scenario, templateID), Code: "QUICKSTART_SCENARIO_UNSUPPORTED"}
+	}
+	return quickstartTemplate{}, &cliError{Message: fmt.Sprintf("Unknown quickstart scenario %q. Run `agora quickstart list` to see valid scenarios.", scenario), Code: "QUICKSTART_SCENARIO_UNKNOWN"}
 }
 
 func (a *App) buildQuickstartCommand() *cobra.Command {
@@ -221,15 +329,20 @@ func (a *App) buildQuickstartList() *cobra.Command {
 					continue
 				}
 				items = append(items, map[string]any{
-					"available":    template.Available,
-					"description":  template.Description,
-					"docsUrl":      quickstartDocsURL(template, a.authRegion()),
-					"envDocs":      template.EnvDocsSummary,
-					"id":           template.ID,
-					"repoUrl":      quickstartRepoURLForRegion(template, a.authRegion()),
-					"runtime":      template.Runtime,
-					"supportsInit": template.SupportsInit,
-					"title":        template.Title,
+					"available":        template.Available,
+					"description":      template.Description,
+					"docsUrl":          quickstartDocsURL(template, a.authRegion()),
+					"envDocs":          template.EnvDocsSummary,
+					"id":               template.ID,
+					"installCommand":   template.InstallCommand,
+					"repoUrl":          quickstartRepoURLForRegion(template, a.authRegion()),
+					"requiredFeatures": append([]string{}, template.RequiredFeatures...),
+					"runCommand":       template.RunCommand,
+					"runtime":          template.Runtime,
+					"scenario":         template.Scenario,
+					"supportsInit":     template.SupportsInit,
+					"template":         template.Template,
+					"title":            template.Title,
 				})
 			}
 			return renderResult(cmd, "quickstart list", map[string]any{
@@ -246,6 +359,7 @@ func (a *App) buildQuickstartList() *cobra.Command {
 
 func (a *App) buildQuickstartCreate() *cobra.Command {
 	var templateID string
+	var scenario string
 	var dir string
 	var project string
 	var ref string
@@ -267,9 +381,9 @@ If a current project context exists, or if --project is passed, the CLI also wri
 			if len(args) != 1 {
 				return errors.New("quickstart name is required")
 			}
-			template, ok := findQuickstartTemplate(templateID)
-			if !ok {
-				return &cliError{Message: fmt.Sprintf("unknown quickstart template %q. Run `agora quickstart list` to see available templates.", templateID), Code: "QUICKSTART_TEMPLATE_UNKNOWN"}
+			template, err := selectQuickstartDefinition(templateID, scenario)
+			if err != nil {
+				return err
 			}
 			targetDir := dir
 			if strings.TrimSpace(targetDir) == "" {
@@ -281,7 +395,7 @@ If a current project context exists, or if --project is passed, the CLI also wri
 				!isCIEnvironment(a.osEnv) &&
 				isTTY(os.Stdin)
 			progress := jsonProgressFor(a, cmd, "quickstart create")
-			result, err := a.quickstartCreate(*template, targetDir, project, templateOnly, promptForProject, cmd.ErrOrStderr(), os.Stdin, ref, progress)
+			result, err := a.quickstartCreate(template, targetDir, project, templateOnly, promptForProject, cmd.ErrOrStderr(), os.Stdin, ref, progress)
 			if err != nil {
 				return err
 			}
@@ -289,6 +403,7 @@ If a current project context exists, or if --project is passed, the CLI also wri
 		},
 	}
 	cmd.Flags().StringVar(&templateID, "template", "", "quickstart template ID from `agora quickstart list`")
+	cmd.Flags().StringVar(&scenario, "scenario", "", "quickstart scenario; omitted selects the template default")
 	cmd.Flags().StringVar(&dir, "dir", "", "target directory for the cloned quickstart; defaults to <name>")
 	cmd.Flags().StringVar(&project, "project", "", "project ID or exact project name to use for env seeding")
 	cmd.Flags().StringVar(&ref, "ref", "", "git branch, tag, or ref to clone for pinned workshops")
@@ -296,6 +411,7 @@ If a current project context exists, or if --project is passed, the CLI also wri
 	cmd.MarkFlagsMutuallyExclusive("project", "template-only")
 	_ = cmd.MarkFlagRequired("template")
 	_ = cmd.RegisterFlagCompletionFunc("template", completeQuickstartTemplateIDs)
+	_ = cmd.RegisterFlagCompletionFunc("scenario", completeQuickstartScenarios)
 	_ = cmd.RegisterFlagCompletionFunc("project", a.completeProjectNames)
 	return cmd
 }
@@ -363,6 +479,7 @@ func chooseQuickstartProject(in io.Reader, out io.Writer, items []projectSummary
 
 func (a *App) buildQuickstartEnv() *cobra.Command {
 	var templateID string
+	var scenario string
 	var project string
 	cmd := &cobra.Command{
 		Use:   "env",
@@ -405,7 +522,7 @@ Python and Go quickstarts receive backend AGORA_APP_ID and AGORA_APP_CERTIFICATE
 			if len(args) > 0 && strings.TrimSpace(args[0]) != "" {
 				targetDir = args[0]
 			}
-			result, err := a.quickstartEnvWrite(targetDir, templateID, project)
+			result, err := a.quickstartEnvWrite(targetDir, templateID, scenario, project)
 			if err != nil {
 				return err
 			}
@@ -413,8 +530,10 @@ Python and Go quickstarts receive backend AGORA_APP_ID and AGORA_APP_CERTIFICATE
 		},
 	}
 	write.Flags().StringVar(&templateID, "template", "", "quickstart template ID; if omitted, the CLI detects it from the repo layout")
+	write.Flags().StringVar(&scenario, "scenario", "", "quickstart scenario; if omitted, use binding, manifest, or the template default")
 	write.Flags().StringVar(&project, "project", "", "project ID or exact project name to use for env seeding")
 	_ = write.RegisterFlagCompletionFunc("template", completeQuickstartTemplateIDs)
+	_ = write.RegisterFlagCompletionFunc("scenario", completeQuickstartScenarios)
 	_ = write.RegisterFlagCompletionFunc("project", a.completeProjectNames)
 	cmd.AddCommand(write)
 	return cmd
@@ -470,7 +589,7 @@ func (a *App) quickstartCreate(template quickstartTemplate, targetDir, explicitP
 	if overrideKey != "" {
 		progress.emit("clone:override", fmt.Sprintf("Using repo override from %s", overrideKey), map[string]any{"repoUrl": repoURL, "envVar": overrideKey})
 	}
-	if err := cloneScaffoldRepo(repoURL, absTarget, ref, progress); err != nil {
+	if err := cloneScaffoldRepo(repoURL, absTarget, ref, progress, &template); err != nil {
 		return nil, err
 	}
 
@@ -493,7 +612,8 @@ func (a *App) quickstartCreate(template quickstartTemplate, targetDir, explicitP
 			ProjectID:   boundProject.project.ProjectID,
 			ProjectName: boundProject.project.Name,
 			Region:      boundProject.region,
-			Template:    template.ID,
+			Template:    template.Template,
+			Scenario:    template.Scenario,
 			EnvPath:     writtenPath,
 		}); err != nil {
 			if cleanupErr := os.RemoveAll(absTarget); cleanupErr != nil {
@@ -506,24 +626,30 @@ func (a *App) quickstartCreate(template quickstartTemplate, targetDir, explicitP
 		written = append(written, writtenPath, filepath.ToSlash(filepath.Join(localAgoraDirName, localProjectFileName)))
 	}
 	sort.Strings(written)
+	setup := resolveQuickstartSetup(template, absTarget, probeQuickstartTool)
 
 	result := map[string]any{
-		"action":       "create",
-		"cloneUrl":     repoURL,
-		"docsUrl":      quickstartDocsURL(template, a.authRegion()),
-		"envPath":      envPath,
-		"envStatus":    envStatus,
-		"metadataPath": "",
-		"path":         absTarget,
-		"projectId":    nil,
-		"projectName":  nil,
-		"runtime":      template.Runtime,
-		"status":       "cloned",
-		"template":     template.ID,
-		"title":        template.Title,
-		"written":      written,
-		"nextSteps":    initNextSteps(template, absTarget),
-		"ref":          ref,
+		"action":           "create",
+		"cloneUrl":         repoURL,
+		"docsUrl":          quickstartDocsURL(template, a.authRegion()),
+		"envPath":          envPath,
+		"envStatus":        envStatus,
+		"metadataPath":     "",
+		"path":             absTarget,
+		"projectId":        nil,
+		"projectName":      nil,
+		"runtime":          template.Runtime,
+		"scenario":         template.Scenario,
+		"status":           "cloned",
+		"template":         template.Template,
+		"requiredFeatures": append([]string{}, template.RequiredFeatures...),
+		"title":            template.Title,
+		"written":          written,
+		"nextSteps":        setup.NextSteps,
+		"ref":              ref,
+	}
+	if setup.PackageManager != nil {
+		result["packageManager"] = setup.PackageManager
 	}
 	if boundProject != nil {
 		result["projectId"] = boundProject.project.ProjectID
@@ -546,12 +672,20 @@ func resolveScaffoldTarget(targetDir string) (string, error) {
 	return absTarget, nil
 }
 
-func cloneScaffoldRepo(repoURL, absTarget, ref string, progress progressEmitter) error {
+func cloneScaffoldRepo(repoURL, absTarget, ref string, progress progressEmitter, expected ...*quickstartTemplate) error {
 	progress.emit("clone:start", "Cloning scaffold repository", map[string]any{"repoUrl": repoURL, "targetPath": absTarget, "ref": ref})
 	if err := cloneQuickstartRepo(repoURL, absTarget, ref); err != nil {
 		return err
 	}
 	progress.emit("clone:complete", "Scaffold repository cloned", map[string]any{"targetPath": absTarget})
+	if len(expected) > 0 {
+		if err := validateRequiredQuickstartManifest(absTarget, *expected[0]); err != nil {
+			if cleanupErr := os.RemoveAll(absTarget); cleanupErr != nil {
+				return fmt.Errorf("%w; cleanup also failed for %s: %v", err, absTarget, cleanupErr)
+			}
+			return fmt.Errorf("%w; removed %s", err, absTarget)
+		}
+	}
 	if err := stripClonedGitMetadata(absTarget); err != nil {
 		if cleanupErr := os.RemoveAll(absTarget); cleanupErr != nil {
 			return fmt.Errorf("failed to remove scaffold git metadata after clone: %v; cleanup also failed for %s: %v", err, absTarget, cleanupErr)
@@ -562,7 +696,7 @@ func cloneScaffoldRepo(repoURL, absTarget, ref string, progress progressEmitter)
 	return nil
 }
 
-func (a *App) quickstartEnvWrite(targetDir, templateID, explicitProject string) (map[string]any, error) {
+func (a *App) quickstartEnvWrite(targetDir, templateID, scenario, explicitProject string) (map[string]any, error) {
 	absTarget, err := filepath.Abs(targetDir)
 	if err != nil {
 		return nil, err
@@ -575,7 +709,7 @@ func (a *App) quickstartEnvWrite(targetDir, templateID, explicitProject string) 
 		return nil, fmt.Errorf("%s is not a directory.", absTarget)
 	}
 
-	template, layout, err := resolveQuickstartEnvWriteTarget(absTarget, templateID)
+	template, layout, err := resolveQuickstartEnvWriteTarget(absTarget, templateID, scenario)
 	if err != nil {
 		return nil, err
 	}
@@ -595,21 +729,24 @@ func (a *App) quickstartEnvWrite(targetDir, templateID, explicitProject string) 
 		ProjectID:   target.project.ProjectID,
 		ProjectName: target.project.Name,
 		Region:      target.region,
-		Template:    template.ID,
+		Template:    template.Template,
+		Scenario:    template.Scenario,
 		EnvPath:     envPath,
 	}); err != nil {
 		return nil, err
 	}
 	return map[string]any{
-		"action":       "env-write",
-		"envPath":      envPath,
-		"metadataPath": filepath.ToSlash(filepath.Join(localAgoraDirName, localProjectFileName)),
-		"path":         absTarget,
-		"projectId":    target.project.ProjectID,
-		"projectName":  target.project.Name,
-		"status":       status,
-		"template":     template.ID,
-		"title":        template.Title,
+		"action":           "env-write",
+		"envPath":          envPath,
+		"metadataPath":     filepath.ToSlash(filepath.Join(localAgoraDirName, localProjectFileName)),
+		"path":             absTarget,
+		"projectId":        target.project.ProjectID,
+		"projectName":      target.project.Name,
+		"status":           status,
+		"template":         template.Template,
+		"scenario":         template.Scenario,
+		"requiredFeatures": append([]string{}, template.RequiredFeatures...),
+		"title":            template.Title,
 	}, nil
 }
 
@@ -763,15 +900,118 @@ func (a *App) resolveOptionalProjectTarget(explicitProject, startPath string) (p
 	return target, true, nil
 }
 
-func resolveQuickstartTemplateForPath(root, explicitTemplate string) (quickstartTemplate, error) {
-	if strings.TrimSpace(explicitTemplate) != "" {
-		template, ok := findQuickstartTemplate(explicitTemplate)
-		if !ok {
-			return quickstartTemplate{}, &cliError{Message: fmt.Sprintf("unknown quickstart template %q. Run `agora quickstart list` to see available templates.", explicitTemplate), Code: "QUICKSTART_TEMPLATE_UNKNOWN"}
+func readQuickstartManifest(root string) (quickstartManifest, bool, error) {
+	raw, err := os.ReadFile(filepath.Join(root, quickstartManifestFileName))
+	if errors.Is(err, os.ErrNotExist) {
+		return quickstartManifest{}, false, nil
+	}
+	if err != nil {
+		return quickstartManifest{}, false, err
+	}
+	var manifest quickstartManifest
+	if err := json.Unmarshal(raw, &manifest); err != nil {
+		return quickstartManifest{}, true, &cliError{Message: fmt.Sprintf("Invalid %s: %v.", quickstartManifestFileName, err), Code: "QUICKSTART_MANIFEST_INVALID"}
+	}
+	if manifest.SchemaVersion != 1 || strings.TrimSpace(manifest.Template) == "" || strings.TrimSpace(manifest.Scenario) == "" {
+		return quickstartManifest{}, true, &cliError{Message: fmt.Sprintf("Invalid %s: schemaVersion must be 1 and template/scenario are required.", quickstartManifestFileName), Code: "QUICKSTART_MANIFEST_INVALID"}
+	}
+	if _, err := selectQuickstartDefinition(manifest.Template, manifest.Scenario); err != nil {
+		return quickstartManifest{}, true, &cliError{Message: fmt.Sprintf("Invalid %s selection %s + %s: %v", quickstartManifestFileName, manifest.Template, manifest.Scenario, err), Code: "QUICKSTART_MANIFEST_INVALID"}
+	}
+	return manifest, true, nil
+}
+
+func validateRequiredQuickstartManifest(root string, expected quickstartTemplate) error {
+	if expected.DefaultScenario {
+		return nil
+	}
+	manifest, found, err := readQuickstartManifest(root)
+	if err != nil {
+		return err
+	}
+	if !found {
+		return &cliError{
+			Message: fmt.Sprintf("Required %s is missing for %s + %s.", quickstartManifestFileName, expected.Template, expected.Scenario),
+			Code:    "QUICKSTART_MANIFEST_INVALID",
 		}
-		return *template, nil
+	}
+	actual, err := selectQuickstartDefinition(manifest.Template, manifest.Scenario)
+	if err != nil {
+		return err
+	}
+	if !sameQuickstartSelection(expected, actual) {
+		return quickstartSelectionMismatch("selected quickstart", expected, quickstartManifestFileName, actual)
+	}
+	return nil
+}
+
+func sameQuickstartSelection(a, b quickstartTemplate) bool {
+	return a.Template == b.Template && a.Scenario == b.Scenario
+}
+
+func quickstartSelectionMismatch(leftName string, left quickstartTemplate, rightName string, right quickstartTemplate) error {
+	return &cliError{
+		Message: fmt.Sprintf("Quickstart selection mismatch: %s is %s + %s, but %s is %s + %s.", leftName, left.Template, left.Scenario, rightName, right.Template, right.Scenario),
+		Code:    "QUICKSTART_SELECTION_MISMATCH",
+	}
+}
+
+func resolveQuickstartTemplateForPath(root, explicitTemplate, explicitScenario string) (quickstartTemplate, error) {
+	manifest, foundManifest, err := readQuickstartManifest(root)
+	if err != nil {
+		return quickstartTemplate{}, err
+	}
+	binding, foundBinding, bindingRoot, err := detectLocalProjectBindingFrom(root)
+	if err != nil {
+		return quickstartTemplate{}, err
+	}
+	foundBinding = foundBinding && bindingRoot == root && strings.TrimSpace(binding.Template) != ""
+
+	type namedSelection struct {
+		name       string
+		definition quickstartTemplate
+	}
+	selections := []namedSelection{}
+	if foundBinding {
+		definition, resolveErr := selectQuickstartDefinition(binding.Template, binding.Scenario)
+		if resolveErr != nil {
+			return quickstartTemplate{}, resolveErr
+		}
+		selections = append(selections, namedSelection{name: ".agora/project.json", definition: definition})
+	}
+	if foundManifest {
+		definition, _ := selectQuickstartDefinition(manifest.Template, manifest.Scenario)
+		selections = append(selections, namedSelection{name: quickstartManifestFileName, definition: definition})
+	}
+
+	if strings.TrimSpace(explicitTemplate) != "" {
+		definition, resolveErr := selectQuickstartDefinition(explicitTemplate, explicitScenario)
+		if resolveErr != nil {
+			return quickstartTemplate{}, resolveErr
+		}
+		selections = append([]namedSelection{{name: "explicit flags", definition: definition}}, selections...)
+	} else if strings.TrimSpace(explicitScenario) != "" {
+		if len(selections) == 0 {
+			return quickstartTemplate{}, &cliError{Message: "--scenario requires --template when the repository has no binding or manifest.", Code: "QUICKSTART_TEMPLATE_REQUIRED"}
+		}
+		definition, resolveErr := selectQuickstartDefinition(selections[0].definition.Template, explicitScenario)
+		if resolveErr != nil {
+			return quickstartTemplate{}, resolveErr
+		}
+		selections = append([]namedSelection{{name: "explicit flags", definition: definition}}, selections...)
+	}
+	if len(selections) > 0 {
+		for index := 1; index < len(selections); index++ {
+			if !sameQuickstartSelection(selections[0].definition, selections[index].definition) {
+				return quickstartTemplate{}, quickstartSelectionMismatch(selections[0].name, selections[0].definition, selections[index].name, selections[index].definition)
+			}
+		}
+		return selections[0].definition, nil
 	}
 	for _, template := range quickstartTemplates() {
+		if !template.DefaultScenario {
+			continue
+		}
 		if matchesQuickstartTemplate(root, template) {
 			return template, nil
 		}
@@ -835,25 +1075,15 @@ func quickstartEnvLayoutForEnvPath(template quickstartTemplate, envPath string) 
 	return quickstartEnvLayout{}, false
 }
 
-func resolveQuickstartEnvWriteTarget(root, explicitTemplate string) (quickstartTemplate, quickstartEnvLayout, error) {
+func resolveQuickstartEnvWriteTarget(root, explicitTemplate, explicitScenario string) (quickstartTemplate, quickstartEnvLayout, error) {
 	binding, foundBinding, bindingRoot, err := detectLocalProjectBindingFrom(root)
 	if err != nil {
 		return quickstartTemplate{}, quickstartEnvLayout{}, err
 	}
 
-	var template quickstartTemplate
-	if strings.TrimSpace(explicitTemplate) == "" && foundBinding && bindingRoot == root && strings.TrimSpace(binding.Template) != "" {
-		found, ok := findQuickstartTemplate(binding.Template)
-		if !ok {
-			return quickstartTemplate{}, quickstartEnvLayout{}, &cliError{Message: fmt.Sprintf("unknown quickstart template %q. Run `agora quickstart list` to see available templates.", binding.Template), Code: "QUICKSTART_TEMPLATE_UNKNOWN"}
-		}
-		template = *found
-	} else {
-		resolved, resolveErr := resolveQuickstartTemplateForPath(root, explicitTemplate)
-		if resolveErr != nil {
-			return quickstartTemplate{}, quickstartEnvLayout{}, resolveErr
-		}
-		template = resolved
+	template, err := resolveQuickstartTemplateForPath(root, explicitTemplate, explicitScenario)
+	if err != nil {
+		return quickstartTemplate{}, quickstartEnvLayout{}, err
 	}
 
 	if foundBinding && bindingRoot == root && strings.TrimSpace(binding.EnvPath) != "" {

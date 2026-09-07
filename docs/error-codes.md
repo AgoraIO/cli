@@ -30,12 +30,18 @@ This catalog is the source of truth for stable codes. CI runs `make snapshot-err
 | `PROJECT_NO_CERTIFICATE` | 1 | The selected project has no app certificate for env seeding. | Enable an app certificate in Console or select another project. |
 | `PROJECT_ENV_TEMPLATE_UNKNOWN` | 1 | The `--template` value for `project env write` is not supported. | Use `nextjs` or `standard`. |
 | `PROJECT_NOT_READY` | 1 | `project doctor` could not surface a more specific issue. | Re-run `project doctor` for details. |
+| `PROJECT_TEMPLATE_UNKNOWN` | 1 | `project create --template` is not a known project scenario preset. | Use `video-call` or `voice-agent`; inspect `agora introspect --json` for the current catalog. |
 
 ### Quickstart / init
 
 | Code | Exit | Meaning | Recovery |
 |------|------|---------|----------|
 | `QUICKSTART_TEMPLATE_UNKNOWN` | 1 | The template ID is not known to this CLI. | Run `agora quickstart list`. |
+| `QUICKSTART_SCENARIO_UNKNOWN` | 1 | The scenario is not known to this CLI. | Run `agora quickstart list` and use an `items[].scenario` value. |
+| `QUICKSTART_SCENARIO_UNSUPPORTED` | 1 | The scenario exists but is not supported by the selected template. | Choose a template/scenario pair returned by `agora quickstart list`. |
+| `QUICKSTART_SELECTION_MISMATCH` | 1 | Explicit flags, `.agora/project.json`, and `agora.quickstart.json` disagree about template/scenario identity. | Correct the conflicting selection; do not overwrite env until all sources agree. |
+| `QUICKSTART_MANIFEST_INVALID` | 1 | `agora.quickstart.json` is malformed, uses an unsupported schema, has missing identity fields, or is required but absent. | Restore a schema v1 manifest with `template` and `scenario` matching the quickstart. |
+| `QUICKSTART_REQUIRED_FEATURE_MISSING` | 1 | An existing project does not provide every feature required by the selected quickstart. | Run the `agora project feature enable ...` command in the error, then retry. |
 | `QUICKSTART_TEMPLATE_UNAVAILABLE` | 1 | The template exists but is not currently available. | Choose an available template. |
 | `QUICKSTART_TEMPLATE_ENV_UNSUPPORTED` | 1 | The selected template does not define an env target path. | Choose a template with env support or configure the env file manually. |
 | `QUICKSTART_PROJECT_REQUIRED` | 1 | `quickstart create` could not resolve a project in a non-interactive run, or the account has no projects to select interactively. | Pass `--project`, set global context with `agora project use`, use `agora init`, or explicitly pass `--template-only`. |
@@ -85,7 +91,6 @@ These codes appear inside `data.checks[].issues[].code` and (for blocking issues
 | `WORKSPACE_ENV_FILE_MISSING` | 1 | A quickstart env file expected by the bound template is missing. | Run the command from `suggestedCommand` (typically `agora quickstart env write`). |
 | `WORKSPACE_ENV_READ_FAILED` | 1 | The CLI could not read the quickstart env file. | Run the command from `suggestedCommand` (`agora quickstart env write . --project <id>`); if it still fails, inspect file permissions and contents. |
 | `WORKSPACE_ENV_PROJECT_MISMATCH` | 1 | The quickstart env file points at a different App ID than the selected project. | Run the command from `suggestedCommand` to overwrite the env file. |
-| `WORKSPACE_ENV_METADATA_MISSING` | 1 | The quickstart env file is missing Agora-managed project metadata comments. | Run the command from `suggestedCommand` to refresh metadata. |
 | `WORKSPACE_ENV_APP_ID_MISSING` | 1 | A quickstart env file is missing the required app ID key. | Run the command from `suggestedCommand`. |
 | `WORKSPACE_ENV_APP_ID_MISMATCH` | 1 | A quickstart env file points at a different app ID. | Run the command from `suggestedCommand`. |
 | `APP_CREDENTIALS_MISSING` | 1 | The selected project has no app ID / app certificate yet. | Run the command from `suggestedCommand` (`agora project show --project <id>`) to re-fetch credentials; if still missing, enable the app certificate in Console (`agora open --target console`). |

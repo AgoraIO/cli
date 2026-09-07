@@ -34,26 +34,42 @@ func skillsCatalog() []skill {
 		{
 			ID:          "create-nextjs-video-app",
 			Title:       "Create a Next.js video app",
-			Description: "Scaffold a runnable Next.js video app bound to an Agora project, with credentials wired into .env.local.",
+			Description: "Create a runnable Next.js one-to-one RTC audio and video call.",
 			Category:    "scaffold",
-			Tags:        []string{"nextjs", "rtc", "video", "init"},
+			Tags:        []string{"nextjs", "rtc", "video", "video-call", "init"},
 			Steps: []string{
 				"agora login",
-				"agora init my-nextjs-demo --template nextjs --new-project --json",
-				"cd my-nextjs-demo && npm install && npm run dev",
+				"agora init my-nextjs-demo --template nextjs --scenario video-call --new-project --json",
+				"Run the nextSteps returned by agora init exactly; they select pnpm or the pinned npx fallback for this machine.",
 			},
 			NextSteps: []string{
 				"Open http://localhost:3000 to verify the app boots.",
-				"Run agora project doctor --json to confirm RTC is enabled.",
+				"Run agora project doctor --feature rtc --deep --json to validate the project, manifest, binding, and env.",
 			},
 			DocsURL: "https://agoraio.github.io/cli/install.html",
+		},
+		{
+			ID:          "create-nextjs-voice-agent",
+			Title:       "Create a Next.js voice agent (ConvoAI)",
+			Description: "Create a runnable Next.js conversational AI voice agent.",
+			Category:    "scaffold",
+			Tags:        []string{"nextjs", "convoai", "voice", "voice-agent", "init"},
+			Steps: []string{
+				"agora login",
+				"agora init my-nextjs-voice-agent --template nextjs --scenario voice-agent --new-project --json",
+				"cd my-nextjs-voice-agent && pnpm install && pnpm dev",
+			},
+			NextSteps: []string{
+				"Open http://localhost:3000 to verify the app boots.",
+				"Run agora project doctor --feature convoai --deep --json to validate project and quickstart readiness.",
+			},
 		},
 		{
 			ID:          "create-python-voice-agent",
 			Title:       "Create a Python voice agent (ConvoAI)",
 			Description: "Bootstrap a Python ConvoAI voice agent with project metadata and env wiring.",
 			Category:    "scaffold",
-			Tags:        []string{"python", "convoai", "voice", "init"},
+			Tags:        []string{"python", "convoai", "voice", "voice-agent", "init"},
 			Steps: []string{
 				"agora login",
 				"agora init my-voice-agent --template python --new-project --feature convoai --json",
@@ -69,7 +85,7 @@ func skillsCatalog() []skill {
 			Title:       "Create a Go voice agent (ConvoAI)",
 			Description: "Bootstrap a Go ConvoAI voice agent with project metadata and env wiring.",
 			Category:    "scaffold",
-			Tags:        []string{"go", "convoai", "voice", "backend", "init"},
+			Tags:        []string{"go", "convoai", "voice", "voice-agent", "init"},
 			Steps: []string{
 				"agora login",
 				"agora init my-go-voice-agent --template go --new-project --feature convoai --json",

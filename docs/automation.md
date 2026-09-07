@@ -345,6 +345,7 @@ Example:
 ./agora init my-nextjs-demo --template nextjs --json
 ./agora init my-nextjs-demo --template nextjs --new-project --json
 ./agora init my-agent --recipe tool-calling --new-project --json
+./agora init my-video-demo --template nextjs --scenario video-call --new-project --json
 ```
 
 By default `init` reuses an existing project — preferring one named exactly `"Default Project"`. If no default exists, interactive sessions show existing projects with a create-new option and default to the most recently created project; JSON, CI, and non-TTY runs select the most recent project automatically. Pass `--new-project` to force creation. Use `--project <name|id>` to bind to a specific project.
@@ -375,20 +376,26 @@ Required `data` fields:
 - `metadataPath`
   Repo-local project binding file path, currently `.agora/project.json`.
 - `enabledFeatures`
-  Array of features enabled during this run. Defaults to `rtc`, `rtm`, and `convoai` for newly created projects unless overridden with `--feature`. Empty for existing projects since the CLI did not create them in this run.
+  Array of features enabled during this run. A new project starts from the selected scenario's required features and merges explicit `--feature` values; `nextjs + video-call` enables only `rtc` unless more features are requested. Empty for existing projects since the CLI did not create them in this run.
 - `nextSteps`
-  Ordered list of suggested follow-up commands for the selected source.
+  Ordered list of suggested follow-up commands for the selected source. For the RTC Next.js quickstart, these use matching pnpm or a version-pinned npx fallback detected after clone.
 - `status`
   Currently `ready`.
 
 Optional fields:
 - `template`
   Present for built-in quickstart initialization.
+- `scenario`, `requiredFeatures`
+  Present for built-in quickstart initialization; describe the selected scenario and its required features.
 - `recipe`, `recipeUrl`, `recipeRawUrl`, `primaryPrompt`, `cloneUrl`
   Present for recipe-backed initialization. The CLI resolves this metadata from
   the official recipes API before it selects or creates a project.
 - `rtmDataCenter`
   RTM data center configured on the new project when RTM was enabled. Defaults to `NA` when `--rtm-data-center` is omitted.
+- `packageManager`
+  Present when the selected quickstart exposes a supported pinned package manager.
+  Fields are `name`, `requiredVersion`, optional `detectedVersion`, `strategy`
+  (`native`, `npx`, or `unavailable`), `ready`, and optional `message`.
 
 Display-oriented fields:
 - `title`
@@ -396,6 +403,13 @@ Display-oriented fields:
 Safe branch fields:
 - `sourceType`
 - `sourceId`
+- `template`
+- `scenario`
+- `requiredFeatures`
+- `packageManager.name`
+- `packageManager.requiredVersion`
+- `packageManager.strategy`
+- `packageManager.ready`
 - `projectAction`
 - `projectId`
 - `path`
@@ -653,6 +667,9 @@ Required `data` fields:
 
 Each item currently includes:
 - `id`
+- `template`
+- `scenario`
+- `requiredFeatures`
 - `title`
 - `description`
 - `runtime`
@@ -661,9 +678,14 @@ Each item currently includes:
 - `available`
 - `envDocs`
 - `supportsInit`
+- `installCommand`
+- `runCommand`
 
 Safe branch fields:
 - `items[].id`
+- `items[].template`
+- `items[].scenario`
+- `items[].requiredFeatures`
 - `items[].runtime`
 - `items[].repoUrl`
 - `items[].available`
@@ -680,6 +702,14 @@ Display-oriented fields:
 Automation notes:
 - `--ref <branch|tag|ref>` pins the cloned quickstart source for workshops and reproducible demos.
 - `--template-only` explicitly skips project lookup and env-file creation. Without a resolved project or this flag, non-interactive runs fail with `QUICKSTART_PROJECT_REQUIRED` before cloning.
+- `--scenario <scenario>` selects an exact scenario; when omitted, the template's default scenario is used.
+- `nextjs + video-call` requires only `rtc` and honors `AGORA_QUICKSTART_NEXTJS_VIDEO_CALL_REPO_URL` for local mirrors and fixtures.
+- Non-default scenarios such as `nextjs + video-call` must provide `agora.quickstart.json` with matching `template` and `scenario`. The CLI validates it after clone and removes the target before writing env or binding data when validation fails. Existing default-scenario quickstarts remain compatible without a manifest.
+- After cloning `nextjs + video-call`, the CLI reads `package.json#packageManager`.
+  An exact pnpm match produces `pnpm install --frozen-lockfile` and `pnpm dev`.
+  Missing or mismatched pnpm produces pinned npx steps when npx is available.
+  If neither is available, `packageManager.ready` is false and no unusable
+  install or run command is included in `nextSteps`.
 
 Example:
 
@@ -691,6 +721,8 @@ Required `data` fields:
 - `action`
   Always `create`.
 - `template`
+- `scenario`
+- `requiredFeatures`
 - `title`
 - `runtime`
 - `cloneUrl`
@@ -711,9 +743,20 @@ Required `data` fields:
 Optional fields:
 - `projectId`
 - `projectName`
+- `packageManager`
+  Present for RTC Next.js when `package.json#packageManager` is a strict
+  `pnpm@<major>.<minor>.<patch>` value. Its fields are `name`,
+  `requiredVersion`, optional `detectedVersion`, `strategy`, `ready`, and an
+  optional diagnostic `message`.
 
 Safe branch fields:
 - `template`
+- `scenario`
+- `requiredFeatures`
+- `packageManager.name`
+- `packageManager.requiredVersion`
+- `packageManager.strategy`
+- `packageManager.ready`
 - `path`
 - `envStatus`
 - `envPath`
@@ -737,6 +780,8 @@ Required `data` fields:
 - `action`
   Always `env-write`.
 - `template`
+- `scenario`
+- `requiredFeatures`
 - `title`
 - `path`
   Absolute path to the quickstart root.
@@ -760,6 +805,8 @@ Env write behavior:
 
 Safe branch fields:
 - `template`
+- `scenario`
+- `requiredFeatures`
 - `path`
 - `envPath`
 - `projectId`
