@@ -276,8 +276,9 @@ Quickstart template behavior:
 - Go quickstarts copy `server/.env.example` to `server/.env`, then use `AGORA_APP_ID` plus `AGORA_APP_CERTIFICATE`
 - Existing Python and Go quickstarts keep their recorded env path when reconfigured, while legacy `APP_ID` / `APP_CERTIFICATE` assignments are commented out and replaced with `AGORA_APP_ID` / `AGORA_APP_CERTIFICATE`.
 - The RTC Next.js quickstart reads its pinned pnpm version after clone. Matching
-  pnpm produces native setup steps; otherwise the CLI uses a version-pinned npx
-  fallback when available. The CLI never installs dependencies or global tools.
+  pnpm produces reproducible setup steps; otherwise the CLI uses native npm
+  without creating `package-lock.json`. The CLI never installs dependencies or
+  global tools.
 
 `project env write` auto-detects Next.js workspaces (or accepts `--template nextjs|standard`) and writes `AGORA_APP_ID` / `AGORA_APP_CERTIFICATE` or the Next.js equivalents.
 

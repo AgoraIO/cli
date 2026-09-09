@@ -28,12 +28,12 @@ func TestResolveQuickstartSetupUsesMatchingPNPM(t *testing.T) {
 	if !reflect.DeepEqual(setup.NextSteps, wantSteps) {
 		t.Fatalf("next steps:\n got: %#v\nwant: %#v", setup.NextSteps, wantSteps)
 	}
-	if setup.PackageManager == nil || setup.PackageManager.Strategy != "native" || !setup.PackageManager.Ready || setup.PackageManager.RequiredVersion != "9.15.9" || setup.PackageManager.DetectedVersion != "9.15.9" {
+	if setup.PackageManager == nil || setup.PackageManager.Strategy != "native" || !setup.PackageManager.Ready || setup.PackageManager.RequiredVersion != "9.15.9" || setup.PackageManager.DetectedVersion != "9.15.9" || setup.PackageManager.SelectedName != "pnpm" || setup.PackageManager.SelectedVersion != "9.15.9" {
 		t.Fatalf("unexpected package manager result: %+v", setup.PackageManager)
 	}
 }
 
-func TestResolveQuickstartSetupFallsBackToNPXWhenPNPMIsMissing(t *testing.T) {
+func TestResolveQuickstartSetupFallsBackToNPMWhenPNPMIsMissing(t *testing.T) {
 	root := t.TempDir()
 	if err := os.WriteFile(filepath.Join(root, "package.json"), []byte(`{"packageManager":"pnpm@9.15.9"}`), 0o644); err != nil {
 		t.Fatal(err)
@@ -44,23 +44,26 @@ func TestResolveQuickstartSetupFallsBackToNPXWhenPNPMIsMissing(t *testing.T) {
 	}
 
 	setup := resolveQuickstartSetup(template, root, func(_ string, command string) (string, bool) {
-		return "", command == "npx"
+		if command == "npm" {
+			return "10.9.4", true
+		}
+		return "", false
 	})
 
 	wantSteps := []string{
 		"cd " + filepath.Base(root),
-		"npx --yes pnpm@9.15.9 install --frozen-lockfile",
-		"npx --yes pnpm@9.15.9 dev",
+		"npm install --package-lock=false",
+		"npm run dev",
 	}
 	if !reflect.DeepEqual(setup.NextSteps, wantSteps) {
 		t.Fatalf("next steps:\n got: %#v\nwant: %#v", setup.NextSteps, wantSteps)
 	}
-	if setup.PackageManager == nil || setup.PackageManager.Strategy != "npx" || !setup.PackageManager.Ready || setup.PackageManager.DetectedVersion != "" {
+	if setup.PackageManager == nil || setup.PackageManager.Strategy != "npm" || !setup.PackageManager.Ready || setup.PackageManager.DetectedVersion != "" || setup.PackageManager.SelectedName != "npm" || setup.PackageManager.SelectedVersion != "10.9.4" {
 		t.Fatalf("unexpected package manager result: %+v", setup.PackageManager)
 	}
 }
 
-func TestResolveQuickstartSetupFallsBackToNPXWhenPNPMVersionDiffers(t *testing.T) {
+func TestResolveQuickstartSetupFallsBackToNPMWhenPNPMVersionDiffers(t *testing.T) {
 	root := t.TempDir()
 	if err := os.WriteFile(filepath.Join(root, "package.json"), []byte(`{"packageManager":"pnpm@9.15.9"}`), 0o644); err != nil {
 		t.Fatal(err)
@@ -74,18 +77,21 @@ func TestResolveQuickstartSetupFallsBackToNPXWhenPNPMVersionDiffers(t *testing.T
 		if command == "pnpm" {
 			return "8.15.9", true
 		}
-		return "", command == "npx"
+		if command == "npm" {
+			return "10.9.4", true
+		}
+		return "", false
 	})
 
-	if setup.PackageManager == nil || setup.PackageManager.Strategy != "npx" || setup.PackageManager.DetectedVersion != "8.15.9" {
+	if setup.PackageManager == nil || setup.PackageManager.Strategy != "npm" || setup.PackageManager.DetectedVersion != "8.15.9" || setup.PackageManager.SelectedName != "npm" || setup.PackageManager.SelectedVersion != "10.9.4" {
 		t.Fatalf("unexpected package manager result: %+v", setup.PackageManager)
 	}
-	if got := setup.NextSteps[1]; got != "npx --yes pnpm@9.15.9 install --frozen-lockfile" {
+	if got := setup.NextSteps[1]; got != "npm install --package-lock=false" {
 		t.Fatalf("install step = %q", got)
 	}
 }
 
-func TestResolveQuickstartSetupReportsUnavailableWithoutPNPMOrNPX(t *testing.T) {
+func TestResolveQuickstartSetupReportsUnavailableWithoutPNPMOrNPM(t *testing.T) {
 	root := t.TempDir()
 	if err := os.WriteFile(filepath.Join(root, "package.json"), []byte(`{"packageManager":"pnpm@9.15.9"}`), 0o644); err != nil {
 		t.Fatal(err)
@@ -119,7 +125,7 @@ func TestResolveQuickstartSetupDoesNotInterpolateMalformedPackageManager(t *test
 	}
 
 	setup := resolveQuickstartSetup(template, root, func(_ string, command string) (string, bool) {
-		return "", command == "npx"
+		return "", command == "npm"
 	})
 
 	wantSteps := []string{"cd " + filepath.Base(root), "pnpm install", "pnpm dev"}

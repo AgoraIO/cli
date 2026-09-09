@@ -34,6 +34,9 @@ func TestCLIInitRTCVideoCallCreatesRTCOnlyProject(t *testing.T) {
 	if !strings.Contains(result.stdout, `"packageManager":{"name":"pnpm","requiredVersion":"9.15.9"`) {
 		t.Fatalf("rtc init is missing package manager setup metadata: %+v", result)
 	}
+	if !strings.Contains(result.stdout, `"selectedName":`) {
+		t.Fatalf("rtc init is missing selected package manager metadata: %+v", result)
+	}
 	if strings.Contains(result.stdout, `"rtmDataCenter"`) || strings.Contains(result.stdout, `"convoai"`) {
 		t.Fatalf("rtc init enabled unrelated features: %+v", result)
 	}

@@ -40,7 +40,7 @@ func skillsCatalog() []skill {
 			Steps: []string{
 				"agora login",
 				"agora init my-nextjs-demo --template nextjs --scenario video-call --new-project --json",
-				"Run the nextSteps returned by agora init exactly; they select pnpm or the pinned npx fallback for this machine.",
+				"Run the nextSteps returned by agora init exactly; they select exact pnpm or the native npm fallback for this machine.",
 			},
 			NextSteps: []string{
 				"Open http://localhost:3000 to verify the app boots.",

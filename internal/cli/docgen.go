@@ -12,6 +12,7 @@ package cli
 import (
 	"fmt"
 	"io"
+	"sort"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -82,10 +83,15 @@ func RenderCommandReference(out io.Writer, root *cobra.Command) error {
 				seen[key] = true
 			}
 		}
-		for key, values := range enums {
+		remaining := make([]string, 0, len(enums)-len(seen))
+		for key := range enums {
 			if !seen[key] {
-				writeEnumRow(&b, key, values)
+				remaining = append(remaining, key)
 			}
+		}
+		sort.Strings(remaining)
+		for _, key := range remaining {
+			writeEnumRow(&b, key, enums[key])
 		}
 	}
 

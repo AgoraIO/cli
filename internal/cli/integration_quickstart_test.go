@@ -45,6 +45,9 @@ func TestCLIRTCVideoCallQuickstartScenario(t *testing.T) {
 	if !strings.Contains(create.stdout, `"packageManager":{"name":"pnpm","requiredVersion":"9.15.9"`) {
 		t.Fatalf("rtc quickstart create is missing package manager setup metadata: %+v", create)
 	}
+	if !strings.Contains(create.stdout, `"selectedName":`) {
+		t.Fatalf("rtc quickstart create is missing selected package manager metadata: %+v", create)
+	}
 	binding, err := loadLocalProjectBinding(target)
 	if err != nil {
 		t.Fatal(err)

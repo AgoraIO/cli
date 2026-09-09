@@ -464,10 +464,10 @@ Show the current auth status
 
 **`doctorStatus`**: `healthy`, `warning`, `not_ready`, `auth_error`
 
-**`recipeTypes`**: `all`, `ai`, `rtc`
-
 **`projectTemplates`**: `video-call`, `voice-agent`
 
-**`quickstartTemplates`**: `nextjs`, `python`, `go`
-
 **`quickstartScenarios`**: `voice-agent`, `video-call`
+
+**`quickstartTemplates`**: `nextjs`, `python`, `go`, `android`
+
+**`recipeTypes`**: `all`, `ai`, `rtc`

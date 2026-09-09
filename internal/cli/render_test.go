@@ -61,8 +61,8 @@ func TestTerminalValueWidthZeroWhenWidthUnknown(t *testing.T) {
 }
 
 func TestQuickstartPackageManagerSummary(t *testing.T) {
-	ready := &quickstartPackageManagerResult{Name: "pnpm", RequiredVersion: "9.15.9", Strategy: "npx", Ready: true}
-	if got := quickstartPackageManagerSummary(ready); got != "pnpm 9.15.9 via npx" {
+	ready := &quickstartPackageManagerResult{Name: "pnpm", RequiredVersion: "9.15.9", SelectedName: "npm", SelectedVersion: "10.9.4", Strategy: "npm", Ready: true}
+	if got := quickstartPackageManagerSummary(ready); got != "pnpm 9.15.9 via npm 10.9.4" {
 		t.Fatalf("ready summary = %q", got)
 	}
 	unavailable := &quickstartPackageManagerResult{Name: "pnpm", RequiredVersion: "9.15.9", Strategy: "unavailable"}

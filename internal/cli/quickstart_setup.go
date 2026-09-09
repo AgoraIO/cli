@@ -15,6 +15,8 @@ type quickstartPackageManagerResult struct {
 	Name            string `json:"name"`
 	RequiredVersion string `json:"requiredVersion"`
 	DetectedVersion string `json:"detectedVersion,omitempty"`
+	SelectedName    string `json:"selectedName,omitempty"`
+	SelectedVersion string `json:"selectedVersion,omitempty"`
 	Strategy        string `json:"strategy"`
 	Ready           bool   `json:"ready"`
 	Message         string `json:"message,omitempty"`
@@ -35,16 +37,16 @@ func quickstartPackageManagerSummary(packageManager *quickstartPackageManagerRes
 	if packageManager.Strategy == "unavailable" {
 		return base + " unavailable"
 	}
-	return base + " via " + packageManager.Strategy
+	if packageManager.SelectedName == packageManager.Name {
+		return base
+	}
+	return base + " via " + packageManager.SelectedName + " " + packageManager.SelectedVersion
 }
 
 func probeQuickstartTool(root, command string) (string, bool) {
 	path, err := exec.LookPath(command)
 	if err != nil {
 		return "", false
-	}
-	if command == "npx" {
-		return "", true
 	}
 	cmd := exec.Command(path, "--version")
 	cmd.Dir = root
@@ -78,23 +80,26 @@ func resolveQuickstartSetup(template quickstartTemplate, targetDir string, probe
 			template.RunCommand,
 		}
 		packageManager.Strategy = "native"
+		packageManager.SelectedName = name
+		packageManager.SelectedVersion = detectedVersion
 		packageManager.Ready = true
 		return setup
 	}
-	if _, npxAvailable := probe(targetDir, "npx"); npxAvailable {
-		spec := name + "@" + version
+	if npmVersion, npmAvailable := probe(targetDir, "npm"); npmAvailable {
 		setup.NextSteps = []string{
 			"cd " + filepath.Base(targetDir),
-			"npx --yes " + spec + " install --frozen-lockfile",
-			"npx --yes " + spec + " dev",
+			"npm install --package-lock=false",
+			"npm run dev",
 		}
-		packageManager.Strategy = "npx"
+		packageManager.Strategy = "npm"
+		packageManager.SelectedName = "npm"
+		packageManager.SelectedVersion = npmVersion
 		packageManager.Ready = true
 		return setup
 	}
 	setup.NextSteps = []string{"cd " + filepath.Base(targetDir)}
 	packageManager.Strategy = "unavailable"
-	packageManager.Message = "pnpm " + version + " is unavailable and npx was not found; install Node.js with npm, then rerun the setup commands."
+	packageManager.Message = "pnpm " + version + " is unavailable and npm was not found; install Node.js with npm or install pnpm, then rerun the setup commands."
 	return setup
 }
 

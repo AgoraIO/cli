@@ -378,7 +378,7 @@ Required `data` fields:
 - `enabledFeatures`
   Array of features enabled during this run. A new project starts from the selected scenario's required features and merges explicit `--feature` values; `nextjs + video-call` enables only `rtc` unless more features are requested. Empty for existing projects since the CLI did not create them in this run.
 - `nextSteps`
-  Ordered list of suggested follow-up commands for the selected source. For the RTC Next.js quickstart, these use matching pnpm or a version-pinned npx fallback detected after clone.
+  Ordered list of suggested follow-up commands for the selected source. For the RTC Next.js quickstart, these use matching pnpm or a native npm fallback detected after clone.
 - `status`
   Currently `ready`.
 
@@ -394,8 +394,10 @@ Optional fields:
   RTM data center configured on the new project when RTM was enabled. Defaults to `NA` when `--rtm-data-center` is omitted.
 - `packageManager`
   Present when the selected quickstart exposes a supported pinned package manager.
-  Fields are `name`, `requiredVersion`, optional `detectedVersion`, `strategy`
-  (`native`, `npx`, or `unavailable`), `ready`, and optional `message`.
+  Existing fields are `name`, `requiredVersion`, optional `detectedVersion`,
+  `strategy` (`native`, `npm`, or `unavailable`), `ready`, and optional
+  `message`. `selectedName` and `selectedVersion` identify the command runner
+  used by the resolved steps.
 
 Display-oriented fields:
 - `title`
@@ -410,6 +412,7 @@ Safe branch fields:
 - `packageManager.requiredVersion`
 - `packageManager.strategy`
 - `packageManager.ready`
+- `packageManager.selectedName`
 - `projectAction`
 - `projectId`
 - `path`
@@ -707,8 +710,9 @@ Automation notes:
 - Non-default scenarios such as `nextjs + video-call` must provide `agora.quickstart.json` with matching `template` and `scenario`. The CLI validates it after clone and removes the target before writing env or binding data when validation fails. Existing default-scenario quickstarts remain compatible without a manifest.
 - After cloning `nextjs + video-call`, the CLI reads `package.json#packageManager`.
   An exact pnpm match produces `pnpm install --frozen-lockfile` and `pnpm dev`.
-  Missing or mismatched pnpm produces pinned npx steps when npx is available.
-  If neither is available, `packageManager.ready` is false and no unusable
+  Missing or mismatched pnpm produces `npm install --package-lock=false` and
+  `npm run dev` when npm is available. If neither is available,
+  `packageManager.ready` is false and no unusable
   install or run command is included in `nextSteps`.
 
 Example:
@@ -747,7 +751,8 @@ Optional fields:
   Present for RTC Next.js when `package.json#packageManager` is a strict
   `pnpm@<major>.<minor>.<patch>` value. Its fields are `name`,
   `requiredVersion`, optional `detectedVersion`, `strategy`, `ready`, and an
-  optional diagnostic `message`.
+  optional diagnostic `message`. `selectedName` and `selectedVersion` identify
+  the package manager used by the resolved steps.
 
 Safe branch fields:
 - `template`
@@ -757,6 +762,7 @@ Safe branch fields:
 - `packageManager.requiredVersion`
 - `packageManager.strategy`
 - `packageManager.ready`
+- `packageManager.selectedName`
 - `path`
 - `envStatus`
 - `envPath`

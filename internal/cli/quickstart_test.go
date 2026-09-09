@@ -238,7 +238,7 @@ func TestNextJSVideoAppSkillUsesVideoCallQuickstartWorkflow(t *testing.T) {
 		wantSteps := []string{
 			"agora login",
 			"agora init my-nextjs-demo --template nextjs --scenario video-call --new-project --json",
-			"Run the nextSteps returned by agora init exactly; they select pnpm or the pinned npx fallback for this machine.",
+			"Run the nextSteps returned by agora init exactly; they select exact pnpm or the native npm fallback for this machine.",
 		}
 		if !reflect.DeepEqual(skill.Steps, wantSteps) {
 			t.Fatalf("unexpected Next.js video app steps:\n got: %#v\nwant: %#v", skill.Steps, wantSteps)
