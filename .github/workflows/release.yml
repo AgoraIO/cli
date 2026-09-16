@@ -72,7 +72,7 @@ jobs:
       # Install Syft for SBOM generation. GoReleaser invokes `syft` directly
       # via the `sboms:` stanza in .goreleaser.yaml.
       - name: Install Syft (SBOM generator)
-        uses: anchore/sbom-action/download-syft@v0.24.0
+        uses: anchore/sbom-action/download-syft@v0.24.2
 
       # Install Cosign for keyless signing of release artifacts and Docker
       # images. The release job already requests `id-token: write`, which is
