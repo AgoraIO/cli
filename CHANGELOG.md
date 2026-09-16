@@ -15,9 +15,31 @@ Earlier entries pre-date this convention and only carry their version's compare 
 
 ## [Unreleased]
 
+## [0.2.9] - 2026-08-24
+
+Quickstart project and environment consistency, Android onboarding, Windows installer compatibility, and release workflow maintenance.
+
 ### Added
 
 - Add the Android conversational AI client/server quickstart to `agora init` and `agora quickstart`, writing credentials only to the included Python server and returning setup steps for the server, HTTPS tunnel, and Android client ([#55](https://github.com/AgoraIO/cli/pull/55)).
+- Add official recipe discovery with `agora recipes list/show` and recipe-backed initialization with `agora init --recipe <slug>`. Recipe metadata is resolved from the versioned `recipes.agora.io` API before project creation, and the API-provided env contract drives credential writing without framework guessing.
+
+### Changed
+
+- Expand installation guidance with the canonical Agora CDN, GitHub-hosted fallbacks, the S3 mirror option, and a PowerShell 7 guard with an actionable process-scoped execution-policy workaround ([03f46af](https://github.com/AgoraIO/cli/commit/03f46af), [#61](https://github.com/AgoraIO/cli/pull/61)).
+- Update GitHub Actions dependencies to `actions/setup-node@v7` and `actions/setup-go@v7` ([#57](https://github.com/AgoraIO/cli/pull/57), [#58](https://github.com/AgoraIO/cli/pull/58)).
+- Align the Python quickstart `nextSteps` install command with the upstream template (`bun run setup` instead of `bun install`) ([#60](https://github.com/AgoraIO/cli/pull/60)).
+- Make clone-only quickstart creation explicit with `--template-only`; interactive runs prompt for an existing project when none resolves, while JSON, CI, and non-TTY runs fail before cloning with `QUICKSTART_PROJECT_REQUIRED` ([91cb8f7](https://github.com/AgoraIO/cli/commit/91cb8f7)).
+
+### Fixed
+
+- Bump the pinned Go toolchain to 1.26.6 to address reachable standard-library vulnerabilities reported by `govulncheck` in Go 1.26.5 ([09fcba8](https://github.com/AgoraIO/cli/commit/09fcba8)).
+- Ensure `agora init`, `quickstart env write`, and `project env write` share credential-file semantics: Python and Go use `server/.env` with `AGORA_APP_ID` and `AGORA_APP_CERTIFICATE`, template example values are preserved, and unsupported legacy credential names are normalized consistently; align with the upstream Python and Go env-file migrations ([91cb8f7](https://github.com/AgoraIO/cli/commit/91cb8f7), [b285093](https://github.com/AgoraIO/cli/commit/b285093), [Python #26](https://github.com/AgoraIO-Conversational-AI/agent-quickstart-python/pull/26), [Go #8](https://github.com/AgoraIO-Conversational-AI/agent-quickstart-go/pull/8)).
+
+### Documentation
+
+- Add `docs/env-local.md` explaining that Quickstart env files are created by the CLI from the template example plus the selected project's App ID and App Certificate (not downloaded from Console); link it from `README.md`, `docs/llms.txt`, and `docs/sitemap.xml` ([#59](https://github.com/AgoraIO/cli/pull/59)).
+- Clarify the README Quick Start around `agora init` project selection (including `Default Project` reuse vs interactive picker), `--project` / `--new-project`, `.agora/project.json` vs `project use`, and that env files are written by the CLI rather than downloaded from Console ([#60](https://github.com/AgoraIO/cli/pull/60)).
 
 ## [0.2.8] - 2026-07-28
 
@@ -363,7 +385,8 @@ Set `AGORA_ALLOW_UPGRADE_IN_CI=1` only when a CI job intentionally needs to muta
 - Support machine-readable JSON output for automation and agent workflows.
 - Ship automated release packaging through GoReleaser, including cross-platform archives, Linux packages, Homebrew, Scoop, npm wrapper packages, Docker images, and install scripts.
 
-[Unreleased]: https://github.com/AgoraIO/cli/compare/v0.2.8...HEAD
+[Unreleased]: https://github.com/AgoraIO/cli/compare/v0.2.9...HEAD
+[0.2.9]: https://github.com/AgoraIO/cli/compare/v0.2.8...v0.2.9
 [0.2.8]: https://github.com/AgoraIO/cli/compare/v0.2.7...v0.2.8
 [0.2.7]: https://github.com/AgoraIO/cli/compare/v0.2.6...v0.2.7
 [0.2.6]: https://github.com/AgoraIO/cli/compare/v0.2.5...v0.2.6

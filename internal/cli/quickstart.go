@@ -1,12 +1,15 @@
 package cli
 
 import (
+	"bufio"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -83,7 +86,7 @@ func quickstartTemplates() []quickstartTemplate {
 				{
 					DetectPaths:       []string{"server/requirements.txt"},
 					EnvExamplePath:    "server/.env.example",
-					EnvTargetPath:     "server/.env.local",
+					EnvTargetPath:     "server/.env",
 					AppIDKey:          "AGORA_APP_ID",
 					AppCertificateKey: "AGORA_APP_CERTIFICATE",
 				},
@@ -91,13 +94,13 @@ func quickstartTemplates() []quickstartTemplate {
 					DetectPaths:       []string{"server/env.example"},
 					EnvExamplePath:    "server/env.example",
 					EnvTargetPath:     "server/.env",
-					AppIDKey:          "APP_ID",
-					AppCertificateKey: "APP_CERTIFICATE",
+					AppIDKey:          "AGORA_APP_ID",
+					AppCertificateKey: "AGORA_APP_CERTIFICATE",
 				},
 			},
-			InstallCommand: "bun install",
+			InstallCommand: "bun run setup",
 			RunCommand:     "bun run dev",
-			EnvDocsSummary: "Copies server/.env.example to server/.env.local, then writes AGORA_APP_ID and AGORA_APP_CERTIFICATE.",
+			EnvDocsSummary: "Copies server/.env.example to server/.env, then writes AGORA_APP_ID and AGORA_APP_CERTIFICATE.",
 			SupportsInit:   true,
 			Available:      true,
 		},
@@ -114,7 +117,7 @@ func quickstartTemplates() []quickstartTemplate {
 				{
 					DetectPaths:       []string{"server/go.mod"},
 					EnvExamplePath:    "server/.env.example",
-					EnvTargetPath:     "server/.env.local",
+					EnvTargetPath:     "server/.env",
 					AppIDKey:          "AGORA_APP_ID",
 					AppCertificateKey: "AGORA_APP_CERTIFICATE",
 				},
@@ -122,13 +125,13 @@ func quickstartTemplates() []quickstartTemplate {
 					DetectPaths:       []string{"server-go/env.example"},
 					EnvExamplePath:    "server-go/env.example",
 					EnvTargetPath:     "server-go/.env",
-					AppIDKey:          "APP_ID",
-					AppCertificateKey: "APP_CERTIFICATE",
+					AppIDKey:          "AGORA_APP_ID",
+					AppCertificateKey: "AGORA_APP_CERTIFICATE",
 				},
 			},
 			InstallCommand: "make setup",
 			RunCommand:     "make dev",
-			EnvDocsSummary: "Copies server/.env.example to server/.env.local, then writes AGORA_APP_ID and AGORA_APP_CERTIFICATE.",
+			EnvDocsSummary: "Copies server/.env.example to server/.env, then writes AGORA_APP_ID and AGORA_APP_CERTIFICATE.",
 			SupportsInit:   true,
 			Available:      true,
 		},
@@ -246,16 +249,18 @@ func (a *App) buildQuickstartCreate() *cobra.Command {
 	var dir string
 	var project string
 	var ref string
+	var templateOnly bool
 	cmd := &cobra.Command{
 		Use:   "create <name>",
 		Short: "Clone an official Agora quickstart into a new directory",
 		Long: `Clone a standalone quickstart repository into a new directory.
 
-If a current project context exists, or if --project is passed, the CLI also writes the quickstart's expected local env file with Agora credentials where supported.`,
+If a current project context exists, or if --project is passed, the CLI also writes the quickstart's expected local env file with Agora credentials where supported. Without a resolved project, interactive runs prompt for an existing project; non-interactive runs require --template-only to clone without credentials.`,
 		Example: example(`
   agora quickstart create my-nextjs-demo --template nextjs
   agora quickstart create my-python-demo --template python --project my-agent-demo
   agora quickstart create my-go-demo --template go --project my-agent-demo
+  agora quickstart create template-source --template python --template-only
   agora quickstart create demo --template nextjs --dir apps/demo
 `),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -270,8 +275,13 @@ If a current project context exists, or if --project is passed, the CLI also wri
 			if strings.TrimSpace(targetDir) == "" {
 				targetDir = args[0]
 			}
+			promptForProject := !templateOnly &&
+				!a.noInput() &&
+				a.resolveOutputMode(cmd) != outputJSON &&
+				!isCIEnvironment(a.osEnv) &&
+				isTTY(os.Stdin)
 			progress := jsonProgressFor(a, cmd, "quickstart create")
-			result, err := a.quickstartCreate(*template, targetDir, project, ref, progress)
+			result, err := a.quickstartCreate(*template, targetDir, project, templateOnly, promptForProject, cmd.ErrOrStderr(), os.Stdin, ref, progress)
 			if err != nil {
 				return err
 			}
@@ -282,10 +292,73 @@ If a current project context exists, or if --project is passed, the CLI also wri
 	cmd.Flags().StringVar(&dir, "dir", "", "target directory for the cloned quickstart; defaults to <name>")
 	cmd.Flags().StringVar(&project, "project", "", "project ID or exact project name to use for env seeding")
 	cmd.Flags().StringVar(&ref, "ref", "", "git branch, tag, or ref to clone for pinned workshops")
+	cmd.Flags().BoolVar(&templateOnly, "template-only", false, "clone without resolving a project or writing credentials")
+	cmd.MarkFlagsMutuallyExclusive("project", "template-only")
 	_ = cmd.MarkFlagRequired("template")
 	_ = cmd.RegisterFlagCompletionFunc("template", completeQuickstartTemplateIDs)
 	_ = cmd.RegisterFlagCompletionFunc("project", a.completeProjectNames)
 	return cmd
+}
+
+func chooseQuickstartProject(in io.Reader, out io.Writer, items []projectSummary) (projectSummary, string, error) {
+	choices := initProjectChoiceItems(items)
+	if len(choices) == 0 {
+		return projectSummary{}, "none", nil
+	}
+	reader := bufio.NewReader(in)
+	templateOnlyIndex := len(choices) + 1
+	cancelIndex := len(choices) + 2
+	for {
+		if _, err := fmt.Fprintln(out, "Choose an Agora project:"); err != nil {
+			return projectSummary{}, "", err
+		}
+		for index, item := range choices {
+			suffix := ""
+			if index == len(choices)-1 {
+				suffix = " (most recent)"
+			}
+			if _, err := fmt.Fprintf(out, "  %d. %s (%s)%s\n", index+1, item.Name, item.ProjectID, suffix); err != nil {
+				return projectSummary{}, "", err
+			}
+		}
+		if _, err := fmt.Fprintf(out, "  %d. Clone template only\n  %d. Cancel\nProject [%d]: ", templateOnlyIndex, cancelIndex, len(choices)); err != nil {
+			return projectSummary{}, "", err
+		}
+		answer, readErr := reader.ReadString('\n')
+		if readErr != nil && !errors.Is(readErr, io.EOF) {
+			return projectSummary{}, "", readErr
+		}
+		trimmed := strings.TrimSpace(answer)
+		switch strings.ToLower(trimmed) {
+		case "":
+			return choices[len(choices)-1], "project", nil
+		case "template-only", "template", "t":
+			return projectSummary{}, "template-only", nil
+		case "cancel", "abort", "q", "quit":
+			return projectSummary{}, "abort", nil
+		}
+		if index, err := strconv.Atoi(trimmed); err == nil {
+			switch {
+			case index >= 1 && index <= len(choices):
+				return choices[index-1], "project", nil
+			case index == templateOnlyIndex:
+				return projectSummary{}, "template-only", nil
+			case index == cancelIndex:
+				return projectSummary{}, "abort", nil
+			}
+		}
+		for _, item := range choices {
+			if strings.EqualFold(item.ProjectID, trimmed) || strings.EqualFold(item.Name, trimmed) {
+				return item, "project", nil
+			}
+		}
+		if _, err := fmt.Fprintf(out, "Please choose 1-%d, enter a project name/id, type template-only, or cancel.\n", cancelIndex); err != nil {
+			return projectSummary{}, "", err
+		}
+		if errors.Is(readErr, io.EOF) {
+			return projectSummary{}, "abort", nil
+		}
+	}
 }
 
 func (a *App) buildQuickstartEnv() *cobra.Command {
@@ -296,7 +369,9 @@ func (a *App) buildQuickstartEnv() *cobra.Command {
 		Short: "Write framework-specific env files for a quickstart repo",
 		Long: `Update the local env file for a cloned quickstart repository.
 
-The CLI can infer the quickstart type from the repository layout, or you can force it with --template.`,
+This is the canonical env-write command for official Agora quickstarts. The CLI selects the template-specific path, seeds its example file, normalizes legacy credential names, and updates quickstart metadata.
+
+The CLI can infer the quickstart type from the repository layout, or you can force it with --template. Use ` + "`agora project env write <file>`" + ` instead for an explicit file in a custom repository.`,
 		Example: example(`
   agora quickstart env write
   agora quickstart env write apps/my-nextjs-demo
@@ -345,27 +420,47 @@ Python and Go quickstarts receive backend AGORA_APP_ID and AGORA_APP_CERTIFICATE
 	return cmd
 }
 
-func (a *App) quickstartCreate(template quickstartTemplate, targetDir, explicitProject string, ref string, progress progressEmitter) (map[string]any, error) {
+func (a *App) quickstartCreate(template quickstartTemplate, targetDir, explicitProject string, templateOnly, promptForProject bool, promptOut io.Writer, promptIn io.Reader, ref string, progress progressEmitter) (map[string]any, error) {
 	if !template.Available || strings.TrimSpace(template.RepoURL) == "" {
 		return nil, &cliError{Message: fmt.Sprintf("Quickstart template %q is not available yet.", template.ID), Code: "QUICKSTART_TEMPLATE_UNAVAILABLE"}
 	}
-	absTarget, err := filepath.Abs(targetDir)
+	absTarget, err := resolveScaffoldTarget(targetDir)
 	if err != nil {
 		return nil, err
 	}
-	if info, err := os.Stat(absTarget); err == nil {
-		return nil, &cliError{Message: fmt.Sprintf("%s already exists. Choose a new target directory.", absTarget), Code: "QUICKSTART_TARGET_EXISTS"}
-	} else if !errors.Is(err, os.ErrNotExist) {
-		return nil, err
-	} else if info != nil {
-		return nil, &cliError{Message: fmt.Sprintf("%s already exists. Choose a new target directory.", absTarget), Code: "QUICKSTART_TARGET_EXISTS"}
-	}
 
 	var boundProject *projectTarget
-	if target, ok, err := a.resolveOptionalProjectTarget(explicitProject, ""); err != nil {
-		return nil, err
-	} else if ok {
-		boundProject = &target
+	if !templateOnly {
+		if target, ok, err := a.resolveOptionalProjectTarget(explicitProject, ""); err != nil {
+			return nil, err
+		} else if ok {
+			boundProject = &target
+		} else if !promptForProject {
+			return nil, &cliError{Message: "No project selected. Pass `--project <id-or-name>`, set a current project with `agora project use`, or pass `--template-only` to clone without credentials.", Code: "QUICKSTART_PROJECT_REQUIRED"}
+		} else {
+			ctx, items, err := a.listInitProjects()
+			if err != nil {
+				return nil, err
+			}
+			selected, action, err := chooseQuickstartProject(promptIn, promptOut, items)
+			if err != nil {
+				return nil, err
+			}
+			switch action {
+			case "none":
+				return nil, &cliError{Message: "No Agora projects are available. Use `agora init` or `agora project create` to create one, or pass `--template-only` to clone without credentials.", Code: "QUICKSTART_PROJECT_REQUIRED"}
+			case "template-only":
+				// Leave boundProject nil so the clone continues without env injection.
+			case "abort":
+				return nil, &cliError{Message: "Quickstart creation aborted by user.", Code: "QUICKSTART_CREATE_ABORTED"}
+			default:
+				resolved, err := a.resolveInitProject(ctx, selected)
+				if err != nil {
+					return nil, err
+				}
+				boundProject = &resolved
+			}
+		}
 	}
 
 	repoURL, overrideKey, err := a.quickstartRepoURL(template)
@@ -375,18 +470,9 @@ func (a *App) quickstartCreate(template quickstartTemplate, targetDir, explicitP
 	if overrideKey != "" {
 		progress.emit("clone:override", fmt.Sprintf("Using repo override from %s", overrideKey), map[string]any{"repoUrl": repoURL, "envVar": overrideKey})
 	}
-	progress.emit("clone:start", "Cloning quickstart repository", map[string]any{"repoUrl": repoURL, "targetPath": absTarget, "ref": ref})
-	if err := cloneQuickstartRepo(repoURL, absTarget, ref); err != nil {
+	if err := cloneScaffoldRepo(repoURL, absTarget, ref, progress); err != nil {
 		return nil, err
 	}
-	progress.emit("clone:complete", "Quickstart repository cloned", map[string]any{"targetPath": absTarget})
-	if err := stripClonedGitMetadata(absTarget); err != nil {
-		if cleanupErr := os.RemoveAll(absTarget); cleanupErr != nil {
-			return nil, fmt.Errorf("failed to remove quickstart git metadata after clone: %v; cleanup also failed for %s: %v", err, absTarget, cleanupErr)
-		}
-		return nil, fmt.Errorf("failed to remove quickstart git metadata after clone: %v; removed %s", err, absTarget)
-	}
-	progress.emit("clone:strip-git", "Removed quickstart repository history", map[string]any{"targetPath": absTarget})
 
 	written := []string{}
 	envStatus := "template-only"
@@ -445,6 +531,35 @@ func (a *App) quickstartCreate(template quickstartTemplate, targetDir, explicitP
 		result["metadataPath"] = filepath.ToSlash(filepath.Join(localAgoraDirName, localProjectFileName))
 	}
 	return result, nil
+}
+
+func resolveScaffoldTarget(targetDir string) (string, error) {
+	absTarget, err := filepath.Abs(targetDir)
+	if err != nil {
+		return "", err
+	}
+	if _, err := os.Stat(absTarget); err == nil {
+		return "", &cliError{Message: fmt.Sprintf("%s already exists. Choose a new target directory.", absTarget), Code: "QUICKSTART_TARGET_EXISTS"}
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return "", err
+	}
+	return absTarget, nil
+}
+
+func cloneScaffoldRepo(repoURL, absTarget, ref string, progress progressEmitter) error {
+	progress.emit("clone:start", "Cloning scaffold repository", map[string]any{"repoUrl": repoURL, "targetPath": absTarget, "ref": ref})
+	if err := cloneQuickstartRepo(repoURL, absTarget, ref); err != nil {
+		return err
+	}
+	progress.emit("clone:complete", "Scaffold repository cloned", map[string]any{"targetPath": absTarget})
+	if err := stripClonedGitMetadata(absTarget); err != nil {
+		if cleanupErr := os.RemoveAll(absTarget); cleanupErr != nil {
+			return fmt.Errorf("failed to remove scaffold git metadata after clone: %v; cleanup also failed for %s: %v", err, absTarget, cleanupErr)
+		}
+		return fmt.Errorf("failed to remove scaffold git metadata after clone: %v; removed %s", err, absTarget)
+	}
+	progress.emit("clone:strip-git", "Removed scaffold repository history", map[string]any{"targetPath": absTarget})
+	return nil
 }
 
 func (a *App) quickstartEnvWrite(targetDir, templateID, explicitProject string) (map[string]any, error) {
@@ -760,63 +875,19 @@ func seedQuickstartEnv(root string, template quickstartTemplate, layout quicksta
 	if layout.EnvTargetPath == "" {
 		return "", "", &cliError{Message: fmt.Sprintf("Quickstart template %q does not define an env target yet.", template.ID), Code: "QUICKSTART_TEMPLATE_ENV_UNSUPPORTED"}
 	}
-	if project.SignKey == nil || *project.SignKey == "" {
-		return "", "", &cliError{Message: fmt.Sprintf("project %q does not have an app certificate. Enable one in Agora Console or use a different project with `agora project use`.", project.Name), Code: "PROJECT_NO_CERTIFICATE"}
-	}
-
 	targetPath := filepath.Join(root, filepath.FromSlash(layout.EnvTargetPath))
-
-	existingContent := ""
-	status := "created"
-	if raw, err := os.ReadFile(targetPath); err == nil {
-		existingContent = string(raw)
-		status = ""
-	} else if !errors.Is(err, os.ErrNotExist) {
-		return "", "", err
-	} else if layout.EnvExamplePath != "" {
-		examplePath := filepath.Join(root, filepath.FromSlash(layout.EnvExamplePath))
-		if raw, err := os.ReadFile(examplePath); err == nil {
-			existingContent = string(raw)
-		} else if !errors.Is(err, os.ErrNotExist) {
-			return "", "", err
-		}
+	examplePath := ""
+	if layout.EnvExamplePath != "" {
+		examplePath = filepath.Join(root, filepath.FromSlash(layout.EnvExamplePath))
 	}
-
-	values := renderQuickstartEnvValues(layout, project)
-	content, mergeStatus := mergeEnvAssignments(existingContent, values, [][2]string{{"# BEGIN AGORA CLI QUICKSTART", "# END AGORA CLI QUICKSTART"}}, conflictingQuickstartEnvKeys(layout))
-	if status == "" {
-		status = mergeStatus
-	}
-	if err := os.MkdirAll(filepath.Dir(targetPath), 0o755); err != nil {
+	written, err := writeCredentialEnv(credentialEnvTarget{
+		Path:              targetPath,
+		ExamplePath:       examplePath,
+		AppIDKey:          layout.AppIDKey,
+		AppCertificateKey: layout.AppCertificateKey,
+	}, project, credentialEnvWriteOptions{AllowAppend: true})
+	if err != nil {
 		return "", "", err
 	}
-	if err := os.WriteFile(targetPath, []byte(content), 0o644); err != nil {
-		return "", "", err
-	}
-	return filepath.ToSlash(layout.EnvTargetPath), status, nil
-}
-
-func conflictingQuickstartEnvKeys(layout quickstartEnvLayout) []string {
-	allCredentialKeys := []string{
-		"NEXT_PUBLIC_AGORA_APP_ID",
-		"NEXT_AGORA_APP_CERTIFICATE",
-		"AGORA_APP_ID",
-		"AGORA_APP_CERTIFICATE",
-		"APP_ID",
-		"APP_CERTIFICATE",
-	}
-	conflicts := make([]string, 0, len(allCredentialKeys)-2)
-	for _, key := range allCredentialKeys {
-		if key != layout.AppIDKey && key != layout.AppCertificateKey {
-			conflicts = append(conflicts, key)
-		}
-	}
-	return conflicts
-}
-
-func renderQuickstartEnvValues(layout quickstartEnvLayout, project projectDetail) map[string]any {
-	return map[string]any{
-		layout.AppIDKey:          project.AppID,
-		layout.AppCertificateKey: *project.SignKey,
-	}
+	return filepath.ToSlash(layout.EnvTargetPath), written.Status, nil
 }

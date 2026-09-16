@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -134,6 +135,8 @@ func TestMCPToolsListCoversFullSurface(t *testing.T) {
 		"agora.quickstart.create",
 		"agora.quickstart.env_write",
 		"agora.quickstart.list",
+		"agora.recipes.list",
+		"agora.recipes.show",
 		"agora.telemetry.status",
 		"agora.upgrade.check",
 		"agora.version",
@@ -166,6 +169,20 @@ func TestMCPToolsListCoversFullSurface(t *testing.T) {
 			t.Errorf("unexpected MCP tools (update test or remove): %v", extra)
 		}
 	}
+}
+
+func TestMCPInitRequiresExactlyOneSource(t *testing.T) {
+	a := newTestApp(t)
+
+	_, err := a.callMCPTool("agora.init", map[string]any{"name": "demo"}, nil)
+	assertCLIErrorCode(t, err, "INIT_SOURCE_REQUIRED")
+
+	_, err = a.callMCPTool("agora.init", map[string]any{
+		"name":     "demo",
+		"template": "nextjs",
+		"recipe":   "tool-calling",
+	}, nil)
+	assertCLIErrorCode(t, err, "INIT_SOURCE_CONFLICT")
 }
 
 func TestMCPProjectWebhookDeleteRequiresConfirm(t *testing.T) {
@@ -235,11 +252,8 @@ func TestMCPConfigIDArgAcceptsIntegralFloat64(t *testing.T) {
 
 func TestMCPOptionalBoolArgFalseIsNonNil(t *testing.T) {
 	got := optionalBoolArg(map[string]any{"enabled": false}, "enabled")
-	if got == nil {
-		t.Fatal("optionalBoolArg returned nil for false")
-	}
-	if *got {
-		t.Fatal("optionalBoolArg returned true, want false")
+	if got == nil || *got {
+		t.Fatalf("optionalBoolArg = %v, want non-nil false", got)
 	}
 }
 
@@ -290,7 +304,7 @@ func TestMCPQuickstartCreateEmitsProgressNotifications(t *testing.T) {
 	t.Setenv("AGORA_QUICKSTART_NEXTJS_REPO_URL", repo)
 	a := newTestApp(t)
 	target := filepath.Join(t.TempDir(), "demo")
-	frame := []byte(`{"jsonrpc":"2.0","id":9,"method":"tools/call","params":{"name":"agora.quickstart.create","arguments":{"template":"nextjs","dir":` + strconv.Quote(target) + `},"_meta":{"progressToken":"clone-1"}}}` + "\n")
+	frame := []byte(`{"jsonrpc":"2.0","id":9,"method":"tools/call","params":{"name":"agora.quickstart.create","arguments":{"template":"nextjs","templateOnly":true,"dir":` + strconv.Quote(target) + `},"_meta":{"progressToken":"clone-1"}}}` + "\n")
 	var out bytes.Buffer
 	if err := a.serveMCP(bytes.NewReader(frame), &out); err != nil {
 		t.Fatalf("serveMCP: %v", err)
@@ -308,6 +322,22 @@ func TestMCPQuickstartCreateEmitsProgressNotifications(t *testing.T) {
 	}
 	if resp.Error != nil {
 		t.Fatalf("unexpected final error: %+v\nall output: %q", resp.Error, out.String())
+	}
+}
+
+func TestMCPQuickstartCreateRequiresProjectOrTemplateOnly(t *testing.T) {
+	a := newTestApp(t)
+	target := filepath.Join(t.TempDir(), "demo")
+	frame := []byte(`{"jsonrpc":"2.0","id":10,"method":"tools/call","params":{"name":"agora.quickstart.create","arguments":{"template":"nextjs","dir":` + strconv.Quote(target) + `}}}` + "\n")
+	var out bytes.Buffer
+	if err := a.serveMCP(bytes.NewReader(frame), &out); err != nil {
+		t.Fatalf("serveMCP: %v", err)
+	}
+	if !strings.Contains(out.String(), "No project selected") || !strings.Contains(out.String(), "--template-only") {
+		t.Fatalf("expected MCP project requirement error, got %q", out.String())
+	}
+	if _, err := os.Stat(target); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("expected MCP project resolution to fail before cloning, got %v", err)
 	}
 }
 

@@ -37,7 +37,7 @@ For end-user behavior and machine-readable contracts, see:
 
 Requirements:
 
-- **Go** 1.26.2+ (see `go.mod`). Release builds intentionally track the current stable Go toolchain; this distributed CLI does not target older Go compiler support.
+- **Go** 1.26.6+ (see `go.mod`). Release builds intentionally track the current stable Go toolchain; this distributed CLI does not target older Go compiler support.
 - **Git**.
 - (Optional) `golangci-lint` v1.64.8 — install matches CI; instructions in
   the next section.

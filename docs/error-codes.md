@@ -35,17 +35,27 @@ This catalog is the source of truth for stable codes. CI runs `make snapshot-err
 
 | Code | Exit | Meaning | Recovery |
 |------|------|---------|----------|
-| `QUICKSTART_TEMPLATE_REQUIRED` | 1 | `init` needs a template in JSON, CI, or non-TTY mode. | Pass `--template` or run `agora quickstart list`. |
 | `QUICKSTART_TEMPLATE_UNKNOWN` | 1 | The template ID is not known to this CLI. | Run `agora quickstart list`. |
 | `QUICKSTART_TEMPLATE_UNAVAILABLE` | 1 | The template exists but is not currently available. | Choose an available template. |
 | `QUICKSTART_TEMPLATE_ENV_UNSUPPORTED` | 1 | The selected template does not define an env target path. | Choose a template with env support or configure the env file manually. |
+| `QUICKSTART_PROJECT_REQUIRED` | 1 | `quickstart create` could not resolve a project in a non-interactive run, or the account has no projects to select interactively. | Pass `--project`, set global context with `agora project use`, use `agora init`, or explicitly pass `--template-only`. |
+| `QUICKSTART_CREATE_ABORTED` | 1 | The interactive quickstart project picker was canceled. | Re-run and select a project, or pass `--template-only`. |
 | `QUICKSTART_TARGET_EXISTS` | 1 | The clone target already exists. | Choose a new directory. |
 | `QUICKSTART_REF_INVALID` | 1 | `--ref` is empty after trimming, starts with `-`, or contains whitespace/control characters. | Pass a valid git branch, tag, or commit (no leading `-`). |
 | `QUICKSTART_REPO_OVERRIDE_INVALID` | 1 | The `AGORA_QUICKSTART_<TEMPLATE>_REPO_URL` env override is set to a malformed value. | Set the variable to an `https://`, `ssh://`, `git://`, `file://`, `git@host:path`, or absolute local path URL — or unset it. |
 | `QUICKSTART_GIT_MISSING` | 1 | `git` is required but was not found on `PATH`. | Install git (https://git-scm.com/downloads) and retry. |
 | `INIT_NAME_REQUIRED` | 1 | `agora init` was run without the required target directory name. | Pass a directory name, for example `agora init my-nextjs-demo --template nextjs`. |
+| `INIT_SOURCE_REQUIRED` | 1 | Non-interactive `agora init` received neither a quickstart template nor a recipe. | Pass exactly one of `--template <id>` or `--recipe <slug>`. |
+| `INIT_SOURCE_CONFLICT` | 1 | `agora init` received both `--template` and `--recipe`. | Pass only one initialization source. |
 | `INIT_ABORTED` | 1 | The interactive `agora init` reuse prompt was answered "no". | Re-run with `--project <id>`, `--new-project`, or accept the prompt. |
 | `PROJECT_NAME_REQUIRED` | 1 | `agora project create` (or the equivalent MCP tool) was called without `name`. | Pass a project name, for example `agora project create my-app`. |
+| `RECIPE_TYPE_INVALID` | 1 | The recipe type filter is not supported. | Use `all`, `ai`, or `rtc`. |
+| `RECIPE_NOT_FOUND` | 1 | The official recipes API did not contain the requested slug. | Run `agora recipes list` and retry with an available slug. |
+| `RECIPE_API_FAILED` | 1 | The recipes API could not be reached or returned a non-success status. | Check connectivity and retry; use `AGORA_RECIPES_BASE_URL` only for staging/testing. |
+| `RECIPE_RESPONSE_INVALID` | 1 | The recipes API response violated its documented schema or included a non-official entry. | Retry; if persistent, report the response schema mismatch. |
+| `RECIPE_SCHEMA_UNSUPPORTED` | 1 | The recipes API schema version is not supported by this CLI. | Upgrade the CLI. |
+| `RECIPE_REPO_URL_INVALID` | 1 | A recipe returned an invalid repository clone URL. | Report the catalog entry; do not clone it manually without verification. |
+| `RECIPE_INIT_UNSUPPORTED` | 1 | An official recipe can be viewed but does not yet include CLI env metadata. | Choose another recipe or follow its recipe document manually. |
 
 ### Self-update (`agora upgrade`)
 
@@ -73,7 +83,7 @@ These codes appear inside `data.checks[].issues[].code` and (for blocking issues
 | `WORKSPACE_TEMPLATE_UNKNOWN` | 1 | The CLI could not detect the quickstart template for this repo. | Pass `--template` to the failing command. |
 | `WORKSPACE_ENV_PATH_UNKNOWN` | 1 | The CLI could not determine the quickstart env target path. | Pass `--template` and re-run; if persistent, file an issue. |
 | `WORKSPACE_ENV_FILE_MISSING` | 1 | A quickstart env file expected by the bound template is missing. | Run the command from `suggestedCommand` (typically `agora quickstart env write`). |
-| `WORKSPACE_ENV_READ_FAILED` | 1 | The CLI could not read the quickstart env file. | Run the command from `suggestedCommand` (`agora quickstart env write . --project <id> --overwrite`); if it still fails, inspect file permissions and contents. |
+| `WORKSPACE_ENV_READ_FAILED` | 1 | The CLI could not read the quickstart env file. | Run the command from `suggestedCommand` (`agora quickstart env write . --project <id>`); if it still fails, inspect file permissions and contents. |
 | `WORKSPACE_ENV_PROJECT_MISMATCH` | 1 | The quickstart env file points at a different App ID than the selected project. | Run the command from `suggestedCommand` to overwrite the env file. |
 | `WORKSPACE_ENV_METADATA_MISSING` | 1 | The quickstart env file is missing Agora-managed project metadata comments. | Run the command from `suggestedCommand` to refresh metadata. |
 | `WORKSPACE_ENV_APP_ID_MISSING` | 1 | A quickstart env file is missing the required app ID key. | Run the command from `suggestedCommand`. |

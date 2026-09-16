@@ -19,6 +19,7 @@ type localProjectBinding struct {
 	Region      string `json:"region"`
 	ProjectType string `json:"projectType,omitempty"`
 	Template    string `json:"template,omitempty"`
+	Recipe      string `json:"recipe,omitempty"`
 	EnvPath     string `json:"envPath,omitempty"`
 }
 

@@ -46,7 +46,7 @@ func TestCLIHelpContentIsTaskOriented(t *testing.T) {
 	}
 
 	quickstart := runCLI(t, []string{"quickstart", "create", "--help"}, cliRunOptions{})
-	if quickstart.exitCode != 0 || !strings.Contains(quickstart.stdout, "If a current project context exists") || !strings.Contains(quickstart.stdout, "agora quickstart create my-nextjs-demo --template nextjs") {
+	if quickstart.exitCode != 0 || !strings.Contains(quickstart.stdout, "If a current project context exists") || !strings.Contains(quickstart.stdout, "--template-only") || !strings.Contains(quickstart.stdout, "agora quickstart create my-nextjs-demo --template nextjs") {
 		t.Fatalf("unexpected quickstart create help output: %+v", quickstart)
 	}
 	quickstartEnv := runCLI(t, []string{"quickstart", "env", "write", "--help"}, cliRunOptions{})

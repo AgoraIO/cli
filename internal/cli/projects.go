@@ -533,30 +533,8 @@ func credentialLayoutFromProjectType(projectType string) projectEnvCredentialLay
 }
 
 func projectCredentialEnvValuesForLayout(project projectDetail, layout projectEnvCredentialLayout) (map[string]any, error) {
-	if project.SignKey == nil || *project.SignKey == "" {
-		return nil, &cliError{Message: fmt.Sprintf("project %q does not have an app certificate. Enable one in Agora Console or use a different project with `agora project use`.", project.Name), Code: "PROJECT_NO_CERTIFICATE"}
-	}
-	switch layout {
-	case projectEnvLayoutNextjs:
-		return map[string]any{
-			"NEXT_PUBLIC_AGORA_APP_ID":   project.AppID,
-			"NEXT_AGORA_APP_CERTIFICATE": *project.SignKey,
-		}, nil
-	default:
-		return map[string]any{
-			"AGORA_APP_ID":          project.AppID,
-			"AGORA_APP_CERTIFICATE": *project.SignKey,
-		}, nil
-	}
-}
-
-func conflictingKeysForProjectEnvLayout(layout projectEnvCredentialLayout) []string {
-	switch layout {
-	case projectEnvLayoutNextjs:
-		return []string{"AGORA_APP_ID", "AGORA_APP_CERTIFICATE", "APP_ID", "APP_CERTIFICATE"}
-	default:
-		return nil
-	}
+	appIDKey, certificateKey := credentialEnvKeysForProjectLayout(layout)
+	return credentialEnvValues(project, appIDKey, certificateKey)
 }
 
 func detectProjectType(workspaceDir, explicitTemplate string) (string, error) {
@@ -839,41 +817,15 @@ func resolveProjectEnvWriteAbsolutePath(cwd, pathArg string) (string, error) {
 }
 
 func writeProjectEnvFile(path string, values map[string]any, appendMode, overwrite bool, conflictingKeys []string, defaultPathChosen bool) (envWriteResult, error) {
-	filePath, err := filepath.Abs(path)
-	if err != nil {
-		return envWriteResult{}, err
-	}
-	if err := os.MkdirAll(filepath.Dir(filePath), 0o755); err != nil {
-		return envWriteResult{}, err
-	}
-	existing, err := os.ReadFile(filePath)
-	if err != nil && !errors.Is(err, os.ErrNotExist) {
-		return envWriteResult{}, err
-	}
-	assignments := strings.TrimRight(renderProjectEnv(values, envDotenv), "\n")
-	status := ""
-	switch {
-	case errors.Is(err, os.ErrNotExist):
-		existing = []byte(assignments + "\n")
-		status = "created"
-	case overwrite:
-		existing = []byte(assignments + "\n")
-		status = "overwritten"
-	default:
-		merged, mergeStatus := mergeEnvAssignments(string(existing), values, [][2]string{{"# BEGIN AGORA CLI", "# END AGORA CLI"}}, conflictingKeys)
-		if mergeStatus == "appended" && !appendMode && !defaultPathChosen && !isDefaultEnvPath(filePath) {
-			return envWriteResult{}, fmt.Errorf("%s already exists. Use --append to append it or --overwrite to replace it.", path)
-		}
-		existing = []byte(merged)
-		status = mergeStatus
-		if status == "empty" {
-			status = "updated"
-		}
-	}
-	if err := os.WriteFile(filePath, existing, 0o644); err != nil {
-		return envWriteResult{}, err
-	}
-	return envWriteResult{Path: filePath, Status: status}, nil
+	return writeEnvAssignmentsFile(
+		path,
+		"",
+		values,
+		overwrite,
+		appendMode || defaultPathChosen || isDefaultEnvPath(path),
+		conflictingKeys,
+		credentialEnvLegacyBlocks,
+	)
 }
 
 func isDefaultEnvPath(path string) bool {

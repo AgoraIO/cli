@@ -36,6 +36,17 @@ param(
     [switch]$SkipShell
 )
 
+if ($PSVersionTable.PSVersion.Major -lt 7) {
+    $message = @"
+Agora CLI installer requires PowerShell 7 or newer.
+Download the installer, then launch it with a process-scoped execution-policy bypass:
+  Invoke-WebRequest -Uri https://dl.agora.io/cli/install.ps1 -OutFile .\install.ps1
+  pwsh -NoProfile -ExecutionPolicy Bypass -File .\install.ps1
+"@
+    [Console]::Error.WriteLine($message)
+    exit 2
+}
+
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 

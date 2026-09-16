@@ -1,6 +1,8 @@
 package cli
 
 import (
+	"net/http"
+	"net/http/httptest"
 	"runtime"
 	"strings"
 	"testing"
@@ -132,4 +134,44 @@ func TestInstallDoctorNetworkEndpointsFollowCurrentRegion(t *testing.T) {
 			t.Fatalf("expected cn oauth endpoint, got %q", endpoints[1].url)
 		}
 	})
+}
+
+func TestInstallDoctorPublicJSONAndPrettyOutput(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	t.Cleanup(server.Close)
+
+	baseEnv := map[string]string{
+		"AGORA_API_BASE_URL":   server.URL,
+		"AGORA_LOG_LEVEL":      "error",
+		"AGORA_OAUTH_BASE_URL": server.URL,
+	}
+
+	jsonEnv := cloneDoctorEnv(baseEnv)
+	jsonEnv["XDG_CONFIG_HOME"] = t.TempDir()
+	persistSessionForIntegration(t, jsonEnv["XDG_CONFIG_HOME"])
+	jsonResult := runCLI(t, []string{"doctor", "--json"}, cliRunOptions{env: jsonEnv})
+	for _, want := range []string{`"command":"doctor"`, `"checks"`, `"category":"network"`, `"category":"auth"`} {
+		if !strings.Contains(jsonResult.stdout, want) {
+			t.Errorf("doctor JSON output does not contain %q: %s", want, jsonResult.stdout)
+		}
+	}
+
+	prettyEnv := cloneDoctorEnv(baseEnv)
+	prettyEnv["XDG_CONFIG_HOME"] = t.TempDir()
+	prettyResult := runCLI(t, []string{"--pretty", "--no-color", "doctor"}, cliRunOptions{env: prettyEnv})
+	for _, want := range []string{"Install", "Network", "Auth", "Summary"} {
+		if !strings.Contains(prettyResult.stdout, want) {
+			t.Errorf("pretty doctor output does not contain %q: %s", want, prettyResult.stdout)
+		}
+	}
+}
+
+func cloneDoctorEnv(input map[string]string) map[string]string {
+	result := make(map[string]string, len(input))
+	for key, value := range input {
+		result[key] = value
+	}
+	return result
 }

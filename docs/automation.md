@@ -41,10 +41,11 @@ Use this guide for:
 - Use `--debug` (equivalent to `AGORA_DEBUG=1`) to echo structured log records to stderr. The flag does not change exit codes, JSON envelope shape, or NDJSON progress events; it only mirrors the entries that would normally be written to the log file. Pair with `--json` for fully machine-parseable runs that also surface internal events to your CI logs. v0.2.0 dropped the legacy `--verbose` / `-v` alias and the `AGORA_VERBOSE` env var; persisted configs that contain a `verbose` key are auto-promoted to `debug` on first load.
 - Use `--yes` (or `-y`) / `AGORA_NO_INPUT=1` to assume the default answer to confirmation prompts. Following industry convention for `-y` (apt-style), the flag never starts brand-new interactive flows: in JSON, CI, or non-TTY contexts the CLI still fails fast with the same `AUTH_UNAUTHENTICATED` error you would have seen without `--yes`, instead of silently launching an OAuth browser flow.
 - Interactive login prompts only appear in interactive pretty-mode TTY runs. Automation should authenticate up front with `agora login`; `--json`, `AGORA_OUTPUT=json`, detected CI environments, and non-TTY stdin all skip the prompt and fail with `AUTH_UNAUTHENTICATED`.
-- In non-interactive runs (`--yes`, JSON, CI, non-TTY), pass `--template` explicitly to `agora init`. The CLI now fails fast with `QUICKSTART_TEMPLATE_REQUIRED` instead of silently selecting a template.
+- In non-interactive runs (`--yes`, JSON, CI, non-TTY), pass exactly one of `--template` or `--recipe` to `agora init`. The CLI fails fast with `INIT_SOURCE_REQUIRED` when neither source is provided.
+- In non-interactive `quickstart create` runs, pass `--project <id-or-name>` (or establish global project context) to configure the scaffold, or pass `--template-only` to explicitly skip project and credential resolution. Otherwise the CLI fails before cloning with `QUICKSTART_PROJECT_REQUIRED`.
 - Output mode precedence is: explicit CLI flag (`--json` or `--output`) first, user-set `AGORA_OUTPUT` second, then user-customized config file value, then **CI auto-detect → JSON** (see below), then pretty.
 - Set `AGORA_AGENT=<tool-name>` in automated environments to explicitly label agent traffic in the API `User-Agent`. When unset, the CLI may infer a coarse label such as `cursor`, `claude-code`, `cline`, `windsurf`, `codex`, or `aider` from known agent environment markers. Set `AGORA_AGENT_DISABLE_INFER=1` to disable inference.
-- Use `agora mcp serve` to expose local Agora CLI tools to MCP-capable agents. The full surface is exposed: `agora.version`, `agora.introspect`, `agora.auth.{status,logout}`, `agora.config.{path,get}`, `agora.telemetry.status`, `agora.upgrade.check`, `agora.project.{list,show,use,create,doctor,env,env_write}`, `agora.project.feature.{list,status,enable}`, `agora.project.webhook.{events,list,show,create,update,delete}`, `agora.quickstart.{list,create,env_write}`, and `agora.init`. Authentication is intentionally **not** exposed via MCP because OAuth requires an interactive browser; run `agora login` once on the host first.
+- Use `agora mcp serve` to expose local Agora CLI tools to MCP-capable agents. The full surface is exposed: `agora.version`, `agora.introspect`, `agora.auth.{status,logout}`, `agora.config.{path,get}`, `agora.telemetry.status`, `agora.upgrade.check`, `agora.project.{list,show,use,create,doctor,env,env_write}`, `agora.project.feature.{list,status,enable}`, `agora.project.webhook.{events,list,show,create,update,delete}`, `agora.quickstart.{list,create,env_write}`, `agora.recipes.{list,show}`, and `agora.init`. Authentication is intentionally **not** exposed via MCP because OAuth requires an interactive browser; run `agora login` once on the host first.
 - Use `agora open --target docs` for the human GitHub Pages docs and `agora open --target docs-md` for the agent-facing raw Markdown index. In CI/non-TTY runs the command defaults to URL-only output unless `--browser` is set. The Markdown tree is published under predictable `/md/` URLs, for example `/md/commands.md`, `/md/automation.md`, and `/md/error-codes.md`.
 - Docs publishing reads `internal-docs/pages/site.env` for `CLI_DOCS_*` and `CLI_INSTALL_*` URL defaults; staging Pages builds can override those environment variables at workflow time without changing docs content. The resolved values are published as `/docs.env` for transparency.
 - The CLI maintains a short-lived on-disk completion cache for `agora project use <TAB>` under `<AGORA_HOME>/cache/projects.json`. The cache is only used for completions when a **local unexpired session exists** (`session.json` with a non-empty access token and a future `expiresAt`, when present), so Tab does not suggest stale project names after logout or local session expiry. The cache TTL is 5 minutes by default; override with `AGORA_PROJECT_CACHE_TTL_SECONDS=<seconds>` (set to `0` to disable). Cache files older than 24 h are pruned at every CLI startup. Set `AGORA_DISABLE_CACHE=1` to drop the cache on the next startup. The cache is invalidated automatically by `agora logout` and `agora project create` (the latter clears the file; it does not embed the new project until the next successful list fetch). To **force-refresh** the cached completion page, run `agora project list --refresh-cache` while authenticated; that command fetches the unfiltered first page used by completion and rewrites `projects.json` when it succeeds.
@@ -77,6 +78,7 @@ You can always override:
 
 Primary command groups:
 - `init`
+- `recipes`
 - `quickstart`
 - `project`
 - `auth`
@@ -342,6 +344,7 @@ Example:
 ```bash
 ./agora init my-nextjs-demo --template nextjs --json
 ./agora init my-nextjs-demo --template nextjs --new-project --json
+./agora init my-agent --recipe tool-calling --new-project --json
 ```
 
 By default `init` reuses an existing project — preferring one named exactly `"Default Project"`. If no default exists, interactive sessions show existing projects with a create-new option and default to the most recently created project; JSON, CI, and non-TTY runs select the most recent project automatically. Pass `--new-project` to force creation. Use `--project <name|id>` to bind to a specific project.
@@ -350,8 +353,10 @@ For deterministic automation, always pass `--project <name|id>` or `--new-projec
 Required `data` fields:
 - `action`
   Always `init`.
-- `template`
-  Template ID such as `nextjs`, `python`, or `go`.
+- `sourceType`
+  `quickstart` or `recipe`.
+- `sourceId`
+  The template ID or recipe slug.
 - `projectAction`
   `created` or `existing`.
 - `reusedExistingProject`
@@ -364,17 +369,24 @@ Required `data` fields:
 - `path`
   Absolute path to the cloned quickstart.
 - `envPath`
-  Path of the env file relative to the cloned quickstart root.
+  Path of the env file relative to the cloned scaffold root.
+- `envStatus`
+  Credential env write status from the selected source contract.
 - `metadataPath`
   Repo-local project binding file path, currently `.agora/project.json`.
 - `enabledFeatures`
   Array of features enabled during this run. Defaults to `rtc`, `rtm`, and `convoai` for newly created projects unless overridden with `--feature`. Empty for existing projects since the CLI did not create them in this run.
 - `nextSteps`
-  Ordered list of suggested follow-up commands for the selected template.
+  Ordered list of suggested follow-up commands for the selected source.
 - `status`
   Currently `ready`.
 
 Optional fields:
+- `template`
+  Present for built-in quickstart initialization.
+- `recipe`, `recipeUrl`, `recipeRawUrl`, `primaryPrompt`, `cloneUrl`
+  Present for recipe-backed initialization. The CLI resolves this metadata from
+  the official recipes API before it selects or creates a project.
 - `rtmDataCenter`
   RTM data center configured on the new project when RTM was enabled. Defaults to `NA` when `--rtm-data-center` is omitted.
 
@@ -382,7 +394,8 @@ Display-oriented fields:
 - `title`
 
 Safe branch fields:
-- `template`
+- `sourceType`
+- `sourceId`
 - `projectAction`
 - `projectId`
 - `path`
@@ -506,6 +519,11 @@ Example:
 ./agora project env write apps/web/.env.local --json
 ```
 
+Use this command for an explicit dotenv path in a custom repository. For an
+official Agora Quickstart, prefer `agora quickstart env write [dir]` so the CLI
+selects the template-specific path, seeds the template example, and updates
+Quickstart binding metadata.
+
 Optional `data` fields:
 - `credentialLayout`
   Either `standard` (AGORA_* keys) or `nextjs` (`NEXT_PUBLIC_AGORA_APP_ID` and `NEXT_AGORA_APP_CERTIFICATE`) when the workspace is detected or overridden as Next.js.
@@ -522,7 +540,7 @@ Required `data` fields:
 - `status`
   One of `created`, `updated`, `appended`, or `overwritten`.
 - `keysWritten`
-  Ordered list of credential keys that were written. By default `project env write` uses `AGORA_APP_ID` and `AGORA_APP_CERTIFICATE`. Next.js workspaces (detected via `package.json` / `next.config.*` / `env.local.example` / repo `.agora` `projectType` / `template: nextjs`, or forced with `--template nextjs`) use `NEXT_PUBLIC_AGORA_APP_ID` and `NEXT_AGORA_APP_CERTIFICATE` instead. Non-secret project metadata stays in `.agora/project.json`.
+  Ordered list of credential keys that were written. By default `project env write` uses `AGORA_APP_ID` and `AGORA_APP_CERTIFICATE`. Next.js workspaces (detected via `package.json` / `next.config.*` / `env.local.example` / repo `.agora` `projectType` / `template: nextjs`, or forced with `--template nextjs`) use `NEXT_PUBLIC_AGORA_APP_ID` and `NEXT_AGORA_APP_CERTIFICATE` instead. Unsupported credential aliases such as `APP_ID` and `APP_CERTIFICATE` are commented out when the canonical keys are written. Non-secret project metadata stays in `.agora/project.json`.
 
 Optional `data` fields (present when the CLI updates or creates repo metadata):
 - `metadataUpdated`
@@ -572,6 +590,53 @@ Safe branch fields:
 - `region`
 - `values`
 
+### `recipes list`
+
+Example:
+
+```bash
+./agora recipes list --type ai --json
+```
+
+Required `data` fields:
+- `action`
+  Always `list`.
+- `type`
+  `all`, `ai`, or `rtc`.
+- `total`
+- `items`
+  Official recipes returned by the versioned recipes API. Each summary includes
+  `slug`, `title`, `mainRepoUrl`, `recipeUrl`, `platforms`, `type`, and
+  `official` (always `true`).
+
+Safe branch fields:
+- `type`
+- `items[].slug`
+- `items[].type`
+- `items[].official`
+
+### `recipes show`
+
+Example:
+
+```bash
+./agora recipes show tool-calling --json
+```
+
+Required `data` fields:
+- `action`
+  Always `show`.
+- `recipe`
+  The official recipe detail, including `recipeRawUrl` and `primaryPrompt`.
+  `recipe.cli` is optional in the API. `init --recipe` requires it and returns
+  `RECIPE_INIT_UNSUPPORTED` when it is absent.
+
+Safe branch fields:
+- `recipe.slug`
+- `recipe.type`
+- `recipe.official`
+- `recipe.mainRepoUrl`
+
 ### `quickstart list`
 
 Example:
@@ -614,6 +679,7 @@ Display-oriented fields:
 
 Automation notes:
 - `--ref <branch|tag|ref>` pins the cloned quickstart source for workshops and reproducible demos.
+- `--template-only` explicitly skips project lookup and env-file creation. Without a resolved project or this flag, non-interactive runs fail with `QUICKSTART_PROJECT_REQUIRED` before cloning.
 
 Example:
 
@@ -661,6 +727,11 @@ Example:
 ```bash
 ./agora quickstart env write /abs/path/to/my-python-demo --json
 ```
+
+This is the canonical env-write workflow for official Agora Quickstarts. It
+uses the same credential merge and legacy-key cleanup semantics as
+`project env write`, while additionally selecting the template-specific target,
+seeding its example file, and updating `.agora/project.json`.
 
 Required `data` fields:
 - `action`

@@ -93,13 +93,29 @@ func renderResult(cmd *cobra.Command, command string, data any) error {
 	case "quickstart env write":
 		m := data.(map[string]any)
 		printBlock(out, "Quickstart Env", [][2]string{{"Template", asString(m["template"])}, {"Project", asString(m["projectName"])}, {"Path", asString(m["path"])}, {"Env Path", asString(m["envPath"])}, {"Metadata", asString(m["metadataPath"])}, {"Status", asString(m["status"])}})
+	case "recipes list":
+		m := data.(map[string]any)
+		fmt.Fprintln(out, "Recipes")
+		if items, ok := m["items"].([]recipeSummary); ok {
+			for _, item := range items {
+				label := "community"
+				if item.Official {
+					label = "official"
+				}
+				fmt.Fprintf(out, "- %s: %s (%s, %s)\n", item.Slug, item.Title, item.Type, label)
+			}
+		}
+	case "recipes show":
+		m := data.(map[string]any)
+		recipe := m["recipe"].(recipeDetail)
+		printBlock(out, "Recipe", [][2]string{{"Slug", recipe.Slug}, {"Title", recipe.Title}, {"Type", recipe.Type}, {"Official", asString(recipe.Official)}, {"Repository", recipe.MainRepoURL}, {"Recipe", recipe.RecipeURL}})
 	case "init":
 		m := data.(map[string]any)
 		features := "-"
 		if list, ok := m["enabledFeatures"].([]string); ok && len(list) > 0 {
 			features = strings.Join(list, ", ")
 		}
-		printBlock(out, "Init", [][2]string{{"Template", asString(m["template"])}, {"Project", asString(m["projectName"])}, {"Project ID", asString(m["projectId"])}, {"Project Action", asString(m["projectAction"])}, {"Region", asString(m["region"])}, {"Path", asString(m["path"])}, {"Env Path", asString(m["envPath"])}, {"Metadata", asString(m["metadataPath"])}, {"Features", features}, {"Status", asString(m["status"])}})
+		printBlock(out, "Init", [][2]string{{"Source", asString(m["sourceType"])}, {"Source ID", asString(m["sourceId"])}, {"Project", asString(m["projectName"])}, {"Project ID", asString(m["projectId"])}, {"Project Action", asString(m["projectAction"])}, {"Region", asString(m["region"])}, {"Path", asString(m["path"])}, {"Env Path", asString(m["envPath"])}, {"Metadata", asString(m["metadataPath"])}, {"Features", features}, {"Status", asString(m["status"])}})
 		if steps, ok := m["nextSteps"].([]string); ok && len(steps) > 0 {
 			fmt.Fprintln(out)
 			fmt.Fprintln(out, "Next Steps")

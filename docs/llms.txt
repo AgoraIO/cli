@@ -9,6 +9,7 @@ Direct GitHub fallback: curl -fsSL @@CLI_INSTALL_SH_FALLBACK_URL@@ | sh
 
 Login: agora login
 Initialize project: agora init my-demo --template nextjs --new-project
+Initialize official recipe: agora init my-agent --recipe tool-calling --new-project
 Check project health: agora project doctor --json
 
 ## Documentation Index
@@ -19,6 +20,7 @@ Check project health: agora project doctor --json
 - Command reference: /cli/commands.html
 - Automation (JSON contract): /cli/automation.html
 - Error codes: /cli/error-codes.html
+- Environment files: /cli/env-local.html
 - Telemetry controls: /cli/telemetry.html
 
 ### Agent-Friendly Markdown
@@ -26,6 +28,7 @@ Check project health: agora project doctor --json
 - Commands: /cli/md/commands.md
 - Automation: /cli/md/automation.md
 - Error codes: /cli/md/error-codes.md
+- Environment files: /cli/md/env-local.md
 - Install guide: /cli/md/install.md
 - Telemetry: /cli/md/telemetry.md
 - Agent rules: /cli/md/agents/README.md
@@ -41,6 +44,7 @@ Check project health: agora project doctor --json
 - **JSON Output**: All commands support --json for automation and scripting (see Automation Notes below for one documented exception)
 - **Stable Exit Codes**: Consistent error codes for CI/CD integration
 - **Template System**: Quick-start templates for Next.js, Python, Go, and Android (see `agora init --help` for the current catalog). Quickstart clones drop upstream `.git` metadata so scaffolds start as clean local repos.
+- **Official Recipes**: `agora recipes list/show` discovers the official `recipes.agora.io` catalog; `agora init --recipe <slug>` clones and configures recipes whose detail response includes CLI env metadata.
 - **Cross-Platform**: macOS, Linux, Windows support
 - **Agentic discovery**: `agora introspect --json` and `agora --help --all --json` emit the same machine-readable command tree
 - **MCP server**: `agora mcp serve` exposes the CLI as Model Context Protocol tools for agents
@@ -59,7 +63,7 @@ Check project health: agora project doctor --json
 
 - Use `--json` for automation and parse the terminal envelope.
 - Use explicit `--project <id|name>` or `--new-project` for deterministic init/project mutations.
-- Pass `--template` with `agora init --yes` in non-interactive runs (v0.2.1+).
+- Pass `--template` or `--recipe` with `agora init --yes` in non-interactive runs.
 - `--yes` accepts confirmation defaults; it does not replace `agora login`.
 - Isolate per-job state with `AGORA_HOME="$(mktemp -d)"`.
 - For URL-only docs access in agents, use `agora open --target docs-md --json` (add `--browser` to force launch).
@@ -80,6 +84,8 @@ agora auth status --json
 agora init my-app --template nextjs
 agora init my-app --template python --new-project --json
 agora init my-app --template go --project <project-id> --json
+agora recipes list --type ai --json
+agora init my-agent --recipe tool-calling --new-project --json
 ```
 
 ### Project Health Check

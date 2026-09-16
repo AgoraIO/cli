@@ -13,5 +13,10 @@
   "outputModes": [
     "pretty",
     "json"
+  ],
+  "recipeTypes": [
+    "all",
+    "ai",
+    "rtc"
   ]
 }

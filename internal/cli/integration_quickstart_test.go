@@ -66,8 +66,23 @@ func TestCLIQuickstartListAndCreate(t *testing.T) {
 	}
 
 	rootDir := t.TempDir()
+	requiredTarget := filepath.Join(rootDir, "project-required")
+	projectRequired := runCLI(t, []string{"quickstart", "create", "project-required", "--template", "nextjs", "--dir", requiredTarget, "--json"}, cliRunOptions{
+		env: map[string]string{
+			"XDG_CONFIG_HOME": t.TempDir(),
+			"AGORA_LOG_LEVEL": "error",
+		},
+		workdir: rootDir,
+	})
+	if projectRequired.exitCode != 1 || !strings.Contains(projectRequired.stdout, `"code":"QUICKSTART_PROJECT_REQUIRED"`) {
+		t.Fatalf("expected explicit project or template-only error, got %+v", projectRequired)
+	}
+	if _, err := os.Stat(requiredTarget); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("expected project resolution to fail before cloning, got %v", err)
+	}
+
 	unboundTarget := filepath.Join(rootDir, "video-demo")
-	createUnbound := runCLI(t, []string{"quickstart", "create", "video-demo", "--template", "nextjs", "--dir", unboundTarget, "--json"}, cliRunOptions{
+	createUnbound := runCLI(t, []string{"quickstart", "create", "video-demo", "--template", "nextjs", "--template-only", "--dir", unboundTarget, "--json"}, cliRunOptions{
 		env: map[string]string{
 			"XDG_CONFIG_HOME":                  t.TempDir(),
 			"AGORA_LOG_LEVEL":                  "error",
@@ -88,6 +103,43 @@ func TestCLIQuickstartListAndCreate(t *testing.T) {
 		t.Fatalf("did not expect .env.local in unbound scaffold, got %v", err)
 	}
 
+	templateOnlyWithContextTarget := filepath.Join(rootDir, "template-with-context")
+	templateOnlyWithContext := runCLI(t, []string{"quickstart", "create", "template-with-context", "--template", "nextjs", "--template-only", "--dir", templateOnlyWithContextTarget, "--json"}, cliRunOptions{
+		env: map[string]string{
+			"XDG_CONFIG_HOME":                  configHome,
+			"AGORA_API_BASE_URL":               api.baseURL,
+			"AGORA_LOG_LEVEL":                  "error",
+			"AGORA_QUICKSTART_NEXTJS_REPO_URL": nextjsRepo,
+		},
+		workdir: rootDir,
+	})
+	if templateOnlyWithContext.exitCode != 0 || !strings.Contains(templateOnlyWithContext.stdout, `"envStatus":"template-only"`) || !strings.Contains(templateOnlyWithContext.stdout, `"written":[]`) {
+		t.Fatalf("expected --template-only to bypass global project context, got %+v", templateOnlyWithContext)
+	}
+	if _, err := os.Stat(filepath.Join(templateOnlyWithContextTarget, ".agora", "project.json")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("did not expect project binding for --template-only clone, got %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(templateOnlyWithContextTarget, ".env.local")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("did not expect env file for --template-only clone, got %v", err)
+	}
+
+	conflictTarget := filepath.Join(rootDir, "conflicting-intent")
+	conflictingIntent := runCLI(t, []string{"quickstart", "create", "conflicting-intent", "--template", "nextjs", "--project", "prj_123456", "--template-only", "--dir", conflictTarget, "--json"}, cliRunOptions{
+		env: map[string]string{
+			"XDG_CONFIG_HOME":    configHome,
+			"AGORA_API_BASE_URL": api.baseURL,
+			"AGORA_LOG_LEVEL":    "error",
+		},
+		workdir: rootDir,
+	})
+	conflictOutput := conflictingIntent.stdout + conflictingIntent.stderr
+	if conflictingIntent.exitCode != 1 || !strings.Contains(conflictOutput, "project") || !strings.Contains(conflictOutput, "template-only") {
+		t.Fatalf("expected project/template-only conflict, got %+v", conflictingIntent)
+	}
+	if _, err := os.Stat(conflictTarget); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("expected conflicting flags to fail before cloning, got %v", err)
+	}
+
 	boundTarget := filepath.Join(rootDir, "agent-demo")
 	createBound := runCLI(t, []string{"quickstart", "create", "agent-demo", "--template", "python", "--dir", boundTarget, "--json"}, cliRunOptions{
 		env: map[string]string{
@@ -101,9 +153,9 @@ func TestCLIQuickstartListAndCreate(t *testing.T) {
 	if createBound.exitCode != 0 || !strings.Contains(createBound.stdout, `"envStatus":"configured"`) || !strings.Contains(createBound.stdout, `"projectId":"prj_123456"`) {
 		t.Fatalf("unexpected bound quickstart create result: %+v", createBound)
 	}
-	localEnv, err := os.ReadFile(filepath.Join(boundTarget, "server", ".env.local"))
+	localEnv, err := os.ReadFile(filepath.Join(boundTarget, "server", ".env"))
 	if err != nil {
-		t.Fatalf("expected .env.local in bound scaffold: %v", err)
+		t.Fatalf("expected server/.env in bound scaffold: %v", err)
 	}
 	if !strings.Contains(string(localEnv), "AGORA_APP_ID=app_123456") || !strings.Contains(string(localEnv), "AGORA_APP_CERTIFICATE=") || !strings.Contains(string(localEnv), "PORT=8000") || strings.Contains(string(localEnv), "# Project ID:") || strings.Contains(string(localEnv), "# Project Name:") || strings.Contains(string(localEnv), "BEGIN AGORA CLI QUICKSTART") {
 		t.Fatalf("unexpected .env.local contents: %s", string(localEnv))
@@ -124,6 +176,23 @@ func TestCLIQuickstartListAndCreate(t *testing.T) {
 	}
 	if !strings.Contains(string(readme), "Python Quickstart") {
 		t.Fatalf("unexpected README contents: %s", string(readme))
+	}
+
+	explicitTarget := filepath.Join(rootDir, "explicit-project-demo")
+	explicitProject := runCLI(t, []string{"quickstart", "create", "explicit-project-demo", "--template", "python", "--project", "prj_123456", "--dir", explicitTarget, "--json"}, cliRunOptions{
+		env: map[string]string{
+			"XDG_CONFIG_HOME":                  configHome,
+			"AGORA_API_BASE_URL":               api.baseURL,
+			"AGORA_LOG_LEVEL":                  "error",
+			"AGORA_QUICKSTART_PYTHON_REPO_URL": pythonRepo,
+		},
+		workdir: rootDir,
+	})
+	if explicitProject.exitCode != 0 || !strings.Contains(explicitProject.stdout, `"envStatus":"configured"`) || !strings.Contains(explicitProject.stdout, `"projectId":"prj_123456"`) {
+		t.Fatalf("expected explicit project to configure quickstart, got %+v", explicitProject)
+	}
+	if _, err := os.Stat(filepath.Join(explicitTarget, "server", ".env")); err != nil {
+		t.Fatalf("expected explicit project to create server/.env: %v", err)
 	}
 
 	nextjsBoundTarget := filepath.Join(rootDir, "nextjs-demo")
@@ -201,9 +270,9 @@ func TestCLIQuickstartListAndCreate(t *testing.T) {
 	if createGoBound.exitCode != 0 || !strings.Contains(createGoBound.stdout, `"envStatus":"configured"`) {
 		t.Fatalf("unexpected bound go quickstart create result: %+v", createGoBound)
 	}
-	goEnv, err := os.ReadFile(filepath.Join(goBoundTarget, "server", ".env.local"))
+	goEnv, err := os.ReadFile(filepath.Join(goBoundTarget, "server", ".env"))
 	if err != nil {
-		t.Fatalf("expected .env.local in bound go scaffold: %v", err)
+		t.Fatalf("expected server/.env in bound go scaffold: %v", err)
 	}
 	if !strings.Contains(string(goEnv), "AGORA_APP_ID=app_123456") || !strings.Contains(string(goEnv), "AGORA_APP_CERTIFICATE=") || !strings.Contains(string(goEnv), "PORT=8080") {
 		t.Fatalf("unexpected go .env.local contents: %s", string(goEnv))
@@ -297,7 +366,7 @@ func TestCLIQuickstartEnvWriteUsesTargetRepoBindingPrecedence(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(envRaw), "APP_ID=app_alpha") || !strings.Contains(string(envRaw), "PORT=8080") || strings.Contains(string(envRaw), "APP_ID=app_beta") {
+	if !strings.Contains(string(envRaw), "AGORA_APP_ID=app_alpha") || !strings.Contains(string(envRaw), "AGORA_APP_CERTIFICATE=") || !strings.Contains(string(envRaw), "PORT=8080") || strings.Contains(string(envRaw), "AGORA_APP_ID=app_beta") {
 		t.Fatalf("expected target repo binding project app id in env, got %s", string(envRaw))
 	}
 	if _, err := os.Stat(filepath.Join(targetDir, "server", ".env.local")); !errors.Is(err, os.ErrNotExist) {
@@ -317,7 +386,7 @@ func TestCLIQuickstartEnvWriteMissingBindingEvenWhenEnvExists(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(targetDir, "server", "go.mod"), []byte("module agent-quickstart-go/server\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(targetDir, "server", ".env.local"), []byte("AGORA_APP_ID=stale\nAGORA_APP_CERTIFICATE=stale\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(targetDir, "server", ".env"), []byte("AGORA_APP_ID=stale\nAGORA_APP_CERTIFICATE=stale\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 

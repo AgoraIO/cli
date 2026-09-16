@@ -38,6 +38,7 @@ func initNextSteps(template quickstartTemplate, targetDir string) []string {
 
 func (a *App) buildInitCommand() *cobra.Command {
 	var templateID string
+	var recipeID string
 	var dir string
 	var existingProject string
 	var rtmDataCenter string
@@ -46,16 +47,18 @@ func (a *App) buildInitCommand() *cobra.Command {
 	var newProject bool
 	cmd := &cobra.Command{
 		Use:   "init <name>",
-		Short: "Create a project, clone a quickstart, and write env in one flow",
+		Short: "Create a project and initialize an official quickstart or recipe",
 		Long: `Init is the recommended onboarding command.
 
 By default it reuses your existing Agora project — preferring one named "Default Project". In interactive sessions without a Default Project, init shows your existing projects and a create-new option. Non-interactive runs fall back to the most recent project. A new project is created when no projects exist yet or when --new-project is passed.
 
 Use --project to bind to a specific existing project by name or ID.
 Use --new-project to always create a fresh project regardless of existing ones.
+Use --recipe to clone an official Agora recipe instead of a built-in quickstart.
 Use --feature to specify which features to enable on a newly created project (repeatable).`,
 		Example: example(`
   agora init my-nextjs-demo --template nextjs
+  agora init my-agent --recipe tool-calling
   agora init my-python-demo --template python
   agora init my-go-demo --template go --project my-existing-project
   agora init my-rtm-demo --template nextjs --new-project --rtm-data-center AP
@@ -65,16 +68,15 @@ Use --feature to specify which features to enable on a newly created project (re
 			if len(args) != 1 || strings.TrimSpace(args[0]) == "" {
 				return &cliError{Message: "directory name is required", Code: "INIT_NAME_REQUIRED"}
 			}
-			if strings.TrimSpace(templateID) == "" {
+			if strings.TrimSpace(templateID) != "" && strings.TrimSpace(recipeID) != "" {
+				return &cliError{Message: "--template and --recipe cannot be used together.", Code: "INIT_SOURCE_CONFLICT"}
+			}
+			if strings.TrimSpace(templateID) == "" && strings.TrimSpace(recipeID) == "" {
 				selected, err := a.selectInitTemplate(cmd)
 				if err != nil {
 					return err
 				}
 				templateID = selected
-			}
-			template, ok := findQuickstartTemplate(templateID)
-			if !ok {
-				return &cliError{Message: fmt.Sprintf("unknown quickstart template %q. Run `agora quickstart list` to see available templates.", templateID), Code: "QUICKSTART_TEMPLATE_UNKNOWN"}
 			}
 			targetDir := dir
 			if strings.TrimSpace(targetDir) == "" {
@@ -90,7 +92,21 @@ Use --feature to specify which features to enable on a newly created project (re
 				!isCIEnvironment(a.osEnv) &&
 				isTTY(os.Stdin)
 			progress := jsonProgressFor(a, cmd, "init")
-			result, err := a.initProject(args[0], targetDir, *template, existingProject, features, rtmDataCenter, newProject, promptForReuse, cmd.ErrOrStderr(), os.Stdin, progress)
+			var result map[string]any
+			var err error
+			if strings.TrimSpace(recipeID) != "" {
+				recipe, recipeErr := a.getRecipe(recipeID)
+				if recipeErr != nil {
+					return recipeErr
+				}
+				result, err = a.initRecipeProject(args[0], targetDir, recipe, existingProject, features, rtmDataCenter, newProject, promptForReuse, cmd.ErrOrStderr(), os.Stdin, progress)
+			} else {
+				template, ok := findQuickstartTemplate(templateID)
+				if !ok {
+					return &cliError{Message: fmt.Sprintf("unknown quickstart template %q. Run `agora quickstart list` to see available templates.", templateID), Code: "QUICKSTART_TEMPLATE_UNKNOWN"}
+				}
+				result, err = a.initProject(args[0], targetDir, *template, existingProject, features, rtmDataCenter, newProject, promptForReuse, cmd.ErrOrStderr(), os.Stdin, progress)
+			}
 			if err != nil {
 				return err
 			}
@@ -105,6 +121,7 @@ Use --feature to specify which features to enable on a newly created project (re
 		},
 	}
 	cmd.Flags().StringVar(&templateID, "template", "", "quickstart template ID to use")
+	cmd.Flags().StringVar(&recipeID, "recipe", "", "official Agora recipe slug (run agora recipes list to discover slugs)")
 	cmd.Flags().StringVar(&dir, "dir", "", "target directory for the cloned quickstart; defaults to <name>")
 	cmd.Flags().StringVar(&existingProject, "project", "", "existing project ID or exact project name to bind to")
 	cmd.Flags().StringVar(&rtmDataCenter, "rtm-data-center", "", "RTM data center to configure when rtm is enabled on a newly created project (CN, NA, EU, or AP); defaults to NA")
@@ -116,10 +133,10 @@ Use --feature to specify which features to enable on a newly created project (re
 
 func (a *App) selectInitTemplate(cmd *cobra.Command) (string, error) {
 	if a.noInput() {
-		return "", &cliError{Message: "quickstart template is required. Pass `--template` or run `agora quickstart list`.", Code: "QUICKSTART_TEMPLATE_REQUIRED"}
+		return "", &cliError{Message: "init source is required. Pass `--template`, pass `--recipe`, or run `agora quickstart list` / `agora recipes list`.", Code: "INIT_SOURCE_REQUIRED"}
 	}
 	if a.resolveOutputMode(cmd) == outputJSON || isCIEnvironment(a.osEnv) || !isTTY(os.Stdin) {
-		return "", &cliError{Message: "quickstart template is required. Pass `--template` or run `agora quickstart list`.", Code: "QUICKSTART_TEMPLATE_REQUIRED"}
+		return "", &cliError{Message: "init source is required. Pass `--template`, pass `--recipe`, or run `agora quickstart list` / `agora recipes list`.", Code: "INIT_SOURCE_REQUIRED"}
 	}
 	templates := []quickstartTemplate{}
 	for _, template := range quickstartTemplates() {
@@ -328,11 +345,62 @@ func (a *App) resolveInitProject(ctx projectContext, item projectSummary) (proje
 	return projectTarget{project: project, region: currentRegionFromContext(ctx)}, nil
 }
 
+type initProjectResolution struct {
+	target                 projectTarget
+	projectAction          string
+	projectSelectionReason string
+	enabledFeatures        []string
+	createdRTMDataCenter   string
+}
+
 func (a *App) initProject(name, targetDir string, template quickstartTemplate, existingProject string, features []string, rtmDataCenter string, newProject bool, promptForReuse bool, promptOut io.Writer, promptIn io.Reader, progress progressEmitter) (map[string]any, error) {
 	if !template.Available || !template.SupportsInit {
 		return nil, &cliError{Message: fmt.Sprintf("Quickstart template %q is not supported by `agora init`. Use `agora quickstart create` instead.", template.ID), Code: "QUICKSTART_TEMPLATE_UNAVAILABLE"}
 	}
+	if _, err := resolveScaffoldTarget(targetDir); err != nil {
+		return nil, err
+	}
+	resolution, err := a.resolveInitProjectForScaffold(name, existingProject, features, rtmDataCenter, newProject, promptForReuse, promptOut, promptIn, progress)
+	if err != nil {
+		return nil, err
+	}
+	target := resolution.target
 
+	quickstartResult, err := a.quickstartCreate(template, targetDir, target.project.ProjectID, false, false, promptOut, promptIn, "", progress)
+	if err != nil {
+		return nil, err
+	}
+	if err := a.persistInitProjectContext(target); err != nil {
+		return nil, err
+	}
+
+	result := map[string]any{
+		"action":                 "init",
+		"enabledFeatures":        resolution.enabledFeatures,
+		"envPath":                quickstartResult["envPath"],
+		"envStatus":              quickstartResult["envStatus"],
+		"metadataPath":           filepath.ToSlash(filepath.Join(localAgoraDirName, localProjectFileName)),
+		"nextSteps":              initNextSteps(template, asString(quickstartResult["path"])),
+		"path":                   quickstartResult["path"],
+		"projectAction":          resolution.projectAction,
+		"projectId":              target.project.ProjectID,
+		"projectName":            target.project.Name,
+		"projectSelectionReason": resolution.projectSelectionReason,
+		"region":                 target.region,
+		"reusedExistingProject":  resolution.projectAction == "existing",
+		"sourceId":               template.ID,
+		"sourceType":             "quickstart",
+		"status":                 "ready",
+		"template":               template.ID,
+		"title":                  template.Title,
+	}
+	if resolution.createdRTMDataCenter != "" {
+		result["rtmDataCenter"] = resolution.createdRTMDataCenter
+	}
+	return result, nil
+}
+
+func (a *App) resolveInitProjectForScaffold(name, existingProject string, features []string, rtmDataCenter string, newProject bool, promptForReuse bool, promptOut io.Writer, promptIn io.Reader, progress progressEmitter) (initProjectResolution, error) {
 	var target projectTarget
 	projectAction := "existing"
 	projectSelectionReason := "explicit_project"
@@ -344,7 +412,7 @@ func (a *App) initProject(name, targetDir string, template quickstartTemplate, e
 	case strings.TrimSpace(existingProject) != "":
 		resolved, err := a.resolveProjectTarget(existingProject)
 		if err != nil {
-			return nil, err
+			return initProjectResolution{}, err
 		}
 		target = resolved
 	case newProject:
@@ -353,7 +421,7 @@ func (a *App) initProject(name, targetDir string, template quickstartTemplate, e
 	default:
 		ctx, items, err := a.listInitProjects()
 		if err != nil {
-			return nil, err
+			return initProjectResolution{}, err
 		}
 		if len(items) == 0 {
 			needsCreate = true
@@ -363,7 +431,7 @@ func (a *App) initProject(name, targetDir string, template quickstartTemplate, e
 		if item, ok := selectDefaultInitProjectFromList(items); ok {
 			resolved, err := a.resolveInitProject(ctx, item)
 			if err != nil {
-				return nil, err
+				return initProjectResolution{}, err
 			}
 			target = resolved
 			projectSelectionReason = "default_name"
@@ -372,18 +440,18 @@ func (a *App) initProject(name, targetDir string, template quickstartTemplate, e
 		if promptForReuse {
 			selected, action, err := chooseInitProject(promptIn, promptOut, items)
 			if err != nil {
-				return nil, err
+				return initProjectResolution{}, err
 			}
 			switch action {
 			case "abort":
-				return nil, &cliError{Message: "init aborted by user.", Code: "INIT_ABORTED"}
+				return initProjectResolution{}, &cliError{Message: "init aborted by user.", Code: "INIT_ABORTED"}
 			case "new":
 				needsCreate = true
 				projectSelectionReason = "interactive_new_project"
 			default:
 				resolved, err := a.resolveInitProject(ctx, selected)
 				if err != nil {
-					return nil, err
+					return initProjectResolution{}, err
 				}
 				target = resolved
 				projectSelectionReason = "interactive_selection"
@@ -397,7 +465,7 @@ func (a *App) initProject(name, targetDir string, template quickstartTemplate, e
 			}
 			resolved, err := a.resolveInitProject(ctx, item)
 			if err != nil {
-				return nil, err
+				return initProjectResolution{}, err
 			}
 			target = resolved
 			projectSelectionReason = "most_recent"
@@ -409,7 +477,7 @@ func (a *App) initProject(name, targetDir string, template quickstartTemplate, e
 		progress.emit("project:create", "Creating Agora project", map[string]any{"projectName": name, "features": featuresToEnable})
 		projectResult, err := a.projectCreate(name, "", featuresToEnable, rtmDataCenter, "")
 		if err != nil {
-			return nil, err
+			return initProjectResolution{}, err
 		}
 		projectAction = "created"
 		if list, ok := projectResult["enabledFeatures"].([]string); ok {
@@ -418,7 +486,7 @@ func (a *App) initProject(name, targetDir string, template quickstartTemplate, e
 		createdRTMDataCenter = asString(projectResult["rtmDataCenter"])
 		resolved, err := a.resolveProjectTarget(asString(projectResult["projectId"]))
 		if err != nil {
-			return nil, err
+			return initProjectResolution{}, err
 		}
 		target = resolved
 		progress.emit("project:created", "Agora project ready", map[string]any{"projectId": target.project.ProjectID, "projectName": target.project.Name})
@@ -426,41 +494,25 @@ func (a *App) initProject(name, targetDir string, template quickstartTemplate, e
 		progress.emit("project:reuse", "Reusing existing Agora project", map[string]any{"projectId": target.project.ProjectID, "projectName": target.project.Name})
 	}
 
-	quickstartResult, err := a.quickstartCreate(template, targetDir, target.project.ProjectID, "", progress)
-	if err != nil {
-		return nil, err
-	}
+	return initProjectResolution{
+		target:                 target,
+		projectAction:          projectAction,
+		projectSelectionReason: projectSelectionReason,
+		enabledFeatures:        enabledFeatures,
+		createdRTMDataCenter:   createdRTMDataCenter,
+	}, nil
+}
 
+func (a *App) persistInitProjectContext(target projectTarget) error {
 	ctx, err := loadContext(a.env)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	ctx.CurrentProjectID = &target.project.ProjectID
 	ctx.CurrentProjectName = &target.project.Name
 	ctx.CurrentRegion = target.region
 	if err := saveContext(a.env, ctx); err != nil {
-		return nil, err
+		return err
 	}
-
-	result := map[string]any{
-		"action":                 "init",
-		"enabledFeatures":        enabledFeatures,
-		"envPath":                quickstartResult["envPath"],
-		"metadataPath":           filepath.ToSlash(filepath.Join(localAgoraDirName, localProjectFileName)),
-		"nextSteps":              initNextSteps(template, asString(quickstartResult["path"])),
-		"path":                   quickstartResult["path"],
-		"projectAction":          projectAction,
-		"projectId":              target.project.ProjectID,
-		"projectName":            target.project.Name,
-		"projectSelectionReason": projectSelectionReason,
-		"region":                 target.region,
-		"reusedExistingProject":  projectAction == "existing",
-		"status":                 "ready",
-		"template":               template.ID,
-		"title":                  template.Title,
-	}
-	if createdRTMDataCenter != "" {
-		result["rtmDataCenter"] = createdRTMDataCenter
-	}
-	return result, nil
+	return nil
 }

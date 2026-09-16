@@ -76,8 +76,47 @@ func TestCLIInitRequiresTemplateWhenNoInputIsSet(t *testing.T) {
 			"AGORA_LOG_LEVEL": "error",
 		},
 	})
-	if result.exitCode != 1 || !strings.Contains(result.stdout, `"code":"QUICKSTART_TEMPLATE_REQUIRED"`) {
-		t.Fatalf("expected QUICKSTART_TEMPLATE_REQUIRED, got %+v", result)
+	if result.exitCode != 1 || !strings.Contains(result.stdout, `"code":"INIT_SOURCE_REQUIRED"`) {
+		t.Fatalf("expected INIT_SOURCE_REQUIRED, got %+v", result)
+	}
+}
+
+func TestCLIInitPythonWritesAgoraCredentialNames(t *testing.T) {
+	configHome := t.TempDir()
+	rootDir := t.TempDir()
+	api := newFakeCLIBFF()
+	defer api.server.Close()
+	persistSessionForIntegration(t, configHome)
+
+	pythonRepo := createLocalGitRepo(t, map[string]string{
+		"README.md":               "# Python Quickstart\n",
+		"server/.env.example":     "APP_ID=placeholder\nAPP_CERTIFICATE=placeholder\nPORT=8000\n",
+		"server/requirements.txt": "",
+		"web/package.json":        `{"name":"python-quickstart-web"}`,
+	})
+	targetDir := filepath.Join(rootDir, "python-demo")
+
+	result := runCLI(t, []string{"init", "python-demo", "--template", "python", "--new-project", "--dir", targetDir, "--json"}, cliRunOptions{
+		env: map[string]string{
+			"XDG_CONFIG_HOME":                  configHome,
+			"AGORA_API_BASE_URL":               api.baseURL,
+			"AGORA_LOG_LEVEL":                  "error",
+			"AGORA_QUICKSTART_PYTHON_REPO_URL": pythonRepo,
+		},
+		workdir: rootDir,
+	})
+	if result.exitCode != 0 || !strings.Contains(result.stdout, `"template":"python"`) || !strings.Contains(result.stdout, `"envPath":"server/.env"`) {
+		t.Fatalf("unexpected Python init result: %+v", result)
+	}
+
+	serverEnv, err := os.ReadFile(filepath.Join(targetDir, "server", ".env"))
+	if err != nil {
+		t.Fatalf("expected Python server env file: %v", err)
+	}
+	content := string(serverEnv)
+	unprefixed := "\n" + content
+	if !strings.Contains(content, "AGORA_APP_ID=app_0001") || !strings.Contains(content, "AGORA_APP_CERTIFICATE=4854d28b48a9439c9f2546e2216fc07a") || !strings.Contains(content, "PORT=8000") || strings.Contains(unprefixed, "\nAPP_ID=") || strings.Contains(unprefixed, "\nAPP_CERTIFICATE=") {
+		t.Fatalf("unexpected Python server env contents: %s", content)
 	}
 }
 

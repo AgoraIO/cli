@@ -21,6 +21,7 @@ func (a *App) buildRoot() *cobra.Command {
   auth        Authenticate this machine with Agora Console
   project     Manage remote Agora project resources and env values
   quickstart  Clone official standalone quickstart repositories
+  recipes     Discover official Agora recipe repositories
   init        Create a project and quickstart in one onboarding flow
 
 Use "agora init" for the fastest path to a runnable demo.
@@ -101,6 +102,7 @@ Use "agora --help --all --json" for a machine-readable command tree (agent tooli
 	root.AddCommand(a.buildConfigCommand())
 	root.AddCommand(a.buildProjectCommand())
 	root.AddCommand(a.buildQuickstartCommand())
+	root.AddCommand(a.buildRecipesCommand())
 	root.AddCommand(a.buildInitCommand())
 	root.AddCommand(a.buildVersionCommand())
 	root.AddCommand(a.buildIntrospectCommand())
@@ -740,7 +742,7 @@ This is the one command whose default (non-JSON) output is raw stdout — withou
   --format envelope   unified JSON envelope (alias of --json)
   --format json       same as --format envelope
 
-For automation, prefer --json (or --format envelope) so the result has the same shape as every other command. Use "project env write" when you want to persist the values into a managed dotenv file on disk.`,
+For automation, prefer --json (or --format envelope) so the result has the same shape as every other command. Use "quickstart env write" for official Agora quickstarts. Use "project env write" when you need to persist credentials to an explicit file in a custom repository.`,
 		Example: example(`
   agora project env
   agora project env --shell
@@ -789,7 +791,9 @@ For automation, prefer --json (or --format envelope) so the result has the same 
 	write := &cobra.Command{
 		Use:   "write [path]",
 		Short: "Write project environment variables to a dotenv file",
-		Long: `Write Agora App ID and App Certificate values to a dotenv file.
+		Long: `Write Agora App ID and App Certificate values to an explicit dotenv file in a custom repository.
+
+For official Agora quickstarts, prefer ` + "`agora quickstart env write .`" + ` so the CLI can select the template-specific path, seed its example file, and update quickstart metadata.
 
 If no path is provided, the CLI chooses the default target using the existing env files in the working directory.
 
@@ -838,15 +842,19 @@ When .agora/project.json exists, this command updates it for the selected projec
 			if err != nil {
 				return err
 			}
-			values, err := projectCredentialEnvValuesForLayout(target.project, layout)
+			appIDKey, certificateKey := credentialEnvKeysForProjectLayout(layout)
+			file, err := writeCredentialEnv(credentialEnvTarget{
+				Path:              absPath,
+				AppIDKey:          appIDKey,
+				AppCertificateKey: certificateKey,
+			}, target.project, credentialEnvWriteOptions{
+				AllowAppend: appendFlag || pathFromUser == "" || isDefaultEnvPath(absPath),
+				Overwrite:   overwriteFlag,
+			})
 			if err != nil {
 				return err
 			}
-			conflicting := conflictingKeysForProjectEnvLayout(layout)
-			file, err := writeProjectEnvFile(absPath, values, appendFlag, overwriteFlag, conflicting, pathFromUser == "")
-			if err != nil {
-				return err
-			}
+			values := file.Values
 			metaUpdated, metadataPath, err := syncLocalProjectBindingAfterEnvWrite(workspaceDir, cwd, absPath, target, projectType)
 			if err != nil {
 				return err

@@ -25,7 +25,7 @@ func TestResolveQuickstartEnvWriteTargetSupportsCurrentAndLegacyLayouts(t *testi
 				"web/package.json":        "{}",
 			},
 			wantTemplate:       "python",
-			wantEnvPath:        "server/.env.local",
+			wantEnvPath:        "server/.env",
 			wantAppIDKey:       "AGORA_APP_ID",
 			wantCertificateKey: "AGORA_APP_CERTIFICATE",
 		},
@@ -37,8 +37,8 @@ func TestResolveQuickstartEnvWriteTargetSupportsCurrentAndLegacyLayouts(t *testi
 			},
 			wantTemplate:       "python",
 			wantEnvPath:        "server/.env",
-			wantAppIDKey:       "APP_ID",
-			wantCertificateKey: "APP_CERTIFICATE",
+			wantAppIDKey:       "AGORA_APP_ID",
+			wantCertificateKey: "AGORA_APP_CERTIFICATE",
 		},
 		{
 			name: "current go",
@@ -47,7 +47,7 @@ func TestResolveQuickstartEnvWriteTargetSupportsCurrentAndLegacyLayouts(t *testi
 				"client/package.json": "{}",
 			},
 			wantTemplate:       "go",
-			wantEnvPath:        "server/.env.local",
+			wantEnvPath:        "server/.env",
 			wantAppIDKey:       "AGORA_APP_ID",
 			wantCertificateKey: "AGORA_APP_CERTIFICATE",
 		},
@@ -59,8 +59,8 @@ func TestResolveQuickstartEnvWriteTargetSupportsCurrentAndLegacyLayouts(t *testi
 			},
 			wantTemplate:       "go",
 			wantEnvPath:        "server-go/.env",
-			wantAppIDKey:       "APP_ID",
-			wantCertificateKey: "APP_CERTIFICATE",
+			wantAppIDKey:       "AGORA_APP_ID",
+			wantCertificateKey: "AGORA_APP_CERTIFICATE",
 		},
 	}
 
@@ -104,12 +104,12 @@ func TestResolveQuickstartEnvWriteTargetPreservesBoundLegacyLayout(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if template.ID != "go" || layout.EnvTargetPath != "server-go/.env" || layout.AppIDKey != "APP_ID" {
+	if template.ID != "go" || layout.EnvTargetPath != "server-go/.env" || layout.AppIDKey != "AGORA_APP_ID" {
 		t.Fatalf("expected bound legacy go layout, got template=%q layout=%+v", template.ID, layout)
 	}
 }
 
-func TestSeedQuickstartEnvPreservesLegacyCredentialNames(t *testing.T) {
+func TestSeedQuickstartEnvNormalizesLegacyCredentialNames(t *testing.T) {
 	template, ok := findQuickstartTemplate("go")
 	if !ok {
 		t.Fatal("go template not found")
@@ -140,9 +140,57 @@ func TestSeedQuickstartEnvPreservesLegacyCredentialNames(t *testing.T) {
 		t.Fatal(err)
 	}
 	content := string(raw)
-	if !strings.Contains(content, "APP_ID=app_123") || !strings.Contains(content, "APP_CERTIFICATE=cert_123") || strings.Contains(content, "AGORA_APP_ID=") || !strings.Contains(content, "PORT=8080") {
+	legacyContent := "\n" + content
+	if !strings.Contains(content, "AGORA_APP_ID=app_123") || !strings.Contains(content, "AGORA_APP_CERTIFICATE=cert_123") || strings.Contains(legacyContent, "\nAPP_ID=") || strings.Contains(legacyContent, "\nAPP_CERTIFICATE=") || !strings.Contains(content, "PORT=8080") {
 		t.Fatalf("unexpected legacy env contents: %s", content)
 	}
+}
+
+func TestChooseQuickstartProject(t *testing.T) {
+	items := []projectSummary{
+		{ProjectID: "prj_old", Name: "Older", CreatedAt: "2026-04-01T10:00:00Z"},
+		{ProjectID: "prj_new", Name: "Newest", CreatedAt: "2026-04-12T10:00:00Z"},
+	}
+
+	t.Run("blank selects most recent project", func(t *testing.T) {
+		var out strings.Builder
+		project, action, err := chooseQuickstartProject(strings.NewReader("\n"), &out, items)
+		if err != nil || action != "project" || project.ProjectID != "prj_new" {
+			t.Fatalf("unexpected choice: action=%q project=%+v err=%v", action, project, err)
+		}
+	})
+
+	t.Run("template-only is explicit", func(t *testing.T) {
+		var out strings.Builder
+		_, action, err := chooseQuickstartProject(strings.NewReader("template-only\n"), &out, items)
+		if err != nil || action != "template-only" {
+			t.Fatalf("unexpected choice: action=%q err=%v", action, err)
+		}
+	})
+
+	t.Run("number selects existing project", func(t *testing.T) {
+		var out strings.Builder
+		project, action, err := chooseQuickstartProject(strings.NewReader("1\n"), &out, items)
+		if err != nil || action != "project" || project.ProjectID != "prj_old" {
+			t.Fatalf("unexpected choice: action=%q project=%+v err=%v", action, project, err)
+		}
+	})
+
+	t.Run("cancel aborts creation", func(t *testing.T) {
+		var out strings.Builder
+		_, action, err := chooseQuickstartProject(strings.NewReader("cancel\n"), &out, items)
+		if err != nil || action != "abort" {
+			t.Fatalf("unexpected choice: action=%q err=%v", action, err)
+		}
+	})
+
+	t.Run("empty account has no selection", func(t *testing.T) {
+		var out strings.Builder
+		_, action, err := chooseQuickstartProject(strings.NewReader("\n"), &out, nil)
+		if err != nil || action != "none" {
+			t.Fatalf("unexpected choice: action=%q err=%v", action, err)
+		}
+	})
 }
 
 func TestGoVoiceAgentSkillUsesQuickstartWorkflow(t *testing.T) {

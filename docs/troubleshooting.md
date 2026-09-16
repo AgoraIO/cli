@@ -204,13 +204,15 @@ curl -fsSL @@CLI_INSTALL_SH_URL@@ | sh
 
 npm and other package-manager installs are unaffected.
 
-## `agora init --yes` fails with QUICKSTART_TEMPLATE_REQUIRED
+## `agora init --yes` fails with INIT_SOURCE_REQUIRED
 
-In JSON, CI, or non-TTY runs, `agora init` requires an explicit template.
-Pass `--template` (list options with `agora quickstart list`):
+In JSON, CI, or non-TTY runs, `agora init` requires an explicit source.
+Pass either `--template` (list options with `agora quickstart list`) or
+`--recipe` (list options with `agora recipes list`):
 
 ```bash
 agora init my-demo --template nextjs --new-project --yes --json
+agora init my-agent --recipe tool-calling --new-project --yes --json
 ```
 
 ## Output looks wrong in scripts (color codes, table widths)

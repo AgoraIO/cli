@@ -268,8 +268,8 @@ func TestCLIProjectDoctorDeepDetectsWorkspaceDrift(t *testing.T) {
 		"# BEGIN AGORA CLI QUICKSTART",
 		"# Project ID: prj_other",
 		"# Project Name: Project Other",
-		"APP_ID=app_other",
-		"APP_CERTIFICATE=other",
+		"AGORA_APP_ID=app_other",
+		"AGORA_APP_CERTIFICATE=other",
 		"# END AGORA CLI QUICKSTART",
 		"",
 	}, "\n")

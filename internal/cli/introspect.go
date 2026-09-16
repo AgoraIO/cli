@@ -80,6 +80,7 @@ func buildIntrospectionData(root *cobra.Command) map[string]any {
 		"pseudoCommands": buildPseudoCommands(),
 		"enums": map[string][]string{
 			"features":     featureIDs(),
+			"recipeTypes":  {"all", "ai", "rtc"},
 			"outputModes":  {"pretty", "json"},
 			"doctorStatus": {"healthy", "warning", "not_ready", "auth_error"},
 		},

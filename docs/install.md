@@ -105,6 +105,8 @@ The shell installer is idempotent. Re-running with the same `--version` will det
 
 ### Windows (PowerShell)
 
+The installer requires PowerShell 7+ (`pwsh`). Windows PowerShell 5.1 exits before making filesystem or network changes and prints the PowerShell 7 recovery commands.
+
 Install the latest release:
 
 ```powershell
@@ -132,12 +134,14 @@ The Windows installer installs `agora.exe` into `%LOCALAPPDATA%\Programs\Agora\b
 
 #### Alternative: download first, then run
 
-Windows PowerShell's default execution policy blocks inline scripts on most machines (`Restricted` is the default for standard users; `RemoteSigned` rejects unsigned CDN content even for admins). If you hit that, download the installer to disk and run it with `-ExecutionPolicy Bypass`. The `Invoke-WebRequest` form below works on both Windows PowerShell 5.1 and PowerShell 7+:
+If execution policy blocks the installer, download it to disk and launch it in a new PowerShell 7 process with a process-scoped bypass:
 
 ```powershell
 Invoke-WebRequest -Uri https://dl.agora.io/cli/install.ps1 -OutFile .\install.ps1
-powershell -ExecutionPolicy Bypass -File .\install.ps1
+pwsh -NoProfile -ExecutionPolicy Bypass -File .\install.ps1
 ```
+
+The process-scoped bypass does not override an organization-level `MachinePolicy` or `UserPolicy`. In a managed environment where Group Policy still blocks the script, ask an administrator to allow it or use a verified release archive instead.
 
 ### Direct GitHub fallback
 

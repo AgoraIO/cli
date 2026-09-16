@@ -28,7 +28,7 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Set up Go
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
           cache: true
@@ -363,6 +363,24 @@ jobs:
           } finally {
             Stop-Process -Id $server.Id -Force -ErrorAction SilentlyContinue
             Remove-Item Env:VERSION, Env:AGORA_INSTALL_SOURCE, Env:RELEASES_DOWNLOAD_BASE_URL, Env:RELEASES_PAGE_URL -ErrorAction SilentlyContinue
+          }
+
+      - name: Reject Windows PowerShell 5.1 installer runs
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $previousNativePreference = $PSNativeCommandUseErrorActionPreference
+          $PSNativeCommandUseErrorActionPreference = $false
+          $output = & powershell.exe -NoProfile -ExecutionPolicy Bypass -File ./install.ps1 2>&1 | Out-String
+          $exitCode = $LASTEXITCODE
+          $PSNativeCommandUseErrorActionPreference = $previousNativePreference
+          $global:LASTEXITCODE = 0
+
+          if ($exitCode -eq 0) {
+            throw 'Expected install.ps1 to reject Windows PowerShell 5.1.'
+          }
+          if ($output -notmatch 'requires PowerShell 7 or newer') {
+            throw "Expected an actionable PowerShell 7 requirement, got: $output"
           }
 
       - name: Smoke test PowerShell installer S3 fallback

@@ -60,7 +60,7 @@ func skillsCatalog() []skill {
 				"cd my-voice-agent/server && pip install -r requirements.txt",
 			},
 			NextSteps: []string{
-				"Configure your model provider keys in server/.env.local (already created with Agora App ID + Certificate).",
+				"Configure your model provider keys in server/.env (already created with Agora App ID + Certificate).",
 				"Run agora project doctor --feature convoai --json before going live.",
 			},
 		},
@@ -76,7 +76,7 @@ func skillsCatalog() []skill {
 				"cd my-go-voice-agent && make setup && make dev",
 			},
 			NextSteps: []string{
-				"Configure your model provider keys in server/.env.local (already created with Agora App ID + Certificate).",
+				"Configure your model provider keys in server/.env (already created with Agora App ID + Certificate).",
 				"Run agora project doctor --feature convoai --json before going live.",
 			},
 		},

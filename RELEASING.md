@@ -38,6 +38,26 @@ The release workflow (`.github/workflows/release.yml`) then:
 
 Before tagging, ensure [CHANGELOG.md](CHANGELOG.md) has the version section finalized (empty `[Unreleased]`, dated release heading, updated compare links), including any migration or upgrade notes. GoReleaser publishes auto-generated release notes from commits; paste highlights from the CHANGELOG section into the GitHub release description if you want a curated summary.
 
+## Recipe-backed init dependency (v0.2.9+)
+
+Recipe-backed init depends on the versioned API at
+`https://recipes.agora.io/api/v1`. Deploy and smoke-test the recipes release
+before tagging a CLI release that advertises `agora init --recipe`:
+
+- `GET /recipes?type=all`, `?type=ai`, and `?type=rtc` return schema version 1
+  and only official recipes.
+- `GET /recipes/<slug>` returns the documented detail wrapper. Recipes intended
+  for CLI initialization include `cli.projectType` and all four `cli.env`
+  fields; catalog-only recipes may omit `cli`.
+- A missing or non-official slug returns `RECIPE_NOT_FOUND` without exposing
+  its metadata.
+- Run a CLI smoke test against production using `agora recipes list --json`,
+  `agora recipes show <slug> --json`, and an init-compatible recipe in a
+  disposable directory before pushing the CLI tag.
+
+Do not tag the CLI first: existing binaries fail safely when the API is
+unavailable, but the advertised onboarding path would not be usable.
+
 ## Local Verification
 
 Before cutting a tag:

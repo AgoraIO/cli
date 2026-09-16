@@ -40,7 +40,8 @@ internal/cli/
   auth.go                   login / logout / whoami / auth status
   projects.go               project create / use / show / env / env write / doctor
   quickstart.go             quickstart create / env write / list
-  init.go                   init — one-step: project + quickstart + env
+  recipes.go                official recipe API client, discovery, and recipe scaffold setup
+  init.go                   init — one-step: project + quickstart/recipe + env
   doctor.go                 project doctor — readiness checks, workspace mode
   install_doctor.go         Top-level agora doctor — install self-test (PATH, network, auth, MCP host)
   env_help.go               agora env-help — authoritative env-var catalog
@@ -72,6 +73,7 @@ The surface is deliberately layered. Use the highest-level command that covers t
 ```
 agora
 ├── init <name>                    Recommended path: reuses existing project (or creates if none); add --new-project to force creation
+├── recipes                        Official recipe discovery (list / show)
 ├── version                        Build version, commit, and date
 ├── introspect                     Machine-readable command metadata for agents
 ├── doctor                         Install self-test (PATH, version, network, auth, MCP host); use project doctor for project readiness
@@ -105,7 +107,8 @@ agora
 **Design rules — do not break these:**
 - `project` = remote Agora control-plane resource; it never scaffolds local files
 - `quickstart` = local repo clone; requires `git` on the PATH; upstream `.git` is removed after clone so demos start without template history
-- `init` = the only command that composes both
+- `recipes` = read-only discovery from the official recipes API; it never clones or mutates projects
+- `init` = the only command that composes a project with a quickstart or recipe scaffold
 - The `add` namespace is reserved; keep it hidden and return a command-not-found error if invoked
 
 ## Project Resolution Precedence
