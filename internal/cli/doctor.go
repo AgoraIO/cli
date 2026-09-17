@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -170,7 +171,8 @@ func buildWorkspaceDoctorDetails(target projectTarget) (doctorCheckCategory, map
 	template, selectionErr := resolveQuickstartTemplateForPath(root, binding.Template, binding.Scenario)
 	if selectionErr != nil {
 		code := "WORKSPACE_TEMPLATE_UNKNOWN"
-		if structured, ok := selectionErr.(*cliError); ok && structured.Code != "" {
+		var structured *cliError
+		if errors.As(selectionErr, &structured) && structured.Code != "" {
 			code = structured.Code
 		}
 		items = append(items, doctorCheckItem{Name: "workspace_selection", Message: selectionErr.Error(), Status: "fail"})
@@ -182,7 +184,8 @@ func buildWorkspaceDoctorDetails(target projectTarget) (doctorCheckCategory, map
 	if !template.DefaultScenario {
 		if manifestErr := validateRequiredQuickstartManifest(root, template); manifestErr != nil {
 			code := "QUICKSTART_MANIFEST_INVALID"
-			if structured, ok := manifestErr.(*cliError); ok && structured.Code != "" {
+			var structured *cliError
+			if errors.As(manifestErr, &structured) && structured.Code != "" {
 				code = structured.Code
 			}
 			message := manifestErr.Error()

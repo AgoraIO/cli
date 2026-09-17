@@ -15,6 +15,14 @@ Earlier entries pre-date this convention and only carry their version's compare 
 
 ## [Unreleased]
 
+### Added
+
+- Add RTC video-call onboarding to `agora init` and `agora quickstart`, including scenario selection and workspace readiness checks ([c9f5f63](https://github.com/AgoraIO/cli/commit/c9f5f63)).
+
+### Fixed
+
+- Use native npm commands when pnpm is unavailable during RTC video-call quickstart setup ([fdd4611](https://github.com/AgoraIO/cli/commit/fdd4611)).
+
 ## [0.2.9] - 2026-08-24
 
 Quickstart project and environment consistency, Android onboarding, Windows installer compatibility, and release workflow maintenance.
