@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -167,39 +168,54 @@ func buildWorkspaceDoctorDetails(target projectTarget) (doctorCheckCategory, map
 		items = append(items, doctorCheckItem{Name: "metadata_project_match", Message: "Repo binding matches the selected project", Status: "pass"})
 	}
 
-	templateID := strings.TrimSpace(binding.Template)
-	if templateID == "" {
-		if template, detectErr := resolveQuickstartTemplateForPath(root, ""); detectErr == nil {
-			templateID = template.ID
+	template, selectionErr := resolveQuickstartTemplateForPath(root, binding.Template, binding.Scenario)
+	if selectionErr != nil {
+		code := "WORKSPACE_TEMPLATE_UNKNOWN"
+		var structured *cliError
+		if errors.As(selectionErr, &structured) && structured.Code != "" {
+			code = structured.Code
 		}
-	}
-	if templateID == "" {
-		items = append(items, doctorCheckItem{Name: "workspace_template", Message: "Could not detect quickstart template for this repo", Status: "warn"})
-		warnings = append(warnings, doctorIssue{Code: "WORKSPACE_TEMPLATE_UNKNOWN", Message: "Could not detect quickstart template for this repo"})
+		items = append(items, doctorCheckItem{Name: "workspace_selection", Message: selectionErr.Error(), Status: "fail"})
+		blocking = append(blocking, doctorIssue{Code: code, Message: selectionErr.Error()})
 		check := doctorCheckCategory{Category: "workspace", Items: items}
 		check.Status = summarizeCategoryStatus(items)
 		return check, workspace, blocking, warnings
 	}
-	workspace["template"] = templateID
-	items = append(items, doctorCheckItem{Name: "workspace_template", Message: "Detected template: " + templateID, Status: "pass"})
+	if !template.DefaultScenario {
+		if manifestErr := validateRequiredQuickstartManifest(root, template); manifestErr != nil {
+			code := "QUICKSTART_MANIFEST_INVALID"
+			var structured *cliError
+			if errors.As(manifestErr, &structured) && structured.Code != "" {
+				code = structured.Code
+			}
+			message := manifestErr.Error()
+			items = append(items, doctorCheckItem{Name: "workspace_manifest", Message: message, Status: "fail"})
+			blocking = append(blocking, doctorIssue{Code: code, Message: message})
+			check := doctorCheckCategory{Category: "workspace", Items: items}
+			check.Status = summarizeCategoryStatus(items)
+			return check, workspace, blocking, warnings
+		}
+		items = append(items, doctorCheckItem{Name: "workspace_manifest", Message: "Quickstart manifest matches the selected scenario", Status: "pass"})
+	}
+	workspace["template"] = template.Template
+	workspace["scenario"] = template.Scenario
+	workspace["requiredFeatures"] = append([]string{}, template.RequiredFeatures...)
+	items = append(items, doctorCheckItem{Name: "workspace_selection", Message: "Detected quickstart: " + template.Template + " + " + template.Scenario, Status: "pass"})
 
-	template, found := findQuickstartTemplate(templateID)
 	envRel := strings.TrimSpace(binding.EnvPath)
 	layout := quickstartEnvLayout{}
-	if found {
-		if envRel != "" {
-			layout, _ = quickstartEnvLayoutForEnvPath(*template, envRel)
+	if envRel != "" {
+		layout, _ = quickstartEnvLayoutForEnvPath(template, envRel)
+	}
+	if layout.EnvTargetPath == "" {
+		if detected, ok := quickstartEnvLayoutForPath(root, template); ok {
+			layout = detected
+		} else if fallback, ok := template.defaultEnvLayout(); ok {
+			layout = fallback
 		}
-		if layout.EnvTargetPath == "" {
-			if detected, ok := quickstartEnvLayoutForPath(root, *template); ok {
-				layout = detected
-			} else if fallback, ok := template.defaultEnvLayout(); ok {
-				layout = fallback
-			}
-		}
-		if envRel == "" {
-			envRel = layout.EnvTargetPath
-		}
+	}
+	if envRel == "" {
+		envRel = layout.EnvTargetPath
 	}
 	if envRel == "" {
 		items = append(items, doctorCheckItem{Name: "workspace_env_path", Message: "Could not determine quickstart env target path", Status: "warn"})
@@ -268,8 +284,7 @@ func buildWorkspaceDoctorDetails(target projectTarget) (doctorCheckCategory, map
 			items = append(items, doctorCheckItem{Name: "workspace_env_project_match", Message: "Env metadata matches the selected project", Status: "pass"})
 		}
 	} else {
-		items = append(items, doctorCheckItem{Name: "workspace_env_project_match", Message: "Env metadata is missing project comments from Agora-managed block", Status: "warn"})
-		warnings = append(warnings, doctorIssue{Code: "WORKSPACE_ENV_METADATA_MISSING", Message: "Quickstart env file is missing Agora-managed project metadata comments"})
+		items = append(items, doctorCheckItem{Name: "workspace_env_project_match", Message: "Project identity is recorded in .agora/project.json; env metadata comments are optional", Status: "pass"})
 	}
 
 	appIDKey := layout.AppIDKey

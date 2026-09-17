@@ -185,6 +185,28 @@ func TestMCPInitRequiresExactlyOneSource(t *testing.T) {
 	assertCLIErrorCode(t, err, "INIT_SOURCE_CONFLICT")
 }
 
+func TestMCPQuickstartToolsExposeScenario(t *testing.T) {
+	wantScenario := map[string]bool{
+		"agora.init":                 true,
+		"agora.quickstart.create":    true,
+		"agora.quickstart.env_write": true,
+	}
+	for _, tool := range mcpTools() {
+		name, _ := tool["name"].(string)
+		if !wantScenario[name] {
+			continue
+		}
+		properties := tool["inputSchema"].(map[string]any)["properties"].(map[string]any)
+		if scenario, ok := properties["scenario"].(map[string]any); !ok || scenario["type"] != "string" {
+			t.Fatalf("%s scenario schema = %#v, want string", name, properties["scenario"])
+		}
+		delete(wantScenario, name)
+	}
+	if len(wantScenario) != 0 {
+		t.Fatalf("missing MCP tools: %v", wantScenario)
+	}
+}
+
 func TestMCPProjectWebhookDeleteRequiresConfirm(t *testing.T) {
 	a := newTestApp(t)
 	_, err := a.callMCPTool("agora.project.webhook.delete", map[string]any{
@@ -326,6 +348,7 @@ func TestMCPQuickstartCreateEmitsProgressNotifications(t *testing.T) {
 }
 
 func TestMCPQuickstartCreateRequiresProjectOrTemplateOnly(t *testing.T) {
+	t.Chdir(t.TempDir())
 	a := newTestApp(t)
 	target := filepath.Join(t.TempDir(), "demo")
 	frame := []byte(`{"jsonrpc":"2.0","id":10,"method":"tools/call","params":{"name":"agora.quickstart.create","arguments":{"template":"nextjs","dir":` + strconv.Quote(target) + `}}}` + "\n")

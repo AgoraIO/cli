@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -77,7 +78,7 @@ func TestResolveQuickstartEnvWriteTargetSupportsCurrentAndLegacyLayouts(t *testi
 				}
 			}
 
-			template, layout, err := resolveQuickstartEnvWriteTarget(root, "")
+			template, layout, err := resolveQuickstartEnvWriteTarget(root, "", "")
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -100,7 +101,7 @@ func TestResolveQuickstartEnvWriteTargetPreservesBoundLegacyLayout(t *testing.T)
 		t.Fatal(err)
 	}
 
-	template, layout, err := resolveQuickstartEnvWriteTarget(root, "")
+	template, layout, err := resolveQuickstartEnvWriteTarget(root, "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -204,6 +205,77 @@ func TestGoVoiceAgentSkillUsesQuickstartWorkflow(t *testing.T) {
 		return
 	}
 	t.Fatal("Go voice agent skill not found")
+}
+
+func TestScaffoldSkillsUseConsistentDiscoveryTags(t *testing.T) {
+	wantTags := map[string][]string{
+		"create-nextjs-video-app":   {"nextjs", "rtc", "video", "video-call", "init"},
+		"create-nextjs-voice-agent": {"nextjs", "convoai", "voice", "voice-agent", "init"},
+		"create-python-voice-agent": {"python", "convoai", "voice", "voice-agent", "init"},
+		"create-go-voice-agent":     {"go", "convoai", "voice", "voice-agent", "init"},
+	}
+
+	for _, skill := range skillsCatalog() {
+		want, ok := wantTags[skill.ID]
+		if !ok {
+			continue
+		}
+		if !reflect.DeepEqual(skill.Tags, want) {
+			t.Fatalf("unexpected tags for %s:\n got: %#v\nwant: %#v", skill.ID, skill.Tags, want)
+		}
+		delete(wantTags, skill.ID)
+	}
+	if len(wantTags) != 0 {
+		t.Fatalf("missing scaffold skills: %#v", wantTags)
+	}
+}
+
+func TestNextJSVideoAppSkillUsesVideoCallQuickstartWorkflow(t *testing.T) {
+	for _, skill := range skillsCatalog() {
+		if skill.ID != "create-nextjs-video-app" {
+			continue
+		}
+		wantSteps := []string{
+			"agora login",
+			"agora init my-nextjs-demo --template nextjs --scenario video-call --new-project --json",
+			"Run the nextSteps returned by agora init exactly; they select exact pnpm or the native npm fallback for this machine.",
+		}
+		if !reflect.DeepEqual(skill.Steps, wantSteps) {
+			t.Fatalf("unexpected Next.js video app steps:\n got: %#v\nwant: %#v", skill.Steps, wantSteps)
+		}
+		if skill.Description != "Create a runnable Next.js one-to-one RTC audio and video call." || !slices.Contains(skill.Tags, "video-call") {
+			t.Fatalf("unexpected Next.js video app discovery metadata: description=%q tags=%#v", skill.Description, skill.Tags)
+		}
+		if !slices.Contains(skill.NextSteps, "Run agora project doctor --feature rtc --deep --json to validate the project, manifest, binding, and env.") {
+			t.Fatalf("Next.js video app skill is missing RTC deep doctor guidance: %#v", skill.NextSteps)
+		}
+		return
+	}
+	t.Fatal("Next.js video app skill not found")
+}
+
+func TestNextJSVoiceAgentSkillUsesVoiceAgentQuickstartWorkflow(t *testing.T) {
+	for _, skill := range skillsCatalog() {
+		if skill.ID != "create-nextjs-voice-agent" {
+			continue
+		}
+		wantSteps := []string{
+			"agora login",
+			"agora init my-nextjs-voice-agent --template nextjs --scenario voice-agent --new-project --json",
+			"cd my-nextjs-voice-agent && pnpm install && pnpm dev",
+		}
+		if !reflect.DeepEqual(skill.Steps, wantSteps) {
+			t.Fatalf("unexpected Next.js voice agent steps:\n got: %#v\nwant: %#v", skill.Steps, wantSteps)
+		}
+		if skill.Description != "Create a runnable Next.js conversational AI voice agent." || !slices.Contains(skill.Tags, "voice-agent") {
+			t.Fatalf("unexpected Next.js voice agent discovery metadata: description=%q tags=%#v", skill.Description, skill.Tags)
+		}
+		if !slices.Contains(skill.NextSteps, "Run agora project doctor --feature convoai --deep --json to validate project and quickstart readiness.") {
+			t.Fatalf("Next.js voice agent skill is missing ConvoAI deep doctor guidance: %#v", skill.NextSteps)
+		}
+		return
+	}
+	t.Fatal("Next.js voice agent skill not found")
 }
 
 func TestGitQuickstartCloneArgs(t *testing.T) {
@@ -346,6 +418,55 @@ func TestQuickstartRepoOverrideKey(t *testing.T) {
 	if got := quickstartRepoOverrideKey("my-template"); got != "AGORA_QUICKSTART_MY_TEMPLATE_REPO_URL" {
 		t.Fatalf("unexpected key for my-template: %q", got)
 	}
+}
+
+func TestSelectQuickstartDefinitionUsesScenarioAndPreservesTemplateDefaults(t *testing.T) {
+	rtc, err := selectQuickstartDefinition("nextjs", "video-call")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rtc.ID != "nextjs-video-call" || rtc.Template != "nextjs" || rtc.Scenario != "video-call" || !reflect.DeepEqual(rtc.RequiredFeatures, []string{"rtc"}) {
+		t.Fatalf("unexpected rtc quickstart definition: %+v", rtc)
+	}
+
+	legacy, err := selectQuickstartDefinition("nextjs", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if legacy.Template != "nextjs" || legacy.Scenario != "voice-agent" || !legacy.DefaultScenario {
+		t.Fatalf("unexpected default nextjs quickstart definition: %+v", legacy)
+	}
+
+	_, err = selectQuickstartDefinition("go", "video-call")
+	assertCLIErrorCode(t, err, "QUICKSTART_SCENARIO_UNSUPPORTED")
+	_, err = selectQuickstartDefinition("nextjs", "not-a-scenario")
+	assertCLIErrorCode(t, err, "QUICKSTART_SCENARIO_UNKNOWN")
+}
+
+func TestResolveQuickstartDefinitionUsesManifestAndRejectsConflicts(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, quickstartManifestFileName), []byte(`{"schemaVersion":1,"template":"nextjs","scenario":"video-call"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	definition, err := resolveQuickstartTemplateForPath(root, "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if definition.ID != "nextjs-video-call" {
+		t.Fatalf("manifest resolved to %+v", definition)
+	}
+
+	if err := writeLocalProjectBinding(root, localProjectBinding{ProjectID: "prj_1", Template: "nextjs", Scenario: "voice-agent"}); err != nil {
+		t.Fatal(err)
+	}
+	_, err = resolveQuickstartTemplateForPath(root, "", "")
+	assertCLIErrorCode(t, err, "QUICKSTART_SELECTION_MISMATCH")
+
+	if err := os.WriteFile(filepath.Join(root, quickstartManifestFileName), []byte(`{"schemaVersion":2,"template":"nextjs","scenario":"video-call"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	_, err = resolveQuickstartTemplateForPath(root, "", "")
+	assertCLIErrorCode(t, err, "QUICKSTART_MANIFEST_INVALID")
 }
 
 func TestQuickstartRepoURLOverride(t *testing.T) {

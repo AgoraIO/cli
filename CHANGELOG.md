@@ -17,10 +17,11 @@ Earlier entries pre-date this convention and only carry their version's compare 
 
 ## [0.2.9] - 2026-08-24
 
-Quickstart project and environment consistency, Android onboarding, Windows installer compatibility, and release workflow maintenance.
+Quickstart project and environment consistency, Android and RTC video-call onboarding, Windows installer compatibility, and release workflow maintenance.
 
 ### Added
 
+- Add RTC video-call onboarding to `agora init` and `agora quickstart`, including scenario selection and workspace readiness checks ([c9f5f63](https://github.com/AgoraIO/cli/commit/c9f5f63)).
 - Add the Android conversational AI client/server quickstart to `agora init` and `agora quickstart`, writing credentials only to the included Python server and returning setup steps for the server, HTTPS tunnel, and Android client ([#55](https://github.com/AgoraIO/cli/pull/55)).
 - Add official recipe discovery with `agora recipes list/show` and recipe-backed initialization with `agora init --recipe <slug>`. Recipe metadata is resolved from the versioned `recipes.agora.io` API before project creation, and the API-provided env contract drives credential writing without framework guessing.
 
@@ -33,6 +34,7 @@ Quickstart project and environment consistency, Android onboarding, Windows inst
 
 ### Fixed
 
+- Use native npm commands when pnpm is unavailable during RTC video-call quickstart setup ([fdd4611](https://github.com/AgoraIO/cli/commit/fdd4611)).
 - Bump the pinned Go toolchain to 1.26.6 to address reachable standard-library vulnerabilities reported by `govulncheck` in Go 1.26.5 ([09fcba8](https://github.com/AgoraIO/cli/commit/09fcba8)).
 - Ensure `agora init`, `quickstart env write`, and `project env write` share credential-file semantics: Python and Go use `server/.env` with `AGORA_APP_ID` and `AGORA_APP_CERTIFICATE`, template example values are preserved, and unsupported legacy credential names are normalized consistently; align with the upstream Python and Go env-file migrations ([91cb8f7](https://github.com/AgoraIO/cli/commit/91cb8f7), [b285093](https://github.com/AgoraIO/cli/commit/b285093), [Python #26](https://github.com/AgoraIO-Conversational-AI/agent-quickstart-python/pull/26), [Go #8](https://github.com/AgoraIO-Conversational-AI/agent-quickstart-go/pull/8)).
 

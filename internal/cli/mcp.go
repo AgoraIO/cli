@@ -244,12 +244,13 @@ func mcpTools() []map[string]any {
 		mcpTool("agora.quickstart.create", "Clone a quickstart with a project or explicitly as template-only", map[string]string{
 			"name":         "string",
 			"template":     "string",
+			"scenario":     "string",
 			"project":      "string",
 			"templateOnly": "boolean",
 			"ref":          "string",
 			"dir":          "string",
 		}),
-		mcpTool("agora.quickstart.env_write", "Write env values into a previously-cloned quickstart", map[string]string{"dir": "string", "template": "string", "project": "string"}),
+		mcpTool("agora.quickstart.env_write", "Write env values into a previously-cloned quickstart", map[string]string{"dir": "string", "template": "string", "scenario": "string", "project": "string"}),
 
 		// Recipe catalog
 		mcpTool("agora.recipes.list", "List recipes from the Agora catalog", map[string]string{"type": "string"}),
@@ -261,6 +262,7 @@ func mcpTools() []map[string]any {
 			"dir":           "string",
 			"template":      "string",
 			"recipe":        "string",
+			"scenario":      "string",
 			"project":       "string",
 			"newProject":    "boolean",
 			"rtmDataCenter": "string",
@@ -396,7 +398,11 @@ func (a *App) callMCPTool(name string, args map[string]any, progress progressEmi
 			return nil, err
 		}
 		features := stringSliceArg(args, "features")
-		progress.emit("project:create", "Creating Agora project", map[string]any{"projectName": name, "features": projectCreateFeatures(stringArg(args, "template"), features)})
+		plannedFeatures, err := resolveProjectCreateFeatures(stringArg(args, "template"), features)
+		if err != nil {
+			return nil, err
+		}
+		progress.emit("project:create", "Creating Agora project", map[string]any{"projectName": name, "features": plannedFeatures})
 		result, err := a.projectCreate(
 			name,
 			stringArg(args, "template"),
@@ -416,7 +422,7 @@ func (a *App) callMCPTool(name string, args map[string]any, progress progressEmi
 		return a.projectEnvValues(stringArg(args, "project"), boolArg(args, "withSecrets", false))
 
 	case "agora.project.env_write":
-		return a.quickstartEnvWrite(defaultString(stringArg(args, "workspaceDir"), "."), stringArg(args, "template"), stringArg(args, "project"))
+		return a.quickstartEnvWrite(defaultString(stringArg(args, "workspaceDir"), "."), stringArg(args, "template"), "", stringArg(args, "project"))
 
 	case "agora.project.feature.list":
 		target, err := a.resolveProjectTarget(stringArg(args, "project"))
@@ -517,23 +523,23 @@ func (a *App) callMCPTool(name string, args map[string]any, progress progressEmi
 			if !template.Available {
 				continue
 			}
-			items = append(items, map[string]any{"id": template.ID, "title": template.Title, "runtime": template.Runtime, "repoUrl": template.RepoURL, "supportsInit": template.SupportsInit})
+			items = append(items, map[string]any{"id": template.ID, "template": template.Template, "scenario": template.Scenario, "requiredFeatures": append([]string{}, template.RequiredFeatures...), "title": template.Title, "runtime": template.Runtime, "repoUrl": template.RepoURL, "supportsInit": template.SupportsInit})
 		}
 		return map[string]any{"items": items}, nil
 
 	case "agora.quickstart.create":
-		template, ok := findQuickstartTemplate(stringArg(args, "template"))
-		if !ok {
-			return nil, &cliError{Message: "unknown quickstart template. Run `agora quickstart list`.", Code: "QUICKSTART_TEMPLATE_UNKNOWN"}
+		template, err := selectQuickstartDefinition(stringArg(args, "template"), stringArg(args, "scenario"))
+		if err != nil {
+			return nil, err
 		}
 		target := defaultString(stringArg(args, "dir"), stringArg(args, "name"))
 		if target == "" {
 			return nil, errors.New("name or dir is required")
 		}
-		return a.quickstartCreate(*template, target, stringArg(args, "project"), boolArg(args, "templateOnly", false), false, io.Discard, bytes.NewReader(nil), stringArg(args, "ref"), progress)
+		return a.quickstartCreate(template, target, stringArg(args, "project"), boolArg(args, "templateOnly", false), false, io.Discard, bytes.NewReader(nil), stringArg(args, "ref"), progress)
 
 	case "agora.quickstart.env_write":
-		return a.quickstartEnvWrite(defaultString(stringArg(args, "dir"), "."), stringArg(args, "template"), stringArg(args, "project"))
+		return a.quickstartEnvWrite(defaultString(stringArg(args, "dir"), "."), stringArg(args, "template"), stringArg(args, "scenario"), stringArg(args, "project"))
 
 	case "agora.recipes.list":
 		response, err := a.listRecipes(defaultString(stringArg(args, "type"), "all"))
@@ -562,6 +568,10 @@ func (a *App) callMCPTool(name string, args map[string]any, progress progressEmi
 		if templateID == "" && recipeID == "" {
 			return nil, &cliError{Message: "init source is required; pass template or recipe.", Code: "INIT_SOURCE_REQUIRED"}
 		}
+		scenario := stringArg(args, "scenario")
+		if recipeID != "" && scenario != "" {
+			return nil, &cliError{Message: "scenario is only valid with a quickstart template.", Code: "INIT_SOURCE_CONFLICT"}
+		}
 		// CRITICAL: when serving over stdio, os.Stdin is the JSON-RPC
 		// transport stream and os.Stderr might be observed by the
 		// host. Pass an empty reader and an in-memory writer so a
@@ -576,11 +586,11 @@ func (a *App) callMCPTool(name string, args map[string]any, progress progressEmi
 			}
 			return a.initRecipeProject(name, targetDir, recipe, stringArg(args, "project"), stringSliceArg(args, "features"), stringArg(args, "rtmDataCenter"), boolArg(args, "newProject", false), false, &promptOut, bytes.NewReader(nil), progress)
 		}
-		template, ok := findQuickstartTemplate(templateID)
-		if !ok {
-			return nil, &cliError{Message: "unknown quickstart template. Run `agora quickstart list`.", Code: "QUICKSTART_TEMPLATE_UNKNOWN"}
+		template, err := selectQuickstartDefinition(templateID, scenario)
+		if err != nil {
+			return nil, err
 		}
-		return a.initProject(name, targetDir, *template, stringArg(args, "project"), stringSliceArg(args, "features"), stringArg(args, "rtmDataCenter"), boolArg(args, "newProject", false), false, &promptOut, bytes.NewReader(nil), progress)
+		return a.initProject(name, targetDir, template, stringArg(args, "project"), stringSliceArg(args, "features"), stringArg(args, "rtmDataCenter"), boolArg(args, "newProject", false), false, &promptOut, bytes.NewReader(nil), progress)
 
 	default:
 		return nil, fmt.Errorf("unknown MCP tool %q", name)

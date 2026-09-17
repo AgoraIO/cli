@@ -79,12 +79,40 @@ func filterProjectCompletions(items []projectSummary, toComplete string) []strin
 
 func completeQuickstartTemplateIDs(_ *cobra.Command, _ []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 	results := []string{}
+	seen := map[string]bool{}
 	for _, template := range quickstartTemplates() {
 		if !template.Available {
 			continue
 		}
-		if strings.HasPrefix(strings.ToLower(template.ID), strings.ToLower(toComplete)) {
-			results = append(results, fmt.Sprintf("%s\t%s", template.ID, template.Title))
+		if !seen[template.Template] && strings.HasPrefix(strings.ToLower(template.Template), strings.ToLower(toComplete)) {
+			results = append(results, template.Template)
+			seen[template.Template] = true
+		}
+	}
+	return results, cobra.ShellCompDirectiveNoFileComp
+}
+
+func completeQuickstartScenarios(cmd *cobra.Command, _ []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	templateID, _ := cmd.Flags().GetString("template")
+	results := []string{}
+	seen := map[string]bool{}
+	for _, definition := range quickstartTemplates() {
+		if !definition.Available || (templateID != "" && definition.Template != templateID) || seen[definition.Scenario] {
+			continue
+		}
+		if strings.HasPrefix(strings.ToLower(definition.Scenario), strings.ToLower(toComplete)) {
+			results = append(results, fmt.Sprintf("%s\t%s", definition.Scenario, definition.Title))
+			seen[definition.Scenario] = true
+		}
+	}
+	return results, cobra.ShellCompDirectiveNoFileComp
+}
+
+func completeProjectPresetIDs(_ *cobra.Command, _ []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	results := []string{}
+	for _, preset := range projectPresetIDs() {
+		if strings.HasPrefix(strings.ToLower(preset), strings.ToLower(toComplete)) {
+			results = append(results, preset)
 		}
 	}
 	return results, cobra.ShellCompDirectiveNoFileComp

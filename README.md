@@ -135,7 +135,8 @@ Command examples use `agora` for the installed CLI. Local source builds use `./a
 
 | Goal | Command | What You Get |
 |------|---------|--------------|
-| Next.js video app | `agora init my-nextjs-demo --template nextjs` | A cloned Next.js quickstart, `.agora` binding, and `.env.local` |
+| Next.js voice agent | `agora init my-nextjs-demo --template nextjs` | A cloned conversational AI quickstart, `.agora` binding, and `.env.local` |
+| RTC video call | `agora init my-video-demo --template nextjs --scenario video-call` | An RTC-only Next.js quickstart, project binding, and `.env.local` |
 | Python voice agent | `agora init my-python-demo --template python` | A Python quickstart with `server/.env` credentials |
 | Go voice agent | `agora init my-go-demo --template go` | A Go quickstart with `server/.env` credentials |
 | Android voice AI app | `agora init my-android-demo --template android` | An Android client with credentials written only to the included Python server |
@@ -274,6 +275,10 @@ Quickstart template behavior:
 - Python quickstarts copy `server/.env.example` to `server/.env`, then use `AGORA_APP_ID` plus `AGORA_APP_CERTIFICATE`
 - Go quickstarts copy `server/.env.example` to `server/.env`, then use `AGORA_APP_ID` plus `AGORA_APP_CERTIFICATE`
 - Existing Python and Go quickstarts keep their recorded env path when reconfigured, while legacy `APP_ID` / `APP_CERTIFICATE` assignments are commented out and replaced with `AGORA_APP_ID` / `AGORA_APP_CERTIFICATE`.
+- The RTC Next.js quickstart reads its pinned pnpm version after clone. Matching
+  pnpm produces reproducible setup steps; otherwise the CLI uses native npm
+  without creating `package-lock.json`. The CLI never installs dependencies or
+  global tools.
 
 `project env write` auto-detects Next.js workspaces (or accepts `--template nextjs|standard`) and writes `AGORA_APP_ID` / `AGORA_APP_CERTIFICATE` or the Next.js equivalents.
 
@@ -306,6 +311,7 @@ It stores durable non-secret metadata:
 - `projectName`
 - `region`
 - `template`
+- `scenario` (when the binding identifies a quickstart scenario)
 - `projectType` (framework hint used for env layout when present)
 - `envPath`
 
@@ -359,7 +365,7 @@ Example:
 
 ```bash
 export AGORA_HOME="$(mktemp -d)"
-agora init my-nextjs-demo --template nextjs --json
+agora init my-nextjs-demo --template nextjs --scenario video-call --json
 agora quickstart create my-python-demo --template python --project my-project --json
 agora quickstart env write my-python-demo --json
 agora project doctor --json

@@ -173,6 +173,43 @@ func TestCLIProjectCreateDefaultsToCoreFeatures(t *testing.T) {
 	}
 }
 
+func TestCLIProjectCreateVideoCallPresetAndRejectsUnknownPresetBeforeRemoteWrite(t *testing.T) {
+	configHome := t.TempDir()
+	api := newFakeCLIBFF()
+	defer api.server.Close()
+	persistSessionForIntegration(t, configHome)
+
+	videoCall := runCLI(t, []string{"project", "create", "RTC Demo", "--template", "video-call", "--dry-run", "--json"}, cliRunOptions{env: map[string]string{
+		"XDG_CONFIG_HOME":    configHome,
+		"AGORA_API_BASE_URL": api.baseURL,
+		"AGORA_LOG_LEVEL":    "error",
+	}})
+	if videoCall.exitCode != 0 || !strings.Contains(videoCall.stdout, `"template":"video-call"`) || !strings.Contains(videoCall.stdout, `"enabledFeatures":["rtc"]`) {
+		t.Fatalf("unexpected video-call preset dry-run result: %+v", videoCall)
+	}
+	if strings.Contains(videoCall.stdout, `"rtm"`) || strings.Contains(videoCall.stdout, `"convoai"`) {
+		t.Fatalf("video-call preset must not include unrelated features: %+v", videoCall)
+	}
+
+	api.mu.Lock()
+	requestsBefore := len(api.requests)
+	api.mu.Unlock()
+	unknown := runCLI(t, []string{"project", "create", "Unknown Demo", "--template", "not-a-preset", "--json"}, cliRunOptions{env: map[string]string{
+		"XDG_CONFIG_HOME":    configHome,
+		"AGORA_API_BASE_URL": api.baseURL,
+		"AGORA_LOG_LEVEL":    "error",
+	}})
+	if unknown.exitCode != 1 || !strings.Contains(unknown.stdout, `"code":"PROJECT_TEMPLATE_UNKNOWN"`) {
+		t.Fatalf("unexpected unknown preset result: %+v", unknown)
+	}
+	api.mu.Lock()
+	requestsAfter := len(api.requests)
+	api.mu.Unlock()
+	if requestsAfter != requestsBefore {
+		t.Fatalf("unknown preset reached the remote API: requests before=%d after=%d", requestsBefore, requestsAfter)
+	}
+}
+
 func TestCLIProjectUseShowFeatureAndDoctorHappyPath(t *testing.T) {
 	configHome := t.TempDir()
 	api := newFakeCLIBFF()
