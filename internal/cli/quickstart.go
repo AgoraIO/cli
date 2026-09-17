@@ -199,8 +199,8 @@ func quickstartTemplates() []quickstartTemplate {
 			Title:            "Next.js Video Call Quickstart",
 			Description:      "Build a one-to-one RTC audio and video call.",
 			Runtime:          "node",
-			RepoURL:          "https://github.com/littleDogWang/agora-rtc-nextjs-quickstart",
-			DocsURL:          "https://github.com/littleDogWang/agora-rtc-nextjs-quickstart",
+			RepoURL:          "https://github.com/AgoraIO-Community/agora-rtc-quickstart-nextjs",
+			DocsURL:          "https://github.com/AgoraIO-Community/agora-rtc-quickstart-nextjs",
 			EnvLayouts: []quickstartEnvLayout{{
 				DetectPaths:       []string{"agora.quickstart.json", "env.local.example"},
 				EnvExamplePath:    "env.local.example",
