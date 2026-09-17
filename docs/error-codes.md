@@ -37,6 +37,7 @@ This catalog is the source of truth for stable codes. CI runs `make snapshot-err
 | Code | Exit | Meaning | Recovery |
 |------|------|---------|----------|
 | `QUICKSTART_TEMPLATE_UNKNOWN` | 1 | The template ID is not known to this CLI. | Run `agora quickstart list`. |
+| `QUICKSTART_TEMPLATE_REQUIRED` | 1 | `quickstart env write` received `--scenario` without `--template`, and the target directory has no project binding or quickstart manifest to identify the template. | Pass `--template <id>` or run from a quickstart directory with `.agora/project.json` or `agora.quickstart.json`. |
 | `QUICKSTART_SCENARIO_UNKNOWN` | 1 | The scenario is not known to this CLI. | Run `agora quickstart list` and use an `items[].scenario` value. |
 | `QUICKSTART_SCENARIO_UNSUPPORTED` | 1 | The scenario exists but is not supported by the selected template. | Choose a template/scenario pair returned by `agora quickstart list`. |
 | `QUICKSTART_SELECTION_MISMATCH` | 1 | Explicit flags, `.agora/project.json`, and `agora.quickstart.json` disagree about template/scenario identity. | Correct the conflicting selection; do not overwrite env until all sources agree. |
