@@ -108,7 +108,7 @@ Create a project and initialize an official quickstart or recipe
 |------|------|---------|-------------|
 | `--add-agent-rules` | `stringArray` | `[]` | write AI agent rules into the quickstart (repeatable: cursor, claude, windsurf) |
 | `--dir` | `string` | — | target directory for the cloned quickstart; defaults to <name> |
-| `--feature` | `stringArray` | `[]` | enable a feature on the newly created project (repeatable); defaults to rtc, rtm, convoai; convoai also enables rtm |
+| `--feature` | `stringArray` | `[]` | add a feature to the scenario's required features (repeatable); video-call requires rtc, voice-agent requires rtc, rtm, convoai; convoai also enables rtm |
 | `--new-project` | `bool` | — | always create a new Agora project instead of reusing an existing one |
 | `--project` | `string` | — | existing project ID or exact project name to bind to |
 | `--recipe` | `string` | — | official Agora recipe slug (run agora recipes list to discover slugs) |

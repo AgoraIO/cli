@@ -130,7 +130,7 @@ Use --feature to specify which features to enable on a newly created project (re
 	cmd.Flags().StringVar(&dir, "dir", "", "target directory for the cloned quickstart; defaults to <name>")
 	cmd.Flags().StringVar(&existingProject, "project", "", "existing project ID or exact project name to bind to")
 	cmd.Flags().StringVar(&rtmDataCenter, "rtm-data-center", "", "RTM data center to configure when rtm is enabled on a newly created project (CN, NA, EU, or AP); defaults to NA")
-	cmd.Flags().StringArrayVar(&features, "feature", nil, fmt.Sprintf("enable a feature on the newly created project (repeatable); defaults to %s; convoai also enables rtm", featureListString()))
+	cmd.Flags().StringArrayVar(&features, "feature", nil, "add a feature to the scenario's required features (repeatable); video-call requires rtc, voice-agent requires rtc, rtm, convoai; convoai also enables rtm")
 	cmd.Flags().StringArrayVar(&agentRules, "add-agent-rules", nil, "write AI agent rules into the quickstart (repeatable: cursor, claude, windsurf)")
 	cmd.Flags().BoolVar(&newProject, "new-project", false, "always create a new Agora project instead of reusing an existing one")
 	_ = cmd.RegisterFlagCompletionFunc("template", completeQuickstartTemplateIDs)

@@ -351,6 +351,8 @@ Example:
 By default `init` reuses an existing project — preferring one named exactly `"Default Project"`. If no default exists, interactive sessions show existing projects with a create-new option and default to the most recently created project; JSON, CI, and non-TTY runs select the most recent project automatically. Pass `--new-project` to force creation. Use `--project <name|id>` to bind to a specific project.
 For deterministic automation, always pass `--project <name|id>` or `--new-project`.
 
+When reusing an existing project, `init` checks the selected scenario's required features plus any explicit `--feature` values before cloning. Each feature must be `enabled` or `included`; otherwise the command fails with `QUICKSTART_REQUIRED_FEATURE_MISSING` and suggests `agora project feature enable <feature> <project>`. It does not automatically enable features on existing projects. Recipe-backed initialization requires `rtc`, `rtm`, and `convoai`, plus any explicit features.
+
 Required `data` fields:
 - `action`
   Always `init`.
@@ -431,6 +433,7 @@ Example:
 ./agora project create my-agent-demo --json
 ./agora project create my-agent-demo --rtm-data-center EU --json
 ./agora project create my-agent-demo --feature rtc --feature convoai --json
+./agora project create my-video-demo --template video-call --json
 ```
 
 Required `data` fields (success):
@@ -441,7 +444,9 @@ Required `data` fields (success):
 - `appId`
 - `region`
 - `enabledFeatures`
-  Array of features that were enabled on the new project. Defaults to `["rtc", "rtm", "convoai"]` when no `--feature` flags are passed. Explicit `convoai` requests also include `rtm`.
+  Array of features that were enabled on the new project. With `--template video-call`, starts with `["rtc"]`; with `--template voice-agent`, starts with `["rtc", "rtm", "convoai"]`. Explicit `--feature` values are added to the preset's required features. Without a preset, explicit features are used, or `["rtc", "rtm", "convoai"]` when none are specified. Requests containing `convoai` also include `rtm`.
+- `template`
+  Project preset applied (`video-call` or `voice-agent`), or an empty string when not requested.
 
 Optional fields:
 - `rtmDataCenter`
