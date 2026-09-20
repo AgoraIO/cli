@@ -168,6 +168,14 @@ func buildWorkspaceDoctorDetails(target projectTarget) (doctorCheckCategory, map
 		items = append(items, doctorCheckItem{Name: "metadata_project_match", Message: "Repo binding matches the selected project", Status: "pass"})
 	}
 
+	if strings.TrimSpace(binding.Recipe) != "" {
+		message := "Recipe workspace detected; built-in quickstart layout checks do not apply. Recipe runtime and env validation are not covered by this check."
+		workspace["recipe"] = binding.Recipe
+		items = append(items, doctorCheckItem{Name: "workspace_selection", Message: message, Status: "warn"})
+		warnings = append(warnings, doctorIssue{Code: "WORKSPACE_TEMPLATE_UNKNOWN", Message: message})
+		check := doctorCheckCategory{Category: "workspace", Items: items, Status: summarizeCategoryStatus(items)}
+		return check, workspace, blocking, warnings
+	}
 	template, selectionErr := resolveQuickstartTemplateForPath(root, binding.Template, binding.Scenario)
 	if selectionErr != nil {
 		code := "WORKSPACE_TEMPLATE_UNKNOWN"
@@ -175,8 +183,14 @@ func buildWorkspaceDoctorDetails(target projectTarget) (doctorCheckCategory, map
 		if errors.As(selectionErr, &structured) && structured.Code != "" {
 			code = structured.Code
 		}
-		items = append(items, doctorCheckItem{Name: "workspace_selection", Message: selectionErr.Error(), Status: "fail"})
-		blocking = append(blocking, doctorIssue{Code: code, Message: selectionErr.Error()})
+		if errors.Is(selectionErr, errQuickstartTemplateUndetected) {
+			message := "Could not detect a built-in quickstart for this workspace; template-specific env checks were skipped."
+			items = append(items, doctorCheckItem{Name: "workspace_selection", Message: message, Status: "warn"})
+			warnings = append(warnings, doctorIssue{Code: code, Message: message})
+		} else {
+			items = append(items, doctorCheckItem{Name: "workspace_selection", Message: selectionErr.Error(), Status: "fail"})
+			blocking = append(blocking, doctorIssue{Code: code, Message: selectionErr.Error()})
+		}
 		check := doctorCheckCategory{Category: "workspace", Items: items}
 		check.Status = summarizeCategoryStatus(items)
 		return check, workspace, blocking, warnings

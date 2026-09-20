@@ -572,3 +572,39 @@ func TestQuickstartTemplatesIncludeAndroid(t *testing.T) {
 		t.Fatalf("unexpected Android next steps:\n got: %#v\nwant: %#v", got, wantSteps)
 	}
 }
+
+func TestResolveQuickstartScenarioInheritance(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		binding  *localProjectBinding
+		manifest bool
+		want     string
+	}{
+		{name: "manifest", manifest: true, want: "video-call"},
+		{name: "binding", binding: &localProjectBinding{ProjectID: "prj_1", Template: "nextjs", Scenario: "video-call"}, want: "video-call"},
+		{name: "legacy binding and manifest", binding: &localProjectBinding{ProjectID: "prj_1", Template: "nextjs"}, manifest: true, want: "video-call"},
+		{name: "legacy default", binding: &localProjectBinding{ProjectID: "prj_1", Template: "nextjs"}, want: "voice-agent"},
+		{name: "no metadata", want: "voice-agent"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			root := t.TempDir()
+			if tc.binding != nil {
+				if err := writeLocalProjectBinding(root, *tc.binding); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if tc.manifest {
+				if err := os.WriteFile(filepath.Join(root, quickstartManifestFileName), []byte(`{"schemaVersion":1,"template":"nextjs","scenario":"video-call"}`), 0600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			definition, err := resolveQuickstartTemplateForPath(root, "nextjs", "")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if definition.Scenario != tc.want {
+				t.Fatalf("scenario=%s want=%s", definition.Scenario, tc.want)
+			}
+		})
+	}
+}

@@ -18,6 +18,8 @@ import (
 
 const quickstartManifestFileName = "agora.quickstart.json"
 
+var errQuickstartTemplateUndetected = errors.New("could not detect the quickstart type from this directory")
+
 type quickstartManifest struct {
 	SchemaVersion int    `json:"schemaVersion"`
 	Template      string `json:"template"`
@@ -967,47 +969,46 @@ func resolveQuickstartTemplateForPath(root, explicitTemplate, explicitScenario s
 	}
 	foundBinding = foundBinding && bindingRoot == root && strings.TrimSpace(binding.Template) != ""
 
+	// Keep missing fields unset until all sources have been reconciled. A
+	// template-only flag or legacy binding must not invent a default scenario
+	// that conflicts with the scenario already declared by the workspace.
 	type namedSelection struct {
-		name       string
-		definition quickstartTemplate
+		name, template, scenario string
 	}
 	selections := []namedSelection{}
 	if foundBinding {
-		definition, resolveErr := selectQuickstartDefinition(binding.Template, binding.Scenario)
-		if resolveErr != nil {
-			return quickstartTemplate{}, resolveErr
-		}
-		selections = append(selections, namedSelection{name: ".agora/project.json", definition: definition})
+		selections = append(selections, namedSelection{".agora/project.json", strings.TrimSpace(binding.Template), strings.TrimSpace(binding.Scenario)})
 	}
 	if foundManifest {
-		definition, _ := selectQuickstartDefinition(manifest.Template, manifest.Scenario)
-		selections = append(selections, namedSelection{name: quickstartManifestFileName, definition: definition})
+		selections = append(selections, namedSelection{quickstartManifestFileName, strings.TrimSpace(manifest.Template), strings.TrimSpace(manifest.Scenario)})
 	}
-
-	if strings.TrimSpace(explicitTemplate) != "" {
-		definition, resolveErr := selectQuickstartDefinition(explicitTemplate, explicitScenario)
-		if resolveErr != nil {
-			return quickstartTemplate{}, resolveErr
-		}
-		selections = append([]namedSelection{{name: "explicit flags", definition: definition}}, selections...)
-	} else if strings.TrimSpace(explicitScenario) != "" {
-		if len(selections) == 0 {
-			return quickstartTemplate{}, &cliError{Message: "--scenario requires --template when the repository has no binding or manifest.", Code: "QUICKSTART_TEMPLATE_REQUIRED"}
-		}
-		definition, resolveErr := selectQuickstartDefinition(selections[0].definition.Template, explicitScenario)
-		if resolveErr != nil {
-			return quickstartTemplate{}, resolveErr
-		}
-		selections = append([]namedSelection{{name: "explicit flags", definition: definition}}, selections...)
+	explicitTemplate = strings.TrimSpace(explicitTemplate)
+	explicitScenario = strings.TrimSpace(explicitScenario)
+	if explicitTemplate == "" && explicitScenario != "" && len(selections) == 0 {
+		return quickstartTemplate{}, &cliError{Message: "--scenario requires --template when the repository has no binding or manifest.", Code: "QUICKSTART_TEMPLATE_REQUIRED"}
+	}
+	if explicitTemplate != "" || explicitScenario != "" {
+		selections = append([]namedSelection{{"explicit flags", explicitTemplate, explicitScenario}}, selections...)
 	}
 	if len(selections) > 0 {
-		for index := 1; index < len(selections); index++ {
-			if !sameQuickstartSelection(selections[0].definition, selections[index].definition) {
-				return quickstartTemplate{}, quickstartSelectionMismatch(selections[0].name, selections[0].definition, selections[index].name, selections[index].definition)
+		var templateID, scenario, templateSource, scenarioSource string
+		for _, selection := range selections {
+			if selection.template != "" {
+				if templateID != "" && templateID != selection.template {
+					return quickstartTemplate{}, &cliError{Message: fmt.Sprintf("Quickstart template mismatch: %s declares %q, but %s declares %q.", templateSource, templateID, selection.name, selection.template), Code: "QUICKSTART_SELECTION_MISMATCH"}
+				}
+				templateID, templateSource = selection.template, selection.name
+			}
+			if selection.scenario != "" {
+				if scenario != "" && scenario != selection.scenario {
+					return quickstartTemplate{}, &cliError{Message: fmt.Sprintf("Quickstart scenario mismatch: %s declares %q, but %s declares %q.", scenarioSource, scenario, selection.name, selection.scenario), Code: "QUICKSTART_SELECTION_MISMATCH"}
+				}
+				scenario, scenarioSource = selection.scenario, selection.name
 			}
 		}
-		return selections[0].definition, nil
+		return selectQuickstartDefinition(templateID, scenario)
 	}
+
 	for _, template := range quickstartTemplates() {
 		if !template.DefaultScenario {
 			continue
@@ -1025,8 +1026,8 @@ func resolveQuickstartTemplateForPath(root, explicitTemplate, explicitScenario s
 		ids = append(ids, t.ID)
 	}
 	return quickstartTemplate{}, fmt.Errorf(
-		"could not detect the quickstart type from this directory (looked for %s). Pass --template %s to specify explicitly.",
-		strings.Join(hints, ", "),
+		"%w (looked for %s). Pass --template %s to specify explicitly.",
+		errQuickstartTemplateUndetected, strings.Join(hints, ", "),
 		strings.Join(ids, "|"),
 	)
 }

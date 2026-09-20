@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -576,5 +577,93 @@ func TestCLIFeatureEnableAndDoctorAuthError(t *testing.T) {
 	}})
 	if unauthDoctor.exitCode != 3 || !strings.Contains(unauthDoctor.stdout, `"ok":false`) || !strings.Contains(unauthDoctor.stdout, `"code":"AUTH_UNAUTHENTICATED"`) || !strings.Contains(unauthDoctor.stdout, `"status":"auth_error"`) || !strings.Contains(unauthDoctor.stdout, `"mode":"deep"`) {
 		t.Fatalf("unexpected unauth doctor result: %+v", unauthDoctor)
+	}
+}
+
+func TestProjectCreatePresetFeatureCompatibility(t *testing.T) {
+	for _, tc := range []struct {
+		name, preset   string
+		features, want []string
+	}{
+		{name: "defaults", want: []string{"rtc", "rtm", "convoai"}},
+		{name: "explicit rtc", features: []string{"rtc"}, want: []string{"rtc"}},
+		{name: "voice preset", preset: "voice-agent", features: []string{"rtc"}, want: []string{"rtc", "rtm", "convoai"}},
+		{name: "video preset", preset: "video-call", want: []string{"rtc"}},
+		{name: "video plus rtm", preset: "video-call", features: []string{"rtm"}, want: []string{"rtc", "rtm"}},
+		{name: "video plus convoai", preset: "video-call", features: []string{"convoai"}, want: []string{"rtc", "rtm", "convoai"}},
+	} {
+		for _, transport := range []string{"dry-run", "cli", "mcp"} {
+			t.Run(tc.name+"/"+transport, func(t *testing.T) {
+				configHome, root := t.TempDir(), t.TempDir()
+				api := newFakeCLIBFF()
+				defer api.server.Close()
+				persistSessionForIntegration(t, configHome)
+				env := map[string]string{"AGORA_HOME": "", "XDG_CONFIG_HOME": configHome, "AGORA_API_BASE_URL": api.baseURL, "AGORA_LOG_LEVEL": "error"}
+				var data map[string]any
+				if transport == "mcp" {
+					t.Chdir(root)
+					for key, value := range env {
+						t.Setenv(key, value)
+					}
+					app, err := NewApp()
+					if err != nil {
+						t.Fatal(err)
+					}
+					result, err := app.callMCPTool("agora.project.create", map[string]any{"name": "demo", "template": tc.preset, "features": tc.features}, nil)
+					if err != nil {
+						t.Fatal(err)
+					}
+					data = result.(map[string]any)
+				} else {
+					args := []string{"project", "create", "demo", "--json"}
+					if tc.preset != "" {
+						args = append(args, "--template", tc.preset)
+					}
+					for _, feature := range tc.features {
+						args = append(args, "--feature", feature)
+					}
+					if transport == "dry-run" {
+						args = append(args, "--dry-run")
+					}
+					result := runCLI(t, args, cliRunOptions{env: env, workdir: root})
+					if result.exitCode != 0 {
+						t.Fatalf("create failed: %+v", result)
+					}
+					var envelope struct {
+						Data map[string]any `json:"data"`
+					}
+					if err := json.Unmarshal([]byte(result.stdout), &envelope); err != nil {
+						t.Fatal(err)
+					}
+					data = envelope.Data
+				}
+				got, err := json.Marshal(data["enabledFeatures"])
+				if err != nil {
+					t.Fatal(err)
+				}
+				want, err := json.Marshal(tc.want)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if string(got) != string(want) {
+					t.Fatalf("features=%s want=%s", got, want)
+				}
+				api.mu.Lock()
+				defer api.mu.Unlock()
+				if transport == "dry-run" {
+					if len(api.projects) != 0 || len(api.requests) != 0 {
+						t.Fatal("dry-run reached API")
+					}
+				} else {
+					project := api.projects["prj_0001"]
+					if project == nil {
+						t.Fatal("project not created")
+					}
+					if project.FeatureState.RTMEnabled != slices.Contains(tc.want, "rtm") || project.FeatureState.ConvoAIEnabled != slices.Contains(tc.want, "convoai") {
+						t.Fatal("API feature state differs from reported features")
+					}
+				}
+			})
+		}
 	}
 }

@@ -431,22 +431,6 @@ func mergeFeatureRequirements(featureGroups ...[]string) ([]string, error) {
 	return ordered, nil
 }
 
-func (a *App) validateProjectRequiredFeatures(target projectTarget, requiredFeatures []string) error {
-	for _, feature := range requiredFeatures {
-		item, err := a.getFeatureItem(feature, target.project, target.region)
-		if err != nil {
-			return err
-		}
-		if item.Status != "enabled" && item.Status != "included" {
-			return &cliError{
-				Message: fmt.Sprintf("Existing project %q is missing required feature %q. Run `agora project feature enable %s %s` and retry.", target.project.Name, feature, feature, target.project.ProjectID),
-				Code:    "QUICKSTART_REQUIRED_FEATURE_MISSING",
-			}
-		}
-	}
-	return nil
-}
-
 func featureListIncludes(features []string, target string) bool {
 	for _, feature := range features {
 		if feature == target {

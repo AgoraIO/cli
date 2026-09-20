@@ -21,11 +21,7 @@ RTC video-call onboarding and package-manager compatibility.
 
 ### Added
 
-- Add RTC video-call onboarding to `agora init` and `agora quickstart`, including scenario selection and workspace readiness checks ([c9f5f63](https://github.com/AgoraIO/cli/commit/c9f5f63)).
-
-### Fixed
-
-- Use native npm commands when pnpm is unavailable during RTC video-call quickstart setup ([fdd4611](https://github.com/AgoraIO/cli/commit/fdd4611)).
+- Add RTC video-call onboarding to `agora init` and `agora quickstart`, with scenario selection, RTC-only project defaults, workspace readiness checks, and native npm setup commands when the required pnpm version is unavailable ([#69](https://github.com/AgoraIO/cli/pull/69)).
 
 ## [0.2.9] - 2026-08-24
 

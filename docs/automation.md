@@ -351,7 +351,11 @@ Example:
 By default `init` reuses an existing project — preferring one named exactly `"Default Project"`. If no default exists, interactive sessions show existing projects with a create-new option and default to the most recently created project; JSON, CI, and non-TTY runs select the most recent project automatically. Pass `--new-project` to force creation. Use `--project <name|id>` to bind to a specific project.
 For deterministic automation, always pass `--project <name|id>` or `--new-project`.
 
-When reusing an existing project, `init` checks the selected scenario's required features plus any explicit `--feature` values before cloning. Each feature must be `enabled` or `included`; otherwise the command fails with `QUICKSTART_REQUIRED_FEATURE_MISSING` and suggests `agora project feature enable <feature> <project>`. It does not automatically enable features on existing projects. Recipe-backed initialization requires `rtc`, `rtm`, and `convoai`, plus any explicit features.
+For newly created projects, `init` uses explicit `--feature` values when supplied, replacing the scaffold defaults. Without explicit features, `nextjs + video-call` defaults to `rtc`; existing voice-agent quickstarts and recipes default to `rtc`, `rtm`, and `convoai`. Explicit `convoai` also enables its `rtm` dependency. Unlike `project create --template <preset>`, init does not merge a project preset into the explicit feature list.
+
+When reusing an existing project (explicitly or automatically), `init` does not enable features or require the scaffold's feature list to be enabled before cloning. `--feature` only controls new project creation. Use `project feature enable` to enable features on an existing project, and `project doctor --feature <feature>` to check runtime readiness. Invalid inputs, credential requirements, and scaffold identity checks still apply.
+
+Migration note for RTC onboarding previews: `init` no longer returns `QUICKSTART_REQUIRED_FEATURE_MISSING` for reused projects. Explicit quickstart features now replace scenario creation defaults rather than adding to them. The existing `project create` preset-merging behavior is unchanged.
 
 Required `data` fields:
 - `action`
@@ -378,17 +382,17 @@ Required `data` fields:
 - `metadataPath`
   Repo-local project binding file path, currently `.agora/project.json`.
 - `enabledFeatures`
-  Array of features enabled during this run. A new project starts from the selected scenario's required features and merges explicit `--feature` values; `nextjs + video-call` enables only `rtc` unless more features are requested. Empty for existing projects since the CLI did not create them in this run.
+  Array of features enabled during this run, using the creation rules above. For example, voice-agent with explicit `--feature rtc` returns only `rtc`, while video-call without explicit features defaults to `rtc`. Empty for reused projects; this field does not enumerate all features already available on the project.
 - `nextSteps`
   Ordered list of suggested follow-up commands for the selected source. For the RTC Next.js quickstart, these use matching pnpm or a native npm fallback detected after clone.
 - `status`
-  Currently `ready`.
+  Currently `ready`, meaning the scaffold and configuration are prepared; it does not certify that all runtime features are enabled.
 
 Optional fields:
 - `template`
   Present for built-in quickstart initialization.
 - `scenario`, `requiredFeatures`
-  Present for built-in quickstart initialization; describe the selected scenario and its required features.
+  Present for built-in quickstart initialization; describe the selected scenario and its runtime requirements. `requiredFeatures` is not an initialization gate or a list of features enabled during this run.
 - `recipe`, `recipeUrl`, `recipeRawUrl`, `primaryPrompt`, `cloneUrl`
   Present for recipe-backed initialization. The CLI resolves this metadata from
   the official recipes API before it selects or creates a project.
@@ -806,6 +810,9 @@ Required `data` fields:
   Currently `created`, `updated`, or `appended`.
 
 Env write behavior:
+- for an existing workspace, omitted template/scenario fields are inherited from `.agora/project.json` and `agora.quickstart.json`; only fields absent from both sources fall back to detection or the template default
+- `--template nextjs` alone does not change a recorded `video-call` scenario to `voice-agent`; legacy bindings without a scenario can inherit it from the manifest
+- conflicting nonempty template/scenario declarations fail with `QUICKSTART_SELECTION_MISMATCH` before changing env or binding files
 - quickstart env files contain only the App ID and App Certificate variable names required by the template
 - Next.js uses `NEXT_PUBLIC_AGORA_APP_ID` and `NEXT_AGORA_APP_CERTIFICATE`
 - Python and Go use `AGORA_APP_ID` and `AGORA_APP_CERTIFICATE`
@@ -861,6 +868,12 @@ Safe branch fields:
 - `summary`
 - `blockingIssues`
 - `warnings`
+
+Deep workspace checks:
+- Recipe bindings are not validated against built-in quickstart layouts. They return a `WORKSPACE_TEMPLATE_UNKNOWN` warning explaining that recipe runtime/env checks are not covered. Generic project and binding identity checks still run.
+- An unrecognized directory without a declared quickstart also produces a warning, not a template blocking issue.
+- With no other issues, these cases return `healthy: true`, `status: "warning"`, `ok: false`, and exit code `2`. This means no blocking issue was found, not that the workspace was fully verified.
+- Invalid declared quickstarts, required manifests, selection conflicts, and project/credential mismatches remain blocking. A workspace warning does not remove an existing blocking issue.
 
 Recommended agent behavior:
 - branch first on `status`

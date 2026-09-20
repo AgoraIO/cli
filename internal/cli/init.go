@@ -130,7 +130,7 @@ Use --feature to specify which features to enable on a newly created project (re
 	cmd.Flags().StringVar(&dir, "dir", "", "target directory for the cloned quickstart; defaults to <name>")
 	cmd.Flags().StringVar(&existingProject, "project", "", "existing project ID or exact project name to bind to")
 	cmd.Flags().StringVar(&rtmDataCenter, "rtm-data-center", "", "RTM data center to configure when rtm is enabled on a newly created project (CN, NA, EU, or AP); defaults to NA")
-	cmd.Flags().StringArrayVar(&features, "feature", nil, "add a feature to the scenario's required features (repeatable); video-call requires rtc, voice-agent requires rtc, rtm, convoai; convoai also enables rtm")
+	cmd.Flags().StringArrayVar(&features, "feature", nil, "select features for new projects (repeatable); explicit values override scenario defaults; omitted uses scenario defaults; ignored when reusing a project; convoai also enables rtm")
 	cmd.Flags().StringArrayVar(&agentRules, "add-agent-rules", nil, "write AI agent rules into the quickstart (repeatable: cursor, claude, windsurf)")
 	cmd.Flags().BoolVar(&newProject, "new-project", false, "always create a new Agora project instead of reusing an existing one")
 	_ = cmd.RegisterFlagCompletionFunc("template", completeQuickstartTemplateIDs)
@@ -367,7 +367,16 @@ func (a *App) initProject(name, targetDir string, template quickstartTemplate, e
 	if _, err := resolveScaffoldTarget(targetDir); err != nil {
 		return nil, err
 	}
-	resolution, err := a.resolveInitProjectForScaffold(name, template.RequiredFeatures, existingProject, features, rtmDataCenter, newProject, promptForReuse, promptOut, promptIn, progress)
+	// A code template supplies defaults, not a project preset. Explicit
+	// feature choices replace those defaults, as in the legacy init flow.
+	if len(features) == 0 {
+		features = template.RequiredFeatures
+	}
+	createFeatures, err := mergeFeatureRequirements(features)
+	if err != nil {
+		return nil, err
+	}
+	resolution, err := a.resolveInitProjectForScaffold(name, createFeatures, existingProject, rtmDataCenter, newProject, promptForReuse, promptOut, promptIn, progress)
 	if err != nil {
 		return nil, err
 	}
@@ -412,17 +421,13 @@ func (a *App) initProject(name, targetDir string, template quickstartTemplate, e
 	return result, nil
 }
 
-func (a *App) resolveInitProjectForScaffold(name string, scaffoldFeatures []string, existingProject string, features []string, rtmDataCenter string, newProject bool, promptForReuse bool, promptOut io.Writer, promptIn io.Reader, progress progressEmitter) (initProjectResolution, error) {
+func (a *App) resolveInitProjectForScaffold(name string, createFeatures []string, existingProject string, rtmDataCenter string, newProject bool, promptForReuse bool, promptOut io.Writer, promptIn io.Reader, progress progressEmitter) (initProjectResolution, error) {
 	var target projectTarget
 	projectAction := "existing"
 	projectSelectionReason := "explicit_project"
 	enabledFeatures := []string{}
 	needsCreate := false
 	createdRTMDataCenter := ""
-	requiredFeatures, err := mergeFeatureRequirements(scaffoldFeatures, features)
-	if err != nil {
-		return initProjectResolution{}, err
-	}
 
 	switch {
 	case strings.TrimSpace(existingProject) != "":
@@ -489,7 +494,7 @@ func (a *App) resolveInitProjectForScaffold(name string, scaffoldFeatures []stri
 	}
 
 	if needsCreate {
-		featuresToEnable := requiredFeatures
+		featuresToEnable := createFeatures
 		progress.emit("project:create", "Creating Agora project", map[string]any{"projectName": name, "features": featuresToEnable})
 		projectResult, err := a.projectCreate(name, "", featuresToEnable, rtmDataCenter, "")
 		if err != nil {
@@ -509,9 +514,6 @@ func (a *App) resolveInitProjectForScaffold(name string, scaffoldFeatures []stri
 		target = resolved
 		progress.emit("project:created", "Agora project ready", map[string]any{"projectId": target.project.ProjectID, "projectName": target.project.Name})
 	} else {
-		if err := a.validateProjectRequiredFeatures(target, requiredFeatures); err != nil {
-			return initProjectResolution{}, err
-		}
 		progress.emit("project:reuse", "Reusing existing Agora project", map[string]any{"projectId": target.project.ProjectID, "projectName": target.project.Name})
 	}
 

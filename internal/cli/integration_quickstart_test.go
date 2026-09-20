@@ -4,6 +4,7 @@ package cli
 // Shared helpers live in integration_test.go.
 
 import (
+	"bytes"
 	"errors"
 	"os"
 	"path/filepath"
@@ -66,9 +67,50 @@ func TestCLIRTCVideoCallQuickstartScenario(t *testing.T) {
 		t.Fatal("quickstart JSON leaked the app certificate")
 	}
 
-	write := runCLI(t, []string{"quickstart", "env", "write", target, "--json"}, cliRunOptions{env: commonEnv, workdir: rootDir})
+	write := runCLI(t, []string{"quickstart", "env", "write", target, "--template", "nextjs", "--json"}, cliRunOptions{env: commonEnv, workdir: rootDir})
 	if write.exitCode != 0 || !strings.Contains(write.stdout, `"scenario":"video-call"`) {
 		t.Fatalf("unexpected rtc quickstart env write result: %+v", write)
+	}
+
+	t.Setenv("AGORA_HOME", "")
+	for key, value := range commonEnv {
+		t.Setenv(key, value)
+	}
+	app, err := NewApp()
+	if err != nil {
+		t.Fatal(err)
+	}
+	mcpResult, err := app.callMCPTool("agora.quickstart.env_write", map[string]any{"dir": target, "template": "nextjs", "project": project.ProjectID}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if mcpResult.(map[string]any)["scenario"] != "video-call" {
+		t.Fatalf("unexpected MCP scenario: %+v", mcpResult)
+	}
+	beforeEnv, err := os.ReadFile(filepath.Join(target, ".env.local"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	beforeBinding, err := os.ReadFile(resolveLocalProjectFile(target))
+	if err != nil {
+		t.Fatal(err)
+	}
+	conflict := runCLI(t, []string{"quickstart", "env", "write", target, "--template", "nextjs", "--scenario", "voice-agent", "--project", project.ProjectID, "--json"}, cliRunOptions{env: commonEnv, workdir: rootDir})
+	if conflict.exitCode != 1 || !strings.Contains(conflict.stdout, `"code":"QUICKSTART_SELECTION_MISMATCH"`) {
+		t.Fatalf("unexpected conflict: %+v", conflict)
+	}
+	_, err = app.callMCPTool("agora.quickstart.env_write", map[string]any{"dir": target, "template": "nextjs", "scenario": "voice-agent", "project": project.ProjectID}, nil)
+	assertCLIErrorCode(t, err, "QUICKSTART_SELECTION_MISMATCH")
+	afterEnv, err := os.ReadFile(filepath.Join(target, ".env.local"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	afterBinding, err := os.ReadFile(resolveLocalProjectFile(target))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(beforeEnv, afterEnv) || !bytes.Equal(beforeBinding, afterBinding) {
+		t.Fatal("conflicting selection changed env or binding")
 	}
 
 	doctor := runCLI(t, []string{"project", "doctor", "--feature", "rtc", "--deep", "--json"}, cliRunOptions{env: commonEnv, workdir: target})
