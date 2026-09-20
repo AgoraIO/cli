@@ -218,7 +218,13 @@ func (a *App) initRecipeProject(name, targetDir string, recipe recipeDetail, exi
 	if err != nil {
 		return nil, err
 	}
-	resolution, err := a.resolveInitProjectForScaffold(name, existingProject, features, rtmDataCenter, newProject, promptForReuse, promptOut, promptIn, progress)
+	// Recipe defaults only control new project creation. They are not
+	// requirements for reusing an existing project.
+	createFeatures, err := resolveProjectCreateFeatures("", features)
+	if err != nil {
+		return nil, err
+	}
+	resolution, err := a.resolveInitProjectForScaffold(name, createFeatures, existingProject, rtmDataCenter, newProject, promptForReuse, promptOut, promptIn, progress)
 	if err != nil {
 		return nil, err
 	}

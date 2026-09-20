@@ -108,11 +108,12 @@ Create a project and initialize an official quickstart or recipe
 |------|------|---------|-------------|
 | `--add-agent-rules` | `stringArray` | `[]` | write AI agent rules into the quickstart (repeatable: cursor, claude, windsurf) |
 | `--dir` | `string` | — | target directory for the cloned quickstart; defaults to <name> |
-| `--feature` | `stringArray` | `[]` | enable a feature on the newly created project (repeatable); defaults to rtc, rtm, convoai; convoai also enables rtm |
+| `--feature` | `stringArray` | `[]` | select features for new projects (repeatable); explicit values override scenario defaults; omitted uses scenario defaults; ignored when reusing a project; convoai also enables rtm |
 | `--new-project` | `bool` | — | always create a new Agora project instead of reusing an existing one |
 | `--project` | `string` | — | existing project ID or exact project name to bind to |
 | `--recipe` | `string` | — | official Agora recipe slug (run agora recipes list to discover slugs) |
 | `--rtm-data-center` | `string` | — | RTM data center to configure when rtm is enabled on a newly created project (CN, NA, EU, or AP); defaults to NA |
+| `--scenario` | `string` | — | quickstart scenario; omitted selects the template default |
 | `--template` | `string` | — | quickstart template ID to use |
 
 ### `agora introspect`
@@ -174,7 +175,7 @@ Create a new remote Agora project
 | `--feature` | `stringArray` | `[]` | enable one or more features after creation; defaults to rtc, rtm, convoai; convoai also enables rtm |
 | `--idempotency-key` | `string` | — | caller-provided key for safe retries when supported by the API |
 | `--rtm-data-center` | `string` | — | RTM data center to configure when rtm is enabled (CN, NA, EU, or AP); defaults to NA |
-| `--template` | `string` | — | apply a higher-level project preset such as voice-agent |
+| `--template` | `string` | — | apply a project scenario preset: video-call, voice-agent |
 
 ### `agora project doctor`
 
@@ -333,6 +334,7 @@ Clone an official Agora quickstart into a new directory
 | `--dir` | `string` | — | target directory for the cloned quickstart; defaults to <name> |
 | `--project` | `string` | — | project ID or exact project name to use for env seeding |
 | `--ref` | `string` | — | git branch, tag, or ref to clone for pinned workshops |
+| `--scenario` | `string` | — | quickstart scenario; omitted selects the template default |
 | `--template` | `string` | — | quickstart template ID from `agora quickstart list` |
 | `--template-only` | `bool` | — | clone without resolving a project or writing credentials |
 
@@ -349,6 +351,7 @@ Write the quickstart env file for the current or selected project
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
 | `--project` | `string` | — | project ID or exact project name to use for env seeding |
+| `--scenario` | `string` | — | quickstart scenario; if omitted, use binding, manifest, or the template default |
 | `--template` | `string` | — | quickstart template ID; if omitted, the CLI detects it from the repo layout |
 
 ### `agora quickstart list`
@@ -460,5 +463,11 @@ Show the current auth status
 **`outputModes`**: `pretty`, `json`
 
 **`doctorStatus`**: `healthy`, `warning`, `not_ready`, `auth_error`
+
+**`projectTemplates`**: `video-call`, `voice-agent`
+
+**`quickstartScenarios`**: `voice-agent`, `video-call`
+
+**`quickstartTemplates`**: `nextjs`, `python`, `go`, `android`
 
 **`recipeTypes`**: `all`, `ai`, `rtc`

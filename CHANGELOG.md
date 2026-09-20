@@ -15,6 +15,14 @@ Earlier entries pre-date this convention and only carry their version's compare 
 
 ## [Unreleased]
 
+## [0.2.10] - 2026-09-20
+
+RTC video-call onboarding and package-manager compatibility.
+
+### Added
+
+- Add RTC video-call onboarding to `agora init` and `agora quickstart`, with scenario selection, RTC-only project defaults, workspace readiness checks, and native npm setup commands when the required pnpm version is unavailable ([#69](https://github.com/AgoraIO/cli/pull/69)).
+
 ## [0.2.9] - 2026-08-24
 
 Quickstart project and environment consistency, Android onboarding, Windows installer compatibility, and release workflow maintenance.
@@ -385,7 +393,8 @@ Set `AGORA_ALLOW_UPGRADE_IN_CI=1` only when a CI job intentionally needs to muta
 - Support machine-readable JSON output for automation and agent workflows.
 - Ship automated release packaging through GoReleaser, including cross-platform archives, Linux packages, Homebrew, Scoop, npm wrapper packages, Docker images, and install scripts.
 
-[Unreleased]: https://github.com/AgoraIO/cli/compare/v0.2.9...HEAD
+[Unreleased]: https://github.com/AgoraIO/cli/compare/v0.2.10...HEAD
+[0.2.10]: https://github.com/AgoraIO/cli/compare/v0.2.9...v0.2.10
 [0.2.9]: https://github.com/AgoraIO/cli/compare/v0.2.8...v0.2.9
 [0.2.8]: https://github.com/AgoraIO/cli/compare/v0.2.7...v0.2.8
 [0.2.7]: https://github.com/AgoraIO/cli/compare/v0.2.6...v0.2.7

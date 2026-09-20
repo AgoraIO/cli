@@ -289,7 +289,10 @@ func (a *App) projectCreate(name, template string, features []string, rtmDataCen
 		return nil, err
 	}
 	region := currentRegionFromContext(ctx)
-	features = projectCreateFeatures(template, features)
+	features, err = resolveProjectCreateFeatures(template, features)
+	if err != nil {
+		return nil, err
+	}
 	rtmDataCenter, err = rtmDataCenterForFeatures(features, rtmDataCenter)
 	if err != nil {
 		return nil, err
@@ -321,7 +324,7 @@ func (a *App) projectCreate(name, template string, features []string, rtmDataCen
 	// command that re-fetches the list. Wipe it so the next completion
 	// triggers a refresh.
 	_ = clearProjectListCache(a.env)
-	result := map[string]any{"action": "create", "appId": project.AppID, "enabledFeatures": enabled, "projectId": project.ProjectID, "projectName": project.Name, "region": region}
+	result := map[string]any{"action": "create", "appId": project.AppID, "enabledFeatures": enabled, "projectId": project.ProjectID, "projectName": project.Name, "region": region, "template": template}
 	if rtmDataCenter != "" {
 		result["rtmDataCenter"] = rtmDataCenter
 	}
@@ -357,23 +360,75 @@ func rtmDataCenterForFeatures(features []string, value string) (string, error) {
 	return normalized, nil
 }
 
-func normalizeProjectCreateFeatures(features []string) []string {
-	if len(features) == 0 {
-		return defaultInitFeatures()
-	}
-	return features
+type projectPreset struct {
+	ID               string
+	RequiredFeatures []string
 }
 
-func projectCreateFeatures(template string, features []string) []string {
-	next := append([]string{}, features...)
-	if template == "voice-agent" {
-		next = append(next, featureIDs()...)
+var projectPresets = []projectPreset{
+	{ID: "video-call", RequiredFeatures: []string{"rtc"}},
+	{ID: "voice-agent", RequiredFeatures: []string{"rtc", "rtm", "convoai"}},
+}
+
+func findProjectPreset(id string) (projectPreset, bool) {
+	for _, preset := range projectPresets {
+		if preset.ID == id {
+			return preset, true
+		}
 	}
-	next = normalizeProjectCreateFeatures(next)
-	if featureListIncludes(next, "convoai") && !featureListIncludes(next, "rtm") {
-		next = append([]string{"rtm"}, next...)
+	return projectPreset{}, false
+}
+
+func projectPresetIDs() []string {
+	ids := make([]string, 0, len(projectPresets))
+	for _, preset := range projectPresets {
+		ids = append(ids, preset.ID)
 	}
-	return next
+	return ids
+}
+
+func resolveProjectCreateFeatures(template string, features []string) ([]string, error) {
+	next := make([]string, 0, len(features)+len(featureCatalog))
+	if template != "" {
+		preset, ok := findProjectPreset(template)
+		if !ok {
+			return nil, &cliError{
+				Message: fmt.Sprintf("Unknown project template %q. Valid templates: %s.", template, strings.Join(projectPresetIDs(), ", ")),
+				Code:    "PROJECT_TEMPLATE_UNKNOWN",
+			}
+		}
+		next = append(next, preset.RequiredFeatures...)
+	}
+	next = append(next, features...)
+	if len(next) == 0 {
+		next = defaultInitFeatures()
+	}
+	return mergeFeatureRequirements(next)
+}
+
+func mergeFeatureRequirements(featureGroups ...[]string) ([]string, error) {
+	next := []string{}
+	for _, features := range featureGroups {
+		next = append(next, features...)
+	}
+	if featureListIncludes(next, "convoai") {
+		next = append(next, "rtm")
+	}
+
+	selected := make(map[string]bool, len(next))
+	for _, feature := range next {
+		if err := validateFeatureID(feature); err != nil {
+			return nil, err
+		}
+		selected[feature] = true
+	}
+	ordered := make([]string, 0, len(selected))
+	for _, feature := range featureIDs() {
+		if selected[feature] {
+			ordered = append(ordered, feature)
+		}
+	}
+	return ordered, nil
 }
 
 func featureListIncludes(features []string, target string) bool {

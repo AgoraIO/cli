@@ -49,7 +49,7 @@ func renderResult(cmd *cobra.Command, command string, data any) error {
 		if list, ok := m["enabledFeatures"].([]string); ok {
 			features = strings.Join(list, ", ")
 		}
-		printBlock(out, "Project", [][2]string{{"Name", asString(m["projectName"])}, {"Project ID", asString(m["projectId"])}, {"App ID", asString(m["appId"])}, {"Region", asString(m["region"])}, {"Features", features}})
+		printBlock(out, "Project", [][2]string{{"Name", asString(m["projectName"])}, {"Project ID", asString(m["projectId"])}, {"App ID", asString(m["appId"])}, {"Region", asString(m["region"])}, {"Template", asString(m["template"])}, {"Features", features}})
 	case "project use":
 		m := data.(map[string]any)
 		printBlock(out, "Current Project", [][2]string{{"Name", asString(m["projectName"])}, {"Project ID", asString(m["projectId"])}, {"Region", asString(m["region"])}})
@@ -70,10 +70,16 @@ func renderResult(cmd *cobra.Command, command string, data any) error {
 		fmt.Fprintln(out, "Quickstarts")
 		if items, ok := m["items"].([]map[string]any); ok {
 			for _, item := range items {
-				fmt.Fprintf(out, "- %s: %s\n", asString(item["id"]), asString(item["title"]))
+				fmt.Fprintf(out, "- %s + %s: %s\n", asString(item["template"]), asString(item["scenario"]), asString(item["title"]))
 				if details, _ := m["details"].(bool); details {
+					features := "-"
+					if list, ok := item["requiredFeatures"].([]string); ok {
+						features = strings.Join(list, ", ")
+					}
+					fmt.Fprintf(out, "  ID: %s\n", asString(item["id"]))
 					fmt.Fprintf(out, "  Available: %s\n", asString(item["available"]))
 					fmt.Fprintf(out, "  Runtime: %s\n", asString(item["runtime"]))
+					fmt.Fprintf(out, "  Required Features: %s\n", features)
 					fmt.Fprintf(out, "  Supports Init: %s\n", asString(item["supportsInit"]))
 					fmt.Fprintf(out, "  Env: %s\n", asString(item["envDocs"]))
 					fmt.Fprintf(out, "  Repo: %s\n", asString(item["repoUrl"]))
@@ -82,7 +88,14 @@ func renderResult(cmd *cobra.Command, command string, data any) error {
 		}
 	case "quickstart create":
 		m := data.(map[string]any)
-		printBlock(out, "Quickstart", [][2]string{{"Template", asString(m["template"])}, {"Path", asString(m["path"])}, {"Project", asString(m["projectName"])}, {"Env", asString(m["envStatus"])}, {"Metadata", asString(m["metadataPath"])}, {"Status", asString(m["status"])}})
+		fields := [][2]string{{"Template", asString(m["template"])}, {"Scenario", asString(m["scenario"])}, {"Path", asString(m["path"])}, {"Project", asString(m["projectName"])}, {"Env", asString(m["envStatus"])}, {"Metadata", asString(m["metadataPath"])}, {"Status", asString(m["status"])}}
+		if packageManager, ok := m["packageManager"].(*quickstartPackageManagerResult); ok {
+			fields = append(fields, [2]string{"Package Manager", quickstartPackageManagerSummary(packageManager)})
+		}
+		printBlock(out, "Quickstart", fields)
+		if packageManager, ok := m["packageManager"].(*quickstartPackageManagerResult); ok && packageManager.Message != "" {
+			fmt.Fprintf(out, "Setup: %s\n", packageManager.Message)
+		}
 		if steps, ok := m["nextSteps"].([]string); ok && len(steps) > 0 {
 			fmt.Fprintln(out)
 			fmt.Fprintln(out, "Next Steps")
@@ -92,7 +105,7 @@ func renderResult(cmd *cobra.Command, command string, data any) error {
 		}
 	case "quickstart env write":
 		m := data.(map[string]any)
-		printBlock(out, "Quickstart Env", [][2]string{{"Template", asString(m["template"])}, {"Project", asString(m["projectName"])}, {"Path", asString(m["path"])}, {"Env Path", asString(m["envPath"])}, {"Metadata", asString(m["metadataPath"])}, {"Status", asString(m["status"])}})
+		printBlock(out, "Quickstart Env", [][2]string{{"Template", asString(m["template"])}, {"Scenario", asString(m["scenario"])}, {"Project", asString(m["projectName"])}, {"Path", asString(m["path"])}, {"Env Path", asString(m["envPath"])}, {"Metadata", asString(m["metadataPath"])}, {"Status", asString(m["status"])}})
 	case "recipes list":
 		m := data.(map[string]any)
 		fmt.Fprintln(out, "Recipes")
@@ -115,7 +128,17 @@ func renderResult(cmd *cobra.Command, command string, data any) error {
 		if list, ok := m["enabledFeatures"].([]string); ok && len(list) > 0 {
 			features = strings.Join(list, ", ")
 		}
-		printBlock(out, "Init", [][2]string{{"Source", asString(m["sourceType"])}, {"Source ID", asString(m["sourceId"])}, {"Project", asString(m["projectName"])}, {"Project ID", asString(m["projectId"])}, {"Project Action", asString(m["projectAction"])}, {"Region", asString(m["region"])}, {"Path", asString(m["path"])}, {"Env Path", asString(m["envPath"])}, {"Metadata", asString(m["metadataPath"])}, {"Features", features}, {"Status", asString(m["status"])}})
+		fields := [][2]string{{"Source", asString(m["sourceType"])}, {"Source ID", asString(m["sourceId"])}, {"Project", asString(m["projectName"])}, {"Project ID", asString(m["projectId"])}, {"Project Action", asString(m["projectAction"])}, {"Region", asString(m["region"])}, {"Path", asString(m["path"])}, {"Env Path", asString(m["envPath"])}, {"Metadata", asString(m["metadataPath"])}, {"Features", features}, {"Status", asString(m["status"])}}
+		if asString(m["scenario"]) != "" {
+			fields = append(fields, [2]string{"Scenario", asString(m["scenario"])})
+		}
+		if packageManager, ok := m["packageManager"].(*quickstartPackageManagerResult); ok {
+			fields = append(fields, [2]string{"Package Manager", quickstartPackageManagerSummary(packageManager)})
+		}
+		printBlock(out, "Init", fields)
+		if packageManager, ok := m["packageManager"].(*quickstartPackageManagerResult); ok && packageManager.Message != "" {
+			fmt.Fprintf(out, "Setup: %s\n", packageManager.Message)
+		}
 		if steps, ok := m["nextSteps"].([]string); ok && len(steps) > 0 {
 			fmt.Fprintln(out)
 			fmt.Fprintln(out, "Next Steps")

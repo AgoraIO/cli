@@ -14,6 +14,20 @@
     "pretty",
     "json"
   ],
+  "projectTemplates": [
+    "video-call",
+    "voice-agent"
+  ],
+  "quickstartScenarios": [
+    "voice-agent",
+    "video-call"
+  ],
+  "quickstartTemplates": [
+    "nextjs",
+    "python",
+    "go",
+    "android"
+  ],
   "recipeTypes": [
     "all",
     "ai",

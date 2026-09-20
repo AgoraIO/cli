@@ -345,10 +345,17 @@ Example:
 ./agora init my-nextjs-demo --template nextjs --json
 ./agora init my-nextjs-demo --template nextjs --new-project --json
 ./agora init my-agent --recipe tool-calling --new-project --json
+./agora init my-video-demo --template nextjs --scenario video-call --new-project --json
 ```
 
 By default `init` reuses an existing project — preferring one named exactly `"Default Project"`. If no default exists, interactive sessions show existing projects with a create-new option and default to the most recently created project; JSON, CI, and non-TTY runs select the most recent project automatically. Pass `--new-project` to force creation. Use `--project <name|id>` to bind to a specific project.
 For deterministic automation, always pass `--project <name|id>` or `--new-project`.
+
+For newly created projects, `init` uses explicit `--feature` values when supplied, replacing the scaffold defaults. Without explicit features, `nextjs + video-call` defaults to `rtc`; existing voice-agent quickstarts and recipes default to `rtc`, `rtm`, and `convoai`. Explicit `convoai` also enables its `rtm` dependency. Unlike `project create --template <preset>`, init does not merge a project preset into the explicit feature list.
+
+When reusing an existing project (explicitly or automatically), `init` does not enable features or require the scaffold's feature list to be enabled before cloning. `--feature` only controls new project creation. Use `project feature enable` to enable features on an existing project, and `project doctor --feature <feature>` to check runtime readiness. Invalid inputs, credential requirements, and scaffold identity checks still apply.
+
+Migration note for RTC onboarding previews: `init` no longer returns `QUICKSTART_REQUIRED_FEATURE_MISSING` for reused projects. Explicit quickstart features now replace scenario creation defaults rather than adding to them. The existing `project create` preset-merging behavior is unchanged.
 
 Required `data` fields:
 - `action`
@@ -375,20 +382,28 @@ Required `data` fields:
 - `metadataPath`
   Repo-local project binding file path, currently `.agora/project.json`.
 - `enabledFeatures`
-  Array of features enabled during this run. Defaults to `rtc`, `rtm`, and `convoai` for newly created projects unless overridden with `--feature`. Empty for existing projects since the CLI did not create them in this run.
+  Array of features enabled during this run, using the creation rules above. For example, voice-agent with explicit `--feature rtc` returns only `rtc`, while video-call without explicit features defaults to `rtc`. Empty for reused projects; this field does not enumerate all features already available on the project.
 - `nextSteps`
-  Ordered list of suggested follow-up commands for the selected source.
+  Ordered list of suggested follow-up commands for the selected source. For the RTC Next.js quickstart, these use matching pnpm or a native npm fallback detected after clone.
 - `status`
-  Currently `ready`.
+  Currently `ready`, meaning the scaffold and configuration are prepared; it does not certify that all runtime features are enabled.
 
 Optional fields:
 - `template`
   Present for built-in quickstart initialization.
+- `scenario`, `requiredFeatures`
+  Present for built-in quickstart initialization; describe the selected scenario and its runtime requirements. `requiredFeatures` is not an initialization gate or a list of features enabled during this run.
 - `recipe`, `recipeUrl`, `recipeRawUrl`, `primaryPrompt`, `cloneUrl`
   Present for recipe-backed initialization. The CLI resolves this metadata from
   the official recipes API before it selects or creates a project.
 - `rtmDataCenter`
   RTM data center configured on the new project when RTM was enabled. Defaults to `NA` when `--rtm-data-center` is omitted.
+- `packageManager`
+  Present when the selected quickstart exposes a supported pinned package manager.
+  Existing fields are `name`, `requiredVersion`, optional `detectedVersion`,
+  `strategy` (`native`, `npm`, or `unavailable`), `ready`, and optional
+  `message`. `selectedName` and `selectedVersion` identify the command runner
+  used by the resolved steps.
 
 Display-oriented fields:
 - `title`
@@ -396,6 +411,14 @@ Display-oriented fields:
 Safe branch fields:
 - `sourceType`
 - `sourceId`
+- `template`
+- `scenario`
+- `requiredFeatures`
+- `packageManager.name`
+- `packageManager.requiredVersion`
+- `packageManager.strategy`
+- `packageManager.ready`
+- `packageManager.selectedName`
 - `projectAction`
 - `projectId`
 - `path`
@@ -414,6 +437,7 @@ Example:
 ./agora project create my-agent-demo --json
 ./agora project create my-agent-demo --rtm-data-center EU --json
 ./agora project create my-agent-demo --feature rtc --feature convoai --json
+./agora project create my-video-demo --template video-call --json
 ```
 
 Required `data` fields (success):
@@ -424,7 +448,9 @@ Required `data` fields (success):
 - `appId`
 - `region`
 - `enabledFeatures`
-  Array of features that were enabled on the new project. Defaults to `["rtc", "rtm", "convoai"]` when no `--feature` flags are passed. Explicit `convoai` requests also include `rtm`.
+  Array of features that were enabled on the new project. With `--template video-call`, starts with `["rtc"]`; with `--template voice-agent`, starts with `["rtc", "rtm", "convoai"]`. Explicit `--feature` values are added to the preset's required features. Without a preset, explicit features are used, or `["rtc", "rtm", "convoai"]` when none are specified. Requests containing `convoai` also include `rtm`.
+- `template`
+  Project preset applied (`video-call` or `voice-agent`), or an empty string when not requested.
 
 Optional fields:
 - `rtmDataCenter`
@@ -653,6 +679,9 @@ Required `data` fields:
 
 Each item currently includes:
 - `id`
+- `template`
+- `scenario`
+- `requiredFeatures`
 - `title`
 - `description`
 - `runtime`
@@ -661,9 +690,14 @@ Each item currently includes:
 - `available`
 - `envDocs`
 - `supportsInit`
+- `installCommand`
+- `runCommand`
 
 Safe branch fields:
 - `items[].id`
+- `items[].template`
+- `items[].scenario`
+- `items[].requiredFeatures`
 - `items[].runtime`
 - `items[].repoUrl`
 - `items[].available`
@@ -680,6 +714,15 @@ Display-oriented fields:
 Automation notes:
 - `--ref <branch|tag|ref>` pins the cloned quickstart source for workshops and reproducible demos.
 - `--template-only` explicitly skips project lookup and env-file creation. Without a resolved project or this flag, non-interactive runs fail with `QUICKSTART_PROJECT_REQUIRED` before cloning.
+- `--scenario <scenario>` selects an exact scenario; when omitted, the template's default scenario is used.
+- `nextjs + video-call` requires only `rtc` and honors `AGORA_QUICKSTART_NEXTJS_VIDEO_CALL_REPO_URL` for local mirrors and fixtures.
+- Non-default scenarios such as `nextjs + video-call` must provide `agora.quickstart.json` with matching `template` and `scenario`. The CLI validates it after clone and removes the target before writing env or binding data when validation fails. Existing default-scenario quickstarts remain compatible without a manifest.
+- After cloning `nextjs + video-call`, the CLI reads `package.json#packageManager`.
+  An exact pnpm match produces `pnpm install --frozen-lockfile` and `pnpm dev`.
+  Missing or mismatched pnpm produces `npm install --package-lock=false` and
+  `npm run dev` when npm is available. If neither is available,
+  `packageManager.ready` is false and no unusable
+  install or run command is included in `nextSteps`.
 
 Example:
 
@@ -691,6 +734,8 @@ Required `data` fields:
 - `action`
   Always `create`.
 - `template`
+- `scenario`
+- `requiredFeatures`
 - `title`
 - `runtime`
 - `cloneUrl`
@@ -711,9 +756,22 @@ Required `data` fields:
 Optional fields:
 - `projectId`
 - `projectName`
+- `packageManager`
+  Present for RTC Next.js when `package.json#packageManager` is a strict
+  `pnpm@<major>.<minor>.<patch>` value. Its fields are `name`,
+  `requiredVersion`, optional `detectedVersion`, `strategy`, `ready`, and an
+  optional diagnostic `message`. `selectedName` and `selectedVersion` identify
+  the package manager used by the resolved steps.
 
 Safe branch fields:
 - `template`
+- `scenario`
+- `requiredFeatures`
+- `packageManager.name`
+- `packageManager.requiredVersion`
+- `packageManager.strategy`
+- `packageManager.ready`
+- `packageManager.selectedName`
 - `path`
 - `envStatus`
 - `envPath`
@@ -737,6 +795,8 @@ Required `data` fields:
 - `action`
   Always `env-write`.
 - `template`
+- `scenario`
+- `requiredFeatures`
 - `title`
 - `path`
   Absolute path to the quickstart root.
@@ -750,6 +810,9 @@ Required `data` fields:
   Currently `created`, `updated`, or `appended`.
 
 Env write behavior:
+- for an existing workspace, omitted template/scenario fields are inherited from `.agora/project.json` and `agora.quickstart.json`; only fields absent from both sources fall back to detection or the template default
+- `--template nextjs` alone does not change a recorded `video-call` scenario to `voice-agent`; legacy bindings without a scenario can inherit it from the manifest
+- conflicting nonempty template/scenario declarations fail with `QUICKSTART_SELECTION_MISMATCH` before changing env or binding files
 - quickstart env files contain only the App ID and App Certificate variable names required by the template
 - Next.js uses `NEXT_PUBLIC_AGORA_APP_ID` and `NEXT_AGORA_APP_CERTIFICATE`
 - Python and Go use `AGORA_APP_ID` and `AGORA_APP_CERTIFICATE`
@@ -760,6 +823,8 @@ Env write behavior:
 
 Safe branch fields:
 - `template`
+- `scenario`
+- `requiredFeatures`
 - `path`
 - `envPath`
 - `projectId`
@@ -803,6 +868,12 @@ Safe branch fields:
 - `summary`
 - `blockingIssues`
 - `warnings`
+
+Deep workspace checks:
+- Recipe bindings are not validated against built-in quickstart layouts. They return a `WORKSPACE_TEMPLATE_UNKNOWN` warning explaining that recipe runtime/env checks are not covered. Generic project and binding identity checks still run.
+- An unrecognized directory without a declared quickstart also produces a warning, not a template blocking issue.
+- With no other issues, these cases return `healthy: true`, `status: "warning"`, `ok: false`, and exit code `2`. This means no blocking issue was found, not that the workspace was fully verified.
+- Invalid declared quickstarts, required manifests, selection conflicts, and project/credential mismatches remain blocking. A workspace warning does not remove an existing blocking issue.
 
 Recommended agent behavior:
 - branch first on `status`
