@@ -1000,6 +1000,8 @@ Required `data` fields:
 
 Each item includes: `projectId`, `name`, `appId`, `projectType`, `status`, `createdAt`, `updatedAt`.
 
+The API `projectType` is preserved as a string, including `paas`, `apaas`, `meeting`, `game-voice`, and `call-agent` for existing Call Agent projects. Consumers should allow additional types. This API field is distinct from the local `.agora/project.json` framework field; `project create` continues to create `paas` projects.
+
 Safe branch fields:
 - `items[].projectId`
 - `items[].name`

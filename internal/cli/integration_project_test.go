@@ -13,6 +13,49 @@ import (
 	"testing"
 )
 
+func TestCLIProjectListAndShowCallAgent(t *testing.T) {
+	configHome := t.TempDir()
+	api := newFakeCLIBFF()
+	defer api.server.Close()
+	project := buildFakeProject("Call Agent Project", "callAgent123", "app_call_agent", "cn")
+	project.ProjectType = "call-agent"
+	api.projects[project.ProjectID] = &project
+	persistSessionForIntegration(t, configHome)
+	opts := cliRunOptions{env: map[string]string{
+		"XDG_CONFIG_HOME":    configHome,
+		"AGORA_API_BASE_URL": api.baseURL,
+		"AGORA_LOG_LEVEL":    "error",
+	}}
+
+	list := runCLI(t, []string{"project", "list", "--json"}, opts)
+	var envelope struct {
+		OK   bool                `json:"ok"`
+		Data projectListResponse `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(list.stdout), &envelope); err != nil {
+		t.Fatal(err)
+	}
+	if list.exitCode != 0 || !envelope.OK || len(envelope.Data.Items) != 1 || envelope.Data.Items[0].ProjectType != "call-agent" {
+		t.Fatalf("expected call-agent project in list: %+v", list)
+	}
+
+	for _, selector := range []string{project.ProjectID, project.Name} {
+		show := runCLI(t, []string{"project", "show", selector, "--json"}, opts)
+		var detail struct {
+			OK   bool `json:"ok"`
+			Data struct {
+				ProjectID string `json:"projectId"`
+			} `json:"data"`
+		}
+		if err := json.Unmarshal([]byte(show.stdout), &detail); err != nil {
+			t.Fatal(err)
+		}
+		if show.exitCode != 0 || !detail.OK || detail.Data.ProjectID != project.ProjectID {
+			t.Fatalf("expected call-agent project resolved by %q: %+v", selector, show)
+		}
+	}
+}
+
 func TestCLIProjectEnvAndDoctor(t *testing.T) {
 	configHome := t.TempDir()
 	projectDir := t.TempDir()
