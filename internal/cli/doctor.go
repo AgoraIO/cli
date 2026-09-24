@@ -414,12 +414,6 @@ func buildProjectDoctorResult(project projectDetail, region string, features []f
 			SuggestedCommand: recoveryCmd,
 		})
 	}
-	if project.TokenEnabled {
-		configItems = append(configItems, doctorCheckItem{Name: "token_capability", Message: "Token capability enabled for the project", Status: "pass"})
-	} else {
-		configItems = append(configItems, doctorCheckItem{Name: "token_capability", Message: "Token capability is disabled for this project", Status: "warn"})
-		warnings = append(warnings, doctorIssue{Code: "TOKEN_CAPABILITY_DISABLED", Message: "Token capability is disabled for this project"})
-	}
 	targetName := strings.ToUpper(feature)
 	readinessItems := []doctorCheckItem{{Name: "control_plane_readiness", Message: "Project is ready for " + targetName + " development", Status: "pass"}}
 	if len(blocking) > 0 {

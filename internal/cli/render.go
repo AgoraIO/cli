@@ -55,7 +55,7 @@ func renderResult(cmd *cobra.Command, command string, data any) error {
 		printBlock(out, "Current Project", [][2]string{{"Name", asString(m["projectName"])}, {"Project ID", asString(m["projectId"])}, {"Region", asString(m["region"])}})
 	case "project show":
 		m := data.(map[string]any)
-		printBlock(out, "Project", [][2]string{{"Name", asString(m["projectName"])}, {"Project ID", asString(m["projectId"])}, {"App ID", asString(m["appId"])}, {"App Certificate", redactSensitive(m["appCertificate"])}, {"Region", asString(m["region"])}, {"Token Enabled", asString(m["tokenEnabled"])}})
+		printBlock(out, "Project", [][2]string{{"Name", asString(m["projectName"])}, {"Project ID", asString(m["projectId"])}, {"App ID", asString(m["appId"])}, {"App Certificate", redactSensitive(m["appCertificate"])}, {"Region", asString(m["region"])}, {"Signaling Token Debug", asString(m["signalingTokenDebugEnabled"])}})
 	case "project env write":
 		m := data.(map[string]any)
 		printBlock(out, "Project Env", [][2]string{{"Project", asString(m["projectName"])}, {"Project ID", asString(m["projectId"])}, {"Path", asString(m["path"])}, {"Status", asString(m["status"])}})

@@ -220,6 +220,7 @@ func TestCLIProjectUseShowFeatureAndDoctorHappyPath(t *testing.T) {
 	beta := buildFakeProject("Project Beta", "prj_9999", "app_9999", "cn")
 	beta.FeatureState.ConvoAIEnabled = true
 	beta.FeatureState.RTMEnabled = true
+	beta.TokenEnabled = false
 	api.projects[alpha.ProjectID] = &alpha
 	api.projects[beta.ProjectID] = &beta
 	persistSessionForIntegration(t, configHome)
@@ -228,7 +229,7 @@ func TestCLIProjectUseShowFeatureAndDoctorHappyPath(t *testing.T) {
 		"XDG_CONFIG_HOME":    configHome,
 		"AGORA_API_BASE_URL": api.baseURL,
 		"AGORA_LOG_LEVEL":    "error",
-	}})
+	}, workdir: configHome})
 	if useResult.exitCode != 0 || !strings.Contains(useResult.stdout, `"projectId":"prj_9999"`) {
 		t.Fatalf("unexpected use result: %+v", useResult)
 	}
@@ -238,16 +239,24 @@ func TestCLIProjectUseShowFeatureAndDoctorHappyPath(t *testing.T) {
 		"AGORA_API_BASE_URL": api.baseURL,
 		"AGORA_LOG_LEVEL":    "error",
 		"AGORA_OUTPUT":       "pretty",
-	}})
-	if showPretty.exitCode != 0 || !strings.Contains(showPretty.stdout, "App Certificate") || !strings.Contains(showPretty.stdout, "Region") || !strings.Contains(showPretty.stdout, "[hidden]") || strings.Contains(showPretty.stdout, "4854d28b48a9439c9f2546e2216fc07a") {
+	}, workdir: configHome})
+	if showPretty.exitCode != 0 || !strings.Contains(showPretty.stdout, "App Certificate") || !strings.Contains(showPretty.stdout, "Region") || !strings.Contains(showPretty.stdout, "Signaling Token Debug : no") || !strings.Contains(showPretty.stdout, "[hidden]") || strings.Contains(showPretty.stdout, "4854d28b48a9439c9f2546e2216fc07a") {
 		t.Fatalf("unexpected pretty show output (cert must be [hidden]): %+v", showPretty)
+	}
+	showJSON := runCLI(t, []string{"project", "show", "--json"}, cliRunOptions{env: map[string]string{
+		"XDG_CONFIG_HOME":    configHome,
+		"AGORA_API_BASE_URL": api.baseURL,
+		"AGORA_LOG_LEVEL":    "error",
+	}, workdir: configHome})
+	if showJSON.exitCode != 0 || !strings.Contains(showJSON.stdout, `"signalingTokenDebugEnabled":false`) || strings.Contains(showJSON.stdout, `"tokenEnabled"`) {
+		t.Fatalf("unexpected JSON show output: %+v", showJSON)
 	}
 
 	featureStatus := runCLI(t, []string{"project", "feature", "status", "convoai", "--json"}, cliRunOptions{env: map[string]string{
 		"XDG_CONFIG_HOME":    configHome,
 		"AGORA_API_BASE_URL": api.baseURL,
 		"AGORA_LOG_LEVEL":    "error",
-	}})
+	}, workdir: configHome})
 	if featureStatus.exitCode != 0 || !strings.Contains(featureStatus.stdout, `"status":"enabled"`) {
 		t.Fatalf("unexpected feature status: %+v", featureStatus)
 	}
@@ -256,7 +265,7 @@ func TestCLIProjectUseShowFeatureAndDoctorHappyPath(t *testing.T) {
 		"XDG_CONFIG_HOME":    configHome,
 		"AGORA_API_BASE_URL": api.baseURL,
 		"AGORA_LOG_LEVEL":    "error",
-	}})
+	}, workdir: configHome})
 	if doctor.exitCode != 0 || !strings.Contains(doctor.stdout, `"status":"healthy"`) {
 		t.Fatalf("unexpected doctor result: %+v", doctor)
 	}
@@ -265,7 +274,7 @@ func TestCLIProjectUseShowFeatureAndDoctorHappyPath(t *testing.T) {
 		"XDG_CONFIG_HOME":    configHome,
 		"AGORA_API_BASE_URL": api.baseURL,
 		"AGORA_LOG_LEVEL":    "error",
-	}})
+	}, workdir: configHome})
 	if rtmDoctor.exitCode != 0 || !strings.Contains(rtmDoctor.stdout, `"feature":"rtm"`) || !strings.Contains(rtmDoctor.stdout, `"status":"healthy"`) {
 		t.Fatalf("unexpected rtm doctor result: %+v", rtmDoctor)
 	}
