@@ -15,6 +15,10 @@ Earlier entries pre-date this convention and only carry their version's compare 
 
 ## [Unreleased]
 
+### Changed
+
+- Rename the `project show --json` token debug status to `signalingTokenDebugEnabled` and remove the misleading token capability warning from `project doctor`. Update consumers of the old `tokenEnabled` result field.
+
 ## [0.2.10] - 2026-09-20
 
 RTC video-call onboarding and package-manager compatibility.

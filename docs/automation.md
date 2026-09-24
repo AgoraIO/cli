@@ -508,6 +508,8 @@ Safe branch fields:
 
 ### `project show`
 
+Migration: `data.tokenEnabled` was renamed to `data.signalingTokenDebugEnabled`. The value is unchanged: `true` means the Console signaling Token debugging switch is on (`need_token=0`), not that token issuance is enabled. Consumers of `project show --json` must update the field name.
+
 Example:
 
 ```bash
@@ -521,7 +523,8 @@ Required `data` fields:
 - `projectName`
 - `appId`
 - `region`
-- `tokenEnabled`
+- `signalingTokenDebugEnabled`
+  Whether the Console signaling Token debugging switch is on (`true` means the upstream `need_token` value is `0`).
 
 Optional fields:
 - `appCertificate`
@@ -535,7 +538,7 @@ Safe branch fields:
 - `projectName`
 - `appId`
 - `region`
-- `tokenEnabled`
+- `signalingTokenDebugEnabled`
 
 ### `project env write`
 

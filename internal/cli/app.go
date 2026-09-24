@@ -69,21 +69,21 @@ type projectSummary struct {
 }
 
 type projectDetail struct {
-	AllowStaticWithDynamic bool    `json:"allowStaticWithDynamic"`
-	AppID                  string  `json:"appId"`
-	CertificateEnabled     bool    `json:"certificateEnabled"`
-	CreatedAt              string  `json:"createdAt"`
-	Name                   string  `json:"name"`
-	ProjectID              string  `json:"projectId"`
-	ProjectType            string  `json:"projectType"`
-	SignKey                *string `json:"signKey"`
-	Stage                  int     `json:"stage"`
-	Status                 string  `json:"status"`
-	TokenEnabled           bool    `json:"tokenEnabled"`
-	UpdatedAt              string  `json:"updatedAt"`
-	Usage7d                int     `json:"usage7d"`
-	UseCaseID              *string `json:"useCaseId,omitempty"`
-	Vid                    int     `json:"vid"`
+	AllowStaticWithDynamic     bool    `json:"allowStaticWithDynamic"`
+	AppID                      string  `json:"appId"`
+	CertificateEnabled         bool    `json:"certificateEnabled"`
+	CreatedAt                  string  `json:"createdAt"`
+	Name                       string  `json:"name"`
+	ProjectID                  string  `json:"projectId"`
+	ProjectType                string  `json:"projectType"`
+	SignKey                    *string `json:"signKey"`
+	Stage                      int     `json:"stage"`
+	Status                     string  `json:"status"`
+	SignalingTokenDebugEnabled bool    `json:"tokenEnabled"`
+	UpdatedAt                  string  `json:"updatedAt"`
+	Usage7d                    int     `json:"usage7d"`
+	UseCaseID                  *string `json:"useCaseId,omitempty"`
+	Vid                        int     `json:"vid"`
 }
 
 type projectListResponse struct {
