@@ -94,8 +94,7 @@ These codes appear inside `data.checks[].issues[].code` and (for blocking issues
 | `WORKSPACE_ENV_PROJECT_MISMATCH` | 1 | The quickstart env file points at a different App ID than the selected project. | Run the command from `suggestedCommand` to overwrite the env file. |
 | `WORKSPACE_ENV_APP_ID_MISSING` | 1 | A quickstart env file is missing the required app ID key. | Run the command from `suggestedCommand`. |
 | `WORKSPACE_ENV_APP_ID_MISMATCH` | 1 | A quickstart env file points at a different app ID. | Run the command from `suggestedCommand`. |
-| `APP_CREDENTIALS_MISSING` | 1 | The selected project has no app ID / app certificate yet. | Run the command from `suggestedCommand` (`agora project show --project <id>`) to re-fetch credentials; if still missing, enable the app certificate in Console (`agora open --target console`). |
-| `TOKEN_CAPABILITY_DISABLED` | (warning) | The project has token issuance disabled. | Enable token issuance in Console. |
+| `APP_CREDENTIALS_MISSING` | 1 | The selected project has no App ID in the API response. | Run the command from `suggestedCommand` (`agora project show --project <id>`) to re-fetch project details. |
 
 ### Skills (curated workflows)
 

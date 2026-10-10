@@ -267,15 +267,17 @@ func TestMergeEnvAssignmentsUpdatesExpectedAndCommentsConflicts(t *testing.T) {
 	}
 }
 
-func TestBuildProjectDoctorResultWarning(t *testing.T) {
-	project := projectDetail{ProjectID: "prj_1", Name: "Alpha", AppID: "app_1", TokenEnabled: false}
-	result := buildProjectDoctorResult(project, "global", []featureItem{
-		{Feature: "rtc", Message: "rtc included with the project", Status: "included"},
-		{Feature: "rtm", Message: "rtm enabled", Status: "enabled"},
-		{Feature: "convoai", Message: "convoai enabled", Status: "enabled"},
-	}, "convoai", false)
-	if result.Status != "warning" {
-		t.Fatalf("expected warning, got %s", result.Status)
+func TestBuildProjectDoctorIgnoresSignalingTokenDebug(t *testing.T) {
+	for _, debugEnabled := range []bool{false, true} {
+		project := projectDetail{ProjectID: "prj_1", Name: "Alpha", AppID: "app_1", SignalingTokenDebugEnabled: debugEnabled}
+		result := buildProjectDoctorResult(project, "global", []featureItem{
+			{Feature: "rtc", Message: "rtc included with the project", Status: "included"},
+			{Feature: "rtm", Message: "rtm enabled", Status: "enabled"},
+			{Feature: "convoai", Message: "convoai enabled", Status: "enabled"},
+		}, "convoai", false)
+		if !result.Healthy || result.Status != "healthy" || len(result.Warnings) != 0 {
+			t.Fatalf("debugEnabled=%v: unexpected doctor result: %+v", debugEnabled, result)
+		}
 	}
 }
 

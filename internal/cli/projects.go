@@ -467,7 +467,7 @@ func (a *App) projectShow(projectArg string) (map[string]any, error) {
 	if err != nil {
 		return nil, err
 	}
-	return map[string]any{"action": "show", "appId": target.project.AppID, "appCertificate": target.project.SignKey, "projectId": target.project.ProjectID, "projectName": target.project.Name, "region": target.region, "tokenEnabled": target.project.TokenEnabled}, nil
+	return map[string]any{"action": "show", "appId": target.project.AppID, "appCertificate": target.project.SignKey, "projectId": target.project.ProjectID, "projectName": target.project.Name, "region": target.region, "signalingTokenDebugEnabled": target.project.SignalingTokenDebugEnabled}, nil
 }
 
 type envFormat string
