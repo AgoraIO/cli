@@ -74,6 +74,11 @@ func TestCLIInitFromOfficialRecipeUsesCatalogEnvContract(t *testing.T) {
 
 				targetDir := filepath.Join(rootDir, "tool-demo")
 				commonEnv := map[string]string{"AGORA_HOME": "", "XDG_CONFIG_HOME": configHome, "AGORA_API_BASE_URL": api.baseURL, "AGORA_RECIPES_BASE_URL": recipes.URL + "/api/v1", "AGORA_LOG_LEVEL": "error"}
+				collector, readEvents := analyticsRecorder(t)
+				commonEnv["AGORA_TELEMETRY_URL"] = collector.URL
+				commonEnv["DO_NOT_TRACK"] = ""
+				commonEnv["AGORA_TELEMETRY_ENABLED"] = "1"
+				commonEnv["AGORA_SENTRY_ENABLED"] = "1"
 				var result cliResult
 				if transport == "cli" {
 					args := []string{"init", "tool-demo", "--recipe", "tool-calling", "--dir", targetDir, "--json"}
@@ -112,6 +117,17 @@ func TestCLIInitFromOfficialRecipeUsesCatalogEnvContract(t *testing.T) {
 
 				if result.exitCode != 0 || !strings.Contains(result.stdout, `"sourceType":"recipe"`) || !strings.Contains(result.stdout, `"sourceId":"tool-calling"`) || !strings.Contains(result.stdout, `"envPath":"server/.env.local"`) {
 					t.Fatalf("unexpected recipe init result: %+v", result)
+				}
+
+				stageCounts := map[string]int{}
+				for _, event := range readEvents() {
+					if event.Event == "cli_init_stage_completed" {
+						stage, _ := event.Properties["stage"].(string)
+						stageCounts[stage]++
+					}
+				}
+				if stageCounts["validate"] != 1 || stageCounts["source_resolve"] != 1 {
+					t.Fatalf("recipe validation stages duplicated or missing: %+v", stageCounts)
 				}
 
 				wantFeatures, err := json.Marshal(tc.wantFeatures)

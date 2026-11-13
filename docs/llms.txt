@@ -141,7 +141,7 @@ Stable error codes: /cli/md/error-codes.md
 
 ## Telemetry
 
-Telemetry is operational diagnostics only and never includes Agora App Certificates or OAuth tokens. Disable with any of:
+Configured analytics reports anonymous recipes/init usage and never includes Agora App Certificates or OAuth tokens. This source build has no embedded collector URL; Sentry diagnostics remains a placeholder. Disable with any of:
 ```
 agora telemetry disable
 agora config update --telemetry-enabled=false
@@ -157,3 +157,7 @@ Full telemetry contract (events, fields, sinks): /cli/md/telemetry.md
 - Security disclosure: security@agora.io (see SECURITY.md)
 - Documentation: https://agoraio.github.io/cli/
 - Agora Console: https://console.agora.io
+
+Optional analytics attribution: agora.init, agora.recipes.list and
+agora.recipes.show accept sourceDistinctId and sourceSessionId, paired for a
+single tool call. They are optional, never credentials, and never persisted.

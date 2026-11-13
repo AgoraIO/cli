@@ -114,6 +114,8 @@ Create a project and initialize an official quickstart or recipe
 | `--recipe` | `string` | — | official Agora recipe slug (run agora recipes list to discover slugs) |
 | `--rtm-data-center` | `string` | — | RTM data center to configure when rtm is enabled on a newly created project (CN, NA, EU, or AP); defaults to NA |
 | `--scenario` | `string` | — | quickstart scenario; omitted selects the template default |
+| `--source-distinct-id` | `string` | — | optional anonymous Recipes browser ID (paired with --source-session-id) |
+| `--source-session-id` | `string` | — | optional source webpage session ID (paired with --source-distinct-id) |
 | `--template` | `string` | — | quickstart template ID to use |
 
 ### `agora introspect`
@@ -375,13 +377,18 @@ List recipes from the Agora catalog
 
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
+| `--source-distinct-id` | `string` | — | optional anonymous Recipes browser ID (paired with --source-session-id) |
+| `--source-session-id` | `string` | — | optional source webpage session ID (paired with --source-distinct-id) |
 | `--type` | `string` | `all` | recipe type: all, ai, or rtc |
 
 ### `agora recipes show`
 
 Show one Agora recipe
 
-_No local flags. Inherited parent and global flags still apply; run `agora <command> --help` for the full flag set._
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--source-distinct-id` | `string` | — | optional anonymous Recipes browser ID (paired with --source-session-id) |
+| `--source-session-id` | `string` | — | optional source webpage session ID (paired with --source-distinct-id) |
 
 ### `agora skills`
 

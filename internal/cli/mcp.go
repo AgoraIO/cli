@@ -253,20 +253,22 @@ func mcpTools() []map[string]any {
 		mcpTool("agora.quickstart.env_write", "Write env values into a previously-cloned quickstart", map[string]string{"dir": "string", "template": "string", "scenario": "string", "project": "string"}),
 
 		// Recipe catalog
-		mcpTool("agora.recipes.list", "List recipes from the Agora catalog", map[string]string{"type": "string"}),
-		mcpTool("agora.recipes.show", "Show one recipe from the Agora catalog", map[string]string{"slug": "string"}),
+		mcpTool("agora.recipes.list", "List recipes from the Agora catalog", map[string]string{"type": "string", "sourceDistinctId": "string", "sourceSessionId": "string"}),
+		mcpTool("agora.recipes.show", "Show one recipe from the Agora catalog", map[string]string{"slug": "string", "sourceDistinctId": "string", "sourceSessionId": "string"}),
 
 		// Init: the recommended end-to-end flow
 		mcpTool("agora.init", "Create or bind a project and initialize an official quickstart or recipe", map[string]string{
-			"name":          "string",
-			"dir":           "string",
-			"template":      "string",
-			"recipe":        "string",
-			"scenario":      "string",
-			"project":       "string",
-			"newProject":    "boolean",
-			"rtmDataCenter": "string",
-			"features":      "array",
+			"sourceDistinctId": "string",
+			"sourceSessionId":  "string",
+			"name":             "string",
+			"dir":              "string",
+			"template":         "string",
+			"recipe":           "string",
+			"scenario":         "string",
+			"project":          "string",
+			"newProject":       "boolean",
+			"rtmDataCenter":    "string",
+			"features":         "array",
 		}),
 	}
 }
@@ -329,7 +331,25 @@ func makeMCPProgressEmitter(encoder *json.Encoder, token any) progressEmitter {
 // when serving over stdio) is never read as if it were user input. We
 // pass bytes.NewReader(nil) and io.Discard explicitly to enforce the
 // no-stdin contract at the call site.
-func (a *App) callMCPTool(name string, args map[string]any, progress progressEmitter) (any, error) {
+func (a *App) callMCPTool(name string, args map[string]any, progress progressEmitter) (result any, err error) {
+	command := ""
+	switch name {
+	case "agora.init":
+		command = "init"
+	case "agora.recipes.list":
+		command = "recipes list"
+	case "agora.recipes.show":
+		command = "recipes show"
+	}
+	var op *analyticsOperation
+	if command != "" {
+		op = a.beginAnalytics(command, "mcp", stringArg(args, "sourceDistinctId"), stringArg(args, "sourceSessionId"))
+		defer func() { op.finish(err) }()
+	}
+	return a.dispatchMCPTool(name, args, progress, op)
+}
+
+func (a *App) dispatchMCPTool(name string, args map[string]any, progress progressEmitter, op *analyticsOperation) (any, error) {
 	switch name {
 
 	case "agora.version":
@@ -360,10 +380,12 @@ func (a *App) callMCPTool(name string, args map[string]any, progress progressEmi
 			return nil, err
 		}
 		return map[string]any{
-			"action":     "status",
-			"configPath": path,
-			"doNotTrack": strings.TrimSpace(a.env["DO_NOT_TRACK"]) != "",
-			"enabled":    a.cfg.TelemetryEnabled && strings.TrimSpace(a.env["DO_NOT_TRACK"]) == "",
+			"action":              "status",
+			"transportConfigured": a.analyticsURL() != "",
+			"captureActive":       a.analyticsEnabled() && a.analyticsURL() != "",
+			"configPath":          path,
+			"doNotTrack":          strings.TrimSpace(a.env["DO_NOT_TRACK"]) != "",
+			"enabled":             a.currentTelemetryPreference() && strings.TrimSpace(a.env["DO_NOT_TRACK"]) == "",
 		}, nil
 
 	case "agora.upgrade.check":
@@ -546,6 +568,9 @@ func (a *App) callMCPTool(name string, args map[string]any, progress progressEmi
 		if err != nil {
 			return nil, err
 		}
+		if op != nil {
+			op.properties["result_count"] = len(response.Items)
+		}
 		return map[string]any{"items": response.Items, "total": response.Total, "type": response.Type}, nil
 
 	case "agora.recipes.show":
@@ -553,7 +578,11 @@ func (a *App) callMCPTool(name string, args map[string]any, progress progressEmi
 		if slug == "" {
 			return nil, &cliError{Message: "recipe slug is required.", Code: "RECIPE_NOT_FOUND"}
 		}
-		return a.getRecipe(slug)
+		recipe, err := a.getRecipe(slug)
+		if err == nil {
+			op.source("recipe", recipe.Slug)
+		}
+		return recipe, err
 
 	case "agora.init":
 		name := stringArg(args, "name")
@@ -579,18 +608,19 @@ func (a *App) callMCPTool(name string, args map[string]any, progress progressEmi
 		// scribble onto the host's stderr.
 		var promptOut bytes.Buffer
 		targetDir := defaultString(stringArg(args, "dir"), name)
+		op.beginStage("source_resolve")
 		if recipeID != "" {
 			recipe, err := a.getRecipe(recipeID)
 			if err != nil {
 				return nil, err
 			}
-			return a.initRecipeProject(name, targetDir, recipe, stringArg(args, "project"), stringSliceArg(args, "features"), stringArg(args, "rtmDataCenter"), boolArg(args, "newProject", false), false, &promptOut, bytes.NewReader(nil), progress)
+			return a.initRecipeProject(name, targetDir, recipe, stringArg(args, "project"), stringSliceArg(args, "features"), stringArg(args, "rtmDataCenter"), boolArg(args, "newProject", false), false, &promptOut, bytes.NewReader(nil), progress, op)
 		}
 		template, err := selectQuickstartDefinition(templateID, scenario)
 		if err != nil {
 			return nil, err
 		}
-		return a.initProject(name, targetDir, template, stringArg(args, "project"), stringSliceArg(args, "features"), stringArg(args, "rtmDataCenter"), boolArg(args, "newProject", false), false, &promptOut, bytes.NewReader(nil), progress)
+		return a.initProject(name, targetDir, template, stringArg(args, "project"), stringSliceArg(args, "features"), stringArg(args, "rtmDataCenter"), boolArg(args, "newProject", false), false, &promptOut, bytes.NewReader(nil), progress, op)
 
 	default:
 		return nil, fmt.Errorf("unknown MCP tool %q", name)

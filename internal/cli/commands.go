@@ -175,7 +175,7 @@ func (a *App) buildTelemetryCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "telemetry",
 		Short: "Inspect or update telemetry preferences",
-		Long:  "Telemetry is limited to operational diagnostics and never includes tokens or app certificates. DO_NOT_TRACK=1 disables telemetry at runtime.",
+		Long:  "Telemetry reports anonymous recipes/init usage when a collector is configured. It never includes tokens or app certificates. DO_NOT_TRACK=1 disables telemetry at runtime.",
 		Example: example(`
   agora telemetry status
   agora telemetry disable
@@ -228,10 +228,12 @@ func (a *App) renderTelemetry(cmd *cobra.Command) error {
 		return err
 	}
 	return renderResult(cmd, "telemetry", map[string]any{
-		"action":     "status",
-		"configPath": path,
-		"doNotTrack": strings.TrimSpace(a.env["DO_NOT_TRACK"]) != "",
-		"enabled":    a.cfg.TelemetryEnabled && strings.TrimSpace(a.env["DO_NOT_TRACK"]) == "",
+		"action":              "status",
+		"transportConfigured": a.analyticsURL() != "",
+		"captureActive":       a.analyticsEnabled() && a.analyticsURL() != "",
+		"configPath":          path,
+		"doNotTrack":          strings.TrimSpace(a.env["DO_NOT_TRACK"]) != "",
+		"enabled":             a.currentTelemetryPreference() && strings.TrimSpace(a.env["DO_NOT_TRACK"]) == "",
 	})
 }
 

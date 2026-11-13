@@ -1308,3 +1308,22 @@ Recommended pattern:
 ./agora init my-go-demo --template go --json
 ./agora quickstart env write my-go-demo --json
 ```
+
+## Anonymous recipes/init analytics
+
+Optional `--source-distinct-id` and `--source-session-id` flags on `init`,
+`recipes list`, and `recipes show` attribute one command to the originating
+Recipes browser/session. They never affect resource authorization or persist
+into later commands. Omission or invalid context uses a local random CLI ID;
+invalid shell context emits a fixed stderr notice. JSON stdout and business
+exit codes remain unchanged. MCP equivalents are `sourceDistinctId` and
+`sourceSessionId` on `agora.init`, `agora.recipes.list`, `agora.recipes.show`.
+
+Events use `source_session_id`, not the browser-managed PostHog `$session_id`.
+Separate attempts have separate `operation_id` values; retries do not carry
+web context implicitly. Opt-out or a missing collector URL means no capture.
+See [Telemetry](telemetry.md) for the event, privacy and transport contract.
+
+Telemetry status adds `transportConfigured` (valid collector URL present) and
+`captureActive` (transport configured and runtime opt-out permits capture).
+The existing `enabled` preference field remains compatible.

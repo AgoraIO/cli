@@ -422,3 +422,9 @@ Full guide with debug logging, CI tips, completion troubleshooting, and the `--d
 - Security policy: [SECURITY.md](SECURITY.md)
 - Support and contact channels: [SUPPORT.md](SUPPORT.md)
 - Contributor and agent guide: [AGENTS.md](AGENTS.md), plus [CONTRIBUTING.md](CONTRIBUTING.md)
+
+Recipes/init analytics supports optional `--source-distinct-id` and
+`--source-session-id` for a single invocation. Core commands work without them.
+Capture requires an approved configured collector and honors opt-out; see
+[Telemetry](docs/telemetry.md). MCP uses the equivalent `sourceDistinctId` and
+`sourceSessionId` arguments.

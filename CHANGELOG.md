@@ -415,3 +415,16 @@ Set `AGORA_ALLOW_UPGRADE_IN_CI=1` only when a CI job intentionally needs to muta
 [0.1.6]: https://github.com/AgoraIO/cli/compare/v0.1.5...v0.1.6
 [0.1.5]: https://github.com/AgoraIO/cli/compare/v0.1.4...v0.1.5
 [0.1.4]: https://github.com/AgoraIO/cli/releases/tag/v0.1.4
+
+### Unreleased — anonymous core-flow analytics
+
+- Add opt-out-aware recipes/init events for shell and MCP, optional one-call
+  anonymous webpage attribution, bounded capture and coarse Agent classification.
+- This source build has no embedded collector URL; activation needs deployment
+  configuration and updated privacy/consent controls. Stable command JSON and
+  business exit codes are unchanged. Sentry transport remains a placeholder.
+
+- Fix live MCP analytics opt-out by checking persisted preferences before each
+  operation/batch; preserve explicit process opt-out and fail closed on invalid
+  configuration. Treat EOF as failure, honor 429 Retry-After across MCP calls,
+  and emit validate once per init attempt.
