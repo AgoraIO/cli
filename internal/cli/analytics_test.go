@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -39,7 +40,37 @@ func analyticsRecorder(t *testing.T) (*httptest.Server, func() []analyticsEvent)
 
 func analyticsTestApp(t *testing.T, endpoint string) *App {
 	t.Helper()
-	return &App{env: map[string]string{"AGORA_HOME": t.TempDir(), "AGORA_TELEMETRY_URL": endpoint}, osEnv: map[string]string{}, cfg: defaultConfig(), httpClient: &http.Client{Timeout: time.Second}}
+	a := &App{env: map[string]string{"AGORA_HOME": t.TempDir(), "AGORA_TELEMETRY_URL": endpoint}, osEnv: map[string]string{}, cfg: defaultConfig(), httpClient: &http.Client{Timeout: time.Second}}
+	if err := a.persistTelemetryChoice(true); err != nil {
+		t.Fatal(err)
+	}
+	return a
+}
+
+// Sender completion no longer acknowledges server receipt. Wait on the test
+// collector explicitly when an assertion needs to inspect received payloads.
+func waitAnalyticsEvents(t *testing.T, read func() []analyticsEvent, count int) []analyticsEvent {
+	t.Helper()
+	return waitAnalytics(t, read, func(events []analyticsEvent) bool { return len(events) >= count })
+}
+
+func waitAnalytics(t *testing.T, read func() []analyticsEvent, ready func([]analyticsEvent) bool) []analyticsEvent {
+	t.Helper()
+	deadline := time.NewTimer(2 * time.Second)
+	defer deadline.Stop()
+	tick := time.NewTicker(time.Millisecond)
+	defer tick.Stop()
+	for {
+		events := read()
+		if ready(events) {
+			return events
+		}
+		select {
+		case <-tick.C:
+		case <-deadline.C:
+			t.Fatalf("collector did not receive the expected events: %+v", events)
+		}
+	}
 }
 
 func TestAnalyticsAttributionPrivacyAndStages(t *testing.T) {
@@ -50,7 +81,7 @@ func TestAnalyticsAttributionPrivacyAndStages(t *testing.T) {
 	op.source("recipe", "hotel-reception")
 	op.beginStage("clone")
 	op.finish(&cliError{Code: "RECIPE_NOT_FOUND", Message: "private-token /private/home/project"})
-	events := read()
+	events := waitAnalyticsEvents(t, read, 4)
 	if len(events) != 4 {
 		t.Fatalf("want start, two stages, final; got %+v", events)
 	}
@@ -59,7 +90,12 @@ func TestAnalyticsAttributionPrivacyAndStages(t *testing.T) {
 			t.Fatalf("bad attribution: %+v", e)
 		}
 	}
-	final := events[len(events)-1]
+	var final analyticsEvent
+	for _, event := range events {
+		if event.Event == "cli_init_completed" {
+			final = event
+		}
+	}
 	if final.Event != "cli_init_completed" || final.Properties["failed_stage"] != "clone" || final.Properties["outcome"] != "failure" || final.Properties["agent_family"] != "claude-code" {
 		t.Fatalf("bad final: %+v", final)
 	}
@@ -69,7 +105,7 @@ func TestAnalyticsAttributionPrivacyAndStages(t *testing.T) {
 	}
 	next := a.beginAnalytics("recipes list", "shell", "", "")
 	next.finish(nil)
-	all := read()
+	all := waitAnalyticsEvents(t, read, 5)
 	last := all[len(all)-1]
 	if !strings.HasPrefix(last.DistinctID, "cli:") || last.Properties["source_session_id"] != nil || last.OperationID == op.id {
 		t.Fatalf("web identity persisted: %+v", last)
@@ -90,7 +126,9 @@ func TestAnalyticsOptOutAndEndpointSafety(t *testing.T) {
 			a := analyticsTestApp(t, server.URL)
 			switch key {
 			case "config":
-				a.cfg.TelemetryEnabled = false
+				if err := a.persistTelemetryChoice(false); err != nil {
+					t.Fatal(err)
+				}
 			case "no-endpoint":
 				delete(a.env, "AGORA_TELEMETRY_URL")
 			case "unsafe-url":
@@ -123,13 +161,14 @@ func TestAnalyticsMCPIsolationAndInvalidSource(t *testing.T) {
 			t.Fatal("missing name should still fail")
 		}
 	}
-	events := read()
+	events := waitAnalyticsEvents(t, read, 6)
 	var finals []analyticsEvent
 	for _, e := range events {
 		if e.Event == "cli_init_completed" {
 			finals = append(finals, e)
 		}
 	}
+	slices.SortFunc(finals, func(a, b analyticsEvent) int { return a.Timestamp.Compare(b.Timestamp) })
 	if len(finals) != 2 || finals[0].OperationID == finals[1].OperationID || finals[0].DistinctID != "browser" || !strings.HasPrefix(finals[1].DistinctID, "cli:") {
 		t.Fatalf("bad MCP isolation: %+v", finals)
 	}
@@ -151,7 +190,7 @@ func TestAnalyticsCommandWithoutWebContext(t *testing.T) {
 	if err := a.root.Execute(); err == nil {
 		t.Fatal("invalid type should fail")
 	}
-	events := read()
+	events := waitAnalyticsEvents(t, read, 1)
 	if len(events) != 1 || events[0].Event != "cli_recipes_list_completed" || events[0].Properties["error_code"] != "RECIPE_TYPE_INVALID" || !strings.HasPrefix(events[0].DistinctID, "cli:") {
 		t.Fatalf("bad standalone events: %+v", events)
 	}

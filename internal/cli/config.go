@@ -12,6 +12,7 @@ type appConfig struct {
 	LogLevel         string     `json:"logLevel"`
 	Output           outputMode `json:"output"`
 	TelemetryEnabled bool       `json:"telemetryEnabled"`
+	TelemetryConsent string     `json:"telemetryConsent"`
 	// Debug controls whether `appendAppLog` mirrors structured log
 	// records to stderr. v0.2.0 renamed this field from "verbose" to
 	// match the canonical --debug flag and AGORA_DEBUG env var.
@@ -30,6 +31,7 @@ func defaultConfig() appConfig {
 		LogLevel:         "info",
 		Output:           outputPretty,
 		TelemetryEnabled: true,
+		TelemetryConsent: telemetryConsentUnknown,
 		Debug:            false,
 	}
 }
@@ -49,6 +51,9 @@ func mergeConfig(cfg *appConfig, raw map[string]any) {
 	}
 	if v, ok := raw["telemetryEnabled"].(bool); ok {
 		cfg.TelemetryEnabled = v
+	}
+	if v, ok := raw["telemetryConsent"].(string); ok {
+		cfg.TelemetryConsent = normalizeTelemetryConsent(v)
 	}
 	// v0.2.0 renamed "verbose" -> "debug". Read the canonical key
 	// first; fall back to the legacy key so existing 0.1.x configs

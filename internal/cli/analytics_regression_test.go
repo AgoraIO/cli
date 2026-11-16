@@ -3,7 +3,6 @@ package cli
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -28,7 +27,7 @@ func TestAnalyticsLiveMCPPreference(t *testing.T) {
 	if _, err := a.callMCPTool("agora.init", map[string]any{}, nil); err == nil {
 		t.Fatal("missing name must fail")
 	}
-	before := len(read())
+	before := len(waitAnalyticsEvents(t, read, 3))
 	if before == 0 {
 		t.Fatal("expected initial capture")
 	}
@@ -113,40 +112,6 @@ func TestAnalyticsEOFIsFailure(t *testing.T) {
 	}
 }
 
-func TestAnalytics429StopsExistingMCP(t *testing.T) {
-	for _, retryAfter := range []string{"60", time.Now().Add(time.Minute).UTC().Format(http.TimeFormat), "invalid", ""} {
-		t.Run(retryAfter, func(t *testing.T) {
-			first := make(chan struct{})
-			release := make(chan struct{})
-			var calls atomic.Int32
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				_, _ = io.Copy(io.Discard, r.Body)
-				if calls.Add(1) == 1 {
-					close(first)
-					<-release
-				}
-				w.Header().Set("Retry-After", retryAfter)
-				w.WriteHeader(http.StatusTooManyRequests)
-			}))
-			defer server.Close()
-			a := analyticsTestApp(t, server.URL)
-			op := a.beginAnalytics("init", "mcp", "", "")
-			select {
-			case <-first:
-			case <-time.After(time.Second):
-				t.Fatal("initial batch not sent")
-			}
-			op.beginStage("clone")
-			close(release)
-			op.finish(errors.New("clone failed"))
-			_, _ = a.callMCPTool("agora.init", map[string]any{}, nil)
-			if calls.Load() != 1 {
-				t.Fatalf("continued capture after 429: %d requests", calls.Load())
-			}
-		})
-	}
-}
-
 func TestAnalyticsBackendEOFRecordedAsFailure(t *testing.T) {
 	collector, read := analyticsRecorder(t)
 	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -161,33 +126,13 @@ func TestAnalyticsBackendEOFRecordedAsFailure(t *testing.T) {
 	if err == nil {
 		t.Fatal("truncated backend response must fail")
 	}
-	events := read()
+	events := waitAnalyticsEvents(t, read, 1)
 	if len(events) != 1 {
 		b, _ := json.Marshal(events)
 		t.Fatalf("unexpected events: %s", b)
 	}
 	if events[0].Properties["outcome"] != "failure" {
 		t.Fatalf("backend disconnect counted as %v", events[0].Properties["outcome"])
-	}
-}
-
-func TestAnalytics429CooldownCanExpire(t *testing.T) {
-	server, read := analyticsRecorder(t)
-	a := analyticsTestApp(t, server.URL)
-	a.deferAnalytics("60")
-	if a.beginAnalytics("recipes list", "mcp", "", "") != nil {
-		t.Fatal("capture started during cooldown")
-	}
-	a.analyticsMu.Lock()
-	a.analyticsRetryUntil = time.Now().Add(-time.Second)
-	a.analyticsMu.Unlock()
-	op := a.beginAnalytics("recipes list", "mcp", "", "")
-	if op == nil {
-		t.Fatal("capture did not resume after cooldown")
-	}
-	op.finish(nil)
-	if len(read()) != 1 {
-		t.Fatal("capture not delivered after cooldown")
 	}
 }
 
@@ -219,30 +164,6 @@ func TestAnalyticsLiveConfigFailsClosedAndHonorsEnvironment(t *testing.T) {
 			}
 			if a.analyticsEnabled() {
 				t.Fatal("unreadable preference must fail closed")
-			}
-		})
-	}
-}
-
-func TestAnalyticsRetryAfterDeadline(t *testing.T) {
-	now := time.Now()
-	for _, tc := range []struct {
-		name, header string
-		want         time.Time
-	}{
-		{"seconds", "60", now.Add(time.Minute)},
-		{"http date", now.Add(2 * time.Minute).UTC().Format(http.TimeFormat), now.Add(2 * time.Minute)},
-		{"past date", now.Add(-time.Minute).UTC().Format(http.TimeFormat), now.Add(-time.Minute)},
-		{"zero seconds", "0", now},
-		{"invalid", "not-a-delay", now.Add(time.Minute)},
-		{"missing", "", now.Add(time.Minute)},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			a := &App{}
-			a.deferAnalytics(tc.header)
-			difference := a.analyticsRetryUntil.Sub(tc.want)
-			if difference < -time.Second || difference > time.Second {
-				t.Fatalf("wrong Retry-After deadline: got %v want %v", a.analyticsRetryUntil, tc.want)
 			}
 		})
 	}

@@ -24,7 +24,6 @@ import (
 	"os"
 	"os/signal"
 	"strings"
-	"sync"
 	"syscall"
 	"time"
 
@@ -152,8 +151,6 @@ type App struct {
 	rootYes                 bool
 	httpClient              *http.Client
 	telemetry               telemetryClient
-	analyticsMu             sync.Mutex
-	analyticsRetryUntil     time.Time
 	projectEnvProject       string
 	projectEnvFormat        string
 	projectEnvShell         bool

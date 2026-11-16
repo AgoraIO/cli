@@ -175,7 +175,7 @@ func (a *App) buildTelemetryCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "telemetry",
 		Short: "Inspect or update telemetry preferences",
-		Long:  "Telemetry reports anonymous recipes/init usage when a collector is configured. It never includes tokens or app certificates. DO_NOT_TRACK=1 disables telemetry at runtime.",
+		Long:  "Telemetry reports recipes/init usage only after explicit consent and when a collector is configured. It never includes tokens or app certificates. DO_NOT_TRACK=1 disables telemetry at runtime.",
 		Example: example(`
   agora telemetry status
   agora telemetry disable
@@ -198,7 +198,8 @@ func (a *App) buildTelemetryCommand() *cobra.Command {
 	})
 	cmd.AddCommand(&cobra.Command{
 		Use:   "enable",
-		Short: "Enable telemetry",
+		Short: "Consent to usage collection and enable telemetry",
+		Long:  telemetryDisclosure + "\n\nRunning this command explicitly consents to usage collection, including in JSON/non-interactive mode.",
 		Example: example(`
   agora telemetry enable
   agora telemetry enable --json
@@ -231,6 +232,7 @@ func (a *App) renderTelemetry(cmd *cobra.Command) error {
 		"action":              "status",
 		"transportConfigured": a.analyticsURL() != "",
 		"captureActive":       a.analyticsEnabled() && a.analyticsURL() != "",
+		"consent":             a.currentTelemetryConsent(),
 		"configPath":          path,
 		"doNotTrack":          strings.TrimSpace(a.env["DO_NOT_TRACK"]) != "",
 		"enabled":             a.currentTelemetryPreference() && strings.TrimSpace(a.env["DO_NOT_TRACK"]) == "",
@@ -238,22 +240,26 @@ func (a *App) renderTelemetry(cmd *cobra.Command) error {
 }
 
 func (a *App) setTelemetry(cmd *cobra.Command, enabled bool) error {
-	next := a.cfg
-	next.TelemetryEnabled = enabled
+	if enabled {
+		if _, err := fmt.Fprintln(cmd.ErrOrStderr(), telemetryDisclosure); err != nil {
+			return err
+		}
+	}
 	path, err := resolveConfigFilePath(a.env)
 	if err != nil {
 		return err
 	}
-	if err := writeSecureJSON(path, next); err != nil {
+	if err := a.persistTelemetryChoice(enabled); err != nil {
 		return err
 	}
-	a.cfg = next
-	a.applyConfigToEnv()
 	return renderResult(cmd, "telemetry", map[string]any{
-		"action":     map[bool]string{true: "enable", false: "disable"}[enabled],
-		"configPath": path,
-		"enabled":    enabled && strings.TrimSpace(a.env["DO_NOT_TRACK"]) == "",
-		"doNotTrack": strings.TrimSpace(a.env["DO_NOT_TRACK"]) != "",
+		"action":              map[bool]string{true: "enable", false: "disable"}[enabled],
+		"consent":             a.currentTelemetryConsent(),
+		"transportConfigured": a.analyticsURL() != "",
+		"captureActive":       a.analyticsEnabled() && a.analyticsURL() != "",
+		"configPath":          path,
+		"enabled":             enabled && strings.TrimSpace(a.env["DO_NOT_TRACK"]) == "",
+		"doNotTrack":          strings.TrimSpace(a.env["DO_NOT_TRACK"]) != "",
 	})
 }
 
@@ -520,6 +526,13 @@ func (a *App) buildConfigCommand() *cobra.Command {
 			next := a.cfg
 			if cmd.Flags().Changed("telemetry-enabled") {
 				next.TelemetryEnabled = telemetryEnabled
+				next.TelemetryConsent = telemetryConsentDenied
+				if telemetryEnabled {
+					if _, err := fmt.Fprintln(cmd.ErrOrStderr(), telemetryDisclosure); err != nil {
+						return err
+					}
+					next.TelemetryConsent = telemetryConsentGranted
+				}
 			}
 			if cmd.Flags().Changed("browser-auto-open") {
 				next.BrowserAutoOpen = browserAutoOpen
@@ -545,7 +558,7 @@ func (a *App) buildConfigCommand() *cobra.Command {
 			return renderResult(cmd, "config update", next)
 		},
 	}
-	update.Flags().BoolVar(&telemetryEnabled, "telemetry-enabled", false, "persist telemetry preference; use --telemetry-enabled=false to disable")
+	update.Flags().BoolVar(&telemetryEnabled, "telemetry-enabled", false, "persist telemetry choice; true explicitly consents to usage collection, false disables it")
 	update.Flags().BoolVar(&browserAutoOpen, "browser-auto-open", false, "persist browser auto-open preference; use --browser-auto-open=false to disable")
 	update.Flags().StringVar(&cfg.LogLevel, "log-level", cfg.LogLevel, "persist default log level")
 	update.Flags().BoolVar(&debug, "debug", false, "persist the --debug preference (echo structured logs to stderr); use --debug=false to disable")

@@ -181,7 +181,7 @@ func mcpTools() []map[string]any {
 		mcpTool("agora.config.get", "Read persisted CLI defaults", nil),
 
 		// Telemetry
-		mcpTool("agora.telemetry.status", "Show telemetry status and DO_NOT_TRACK detection", nil),
+		mcpTool("agora.telemetry.status", "Show telemetry preference, explicit consent, capture status and DO_NOT_TRACK detection", nil),
 
 		// Upgrade guidance
 		mcpTool("agora.upgrade.check", "Resolve the latest release and report what would happen", nil),
@@ -383,6 +383,7 @@ func (a *App) dispatchMCPTool(name string, args map[string]any, progress progres
 			"action":              "status",
 			"transportConfigured": a.analyticsURL() != "",
 			"captureActive":       a.analyticsEnabled() && a.analyticsURL() != "",
+			"consent":             a.currentTelemetryConsent(),
 			"configPath":          path,
 			"doNotTrack":          strings.TrimSpace(a.env["DO_NOT_TRACK"]) != "",
 			"enabled":             a.currentTelemetryPreference() && strings.TrimSpace(a.env["DO_NOT_TRACK"]) == "",

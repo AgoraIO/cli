@@ -141,7 +141,7 @@ Stable error codes: /cli/md/error-codes.md
 
 ## Telemetry
 
-Configured analytics reports anonymous recipes/init usage and never includes Agora App Certificates or OAuth tokens. This source build has no embedded collector URL; Sentry diagnostics remains a placeholder. Disable with any of:
+Configured analytics reports recipes/init usage only after explicit consent and never includes Agora App Certificates or OAuth tokens. A legacy enabled preference does not count as consent. JSON/CI/MCP/no-input runs never prompt or infer consent. Obtain the user's approval before running `agora telemetry enable` or `agora config update --telemetry-enabled=true`; these commands explicitly consent. Status includes `consent` and `captureActive`; `config get` includes `telemetryConsent`. This source build has no embedded collector URL; Sentry diagnostics remains a placeholder. Disable with any of:
 ```
 agora telemetry disable
 agora config update --telemetry-enabled=false
@@ -149,6 +149,8 @@ DO_NOT_TRACK=1 agora <command>
 ```
 
 Full telemetry contract (events, fields, sinks): /cli/md/telemetry.md
+
+CLI analytics sends in the background and drains writes for at most five seconds at shell/MCP completion. It does not wait for HTTP responses or retry failed batches; a completed write does not confirm ingestion.
 
 ## Support
 

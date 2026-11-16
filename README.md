@@ -244,7 +244,11 @@ Reads and updates local CLI defaults such as output mode, log level, and browser
 
 ### `telemetry`
 
-Reads and updates telemetry preferences. `DO_NOT_TRACK=1` disables telemetry at runtime.
+Usage statistics are collected only after explicit consent. A configured CLI
+asks once in an interactive terminal (default: no); JSON, CI and MCP do not
+prompt or infer consent. `agora telemetry enable` explicitly consents,
+`agora telemetry disable` withdraws consent, and `DO_NOT_TRACK=1` disables
+telemetry at runtime. See [what is collected and where the choice is saved](docs/telemetry.md).
 
 ### `open`
 

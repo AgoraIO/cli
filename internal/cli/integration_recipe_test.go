@@ -79,6 +79,10 @@ func TestCLIInitFromOfficialRecipeUsesCatalogEnvContract(t *testing.T) {
 				commonEnv["DO_NOT_TRACK"] = ""
 				commonEnv["AGORA_TELEMETRY_ENABLED"] = "1"
 				commonEnv["AGORA_SENTRY_ENABLED"] = "1"
+				enable := runCLI(t, []string{"telemetry", "enable", "--json"}, cliRunOptions{env: commonEnv})
+				if enable.exitCode != 0 {
+					t.Fatalf("consent failed: %+v", enable)
+				}
 				var result cliResult
 				if transport == "cli" {
 					args := []string{"init", "tool-demo", "--recipe", "tool-calling", "--dir", targetDir, "--json"}

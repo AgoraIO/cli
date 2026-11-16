@@ -418,6 +418,17 @@ Set `AGORA_ALLOW_UPGRADE_IN_CI=1` only when a CI job intentionally needs to muta
 
 ### Unreleased — anonymous core-flow analytics
 
+- Finish CLI analytics delivery after the request is fully written, without
+  waiting for an HTTP response. Shell and MCP use the same five-second maximum
+  write-drain budget. Do not retry, replay, or process response-based cooldown.
+
+- Require explicit consent before recipes/init capture. Interactive terminals
+  disclose collection and ask once with a default-no answer; JSON/CI/MCP and
+  no-input runs never infer consent. Persist the choice in `telemetryConsent`;
+  legacy enabled preferences stay undecided and legacy opt-out remains off.
+  Explicit enable commands disclose and grant consent; disable commands revoke
+  it. Status adds `consent`, and `captureActive` now requires granted consent.
+
 - Add opt-out-aware recipes/init events for shell and MCP, optional one-call
   anonymous webpage attribution, bounded capture and coarse Agent classification.
 - This source build has no embedded collector URL; activation needs deployment
@@ -426,5 +437,4 @@ Set `AGORA_ALLOW_UPGRADE_IN_CI=1` only when a CI job intentionally needs to muta
 
 - Fix live MCP analytics opt-out by checking persisted preferences before each
   operation/batch; preserve explicit process opt-out and fail closed on invalid
-  configuration. Treat EOF as failure, honor 429 Retry-After across MCP calls,
-  and emit validate once per init attempt.
+  configuration. Treat EOF as failure and emit validate once per init attempt.

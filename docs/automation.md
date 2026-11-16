@@ -1211,6 +1211,7 @@ Returns the current resolved config object. Safe branch fields:
 - `logLevel`
 - `browserAutoOpen`
 - `telemetryEnabled`
+- `telemetryConsent` (`unknown`, `granted`, `denied`; missing legacy values mean `unknown`)
 - `debug` (renamed from legacy `verbose` in v0.2.0; legacy key is migrated on first load)
 
 Endpoint and OAuth integration values are derived from the active login
@@ -1321,9 +1322,23 @@ exit codes remain unchanged. MCP equivalents are `sourceDistinctId` and
 
 Events use `source_session_id`, not the browser-managed PostHog `$session_id`.
 Separate attempts have separate `operation_id` values; retries do not carry
-web context implicitly. Opt-out or a missing collector URL means no capture.
+web context implicitly. Missing explicit consent, opt-out or a missing collector
+URL means no capture. JSON, CI, MCP, quiet, non-TTY and no-input calls never
+prompt or infer consent; `--yes`, environment enable flags and source IDs do not
+grant consent. Explicit `telemetry enable` and
+`config update --telemetry-enabled=true` print the disclosure to stderr and save
+consent. Agents must obtain user approval before running either enable command.
+Disable commands save refusal. Existing JSON stdout framing and business exit
+codes are unchanged; the new consent field is additive.
 See [Telemetry](telemetry.md) for the event, privacy and transport contract.
 
 Telemetry status adds `transportConfigured` (valid collector URL present) and
-`captureActive` (transport configured and runtime opt-out permits capture).
+`captureActive` (transport configured, consent granted, preference enabled and
+runtime opt-out permits capture), plus `consent` (`unknown`, `granted`, `denied`).
 The existing `enabled` preference field remains compatible.
+
+CLI capture waits only for its request to finish writing, not for an HTTP
+response. Both shell and MCP finalization use the same bounded write drain
+(five seconds maximum). A completed write does not confirm acceptance. Failed
+batches are not retried; response status and `Retry-After` are not processed.
+Telemetry never changes business exit codes or JSON framing.

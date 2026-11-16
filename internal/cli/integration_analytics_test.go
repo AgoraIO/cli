@@ -17,6 +17,10 @@ func TestCLIAnalyticsInitStagesAndFailure(t *testing.T) {
 			api := newFakeCLIBFF()
 			defer api.server.Close()
 			persistSessionForIntegration(t, configHome)
+			enable := runCLI(t, []string{"telemetry", "enable", "--json"}, cliRunOptions{env: map[string]string{"AGORA_HOME": "", "XDG_CONFIG_HOME": configHome}})
+			if enable.exitCode != 0 {
+				t.Fatalf("consent failed: %+v", enable)
+			}
 			files := map[string]string{"agora.quickstart.json": `{"schemaVersion":1,"template":"nextjs","scenario":"video-call"}`, "env.local.example": "NEXT_PUBLIC_AGORA_APP_ID=\nNEXT_AGORA_APP_CERTIFICATE=\n", "package.json": `{"name":"fixture"}`}
 
 			repo := createLocalGitRepo(t, files)
@@ -77,12 +81,17 @@ func TestCLIAnalyticsRecipesJSONUnchanged(t *testing.T) {
 		_, _ = w.Write([]byte(`{"schemaVersion":1,"type":"all","total":1,"items":[{"slug":"hotel","title":"Hotel","mainRepoUrl":"https://github.com/AgoraIO/hotel","type":"ai","official":true}]}`))
 	}))
 	defer catalog.Close()
-	result := runCLI(t, []string{"recipes", "list", "--json"}, cliRunOptions{env: map[string]string{"AGORA_HOME": t.TempDir(), "AGORA_RECIPES_BASE_URL": catalog.URL, "AGORA_TELEMETRY_URL": collector.URL, "DO_NOT_TRACK": "", "AGORA_SENTRY_ENABLED": "1", "AGORA_TELEMETRY_ENABLED": "1"}})
+	env := map[string]string{"AGORA_HOME": t.TempDir(), "AGORA_RECIPES_BASE_URL": catalog.URL, "AGORA_TELEMETRY_URL": collector.URL, "DO_NOT_TRACK": "", "AGORA_SENTRY_ENABLED": "1", "AGORA_TELEMETRY_ENABLED": "1"}
+	enable := runCLI(t, []string{"telemetry", "enable", "--json"}, cliRunOptions{env: env})
+	if enable.exitCode != 0 {
+		t.Fatalf("consent failed: %+v", enable)
+	}
+	result := runCLI(t, []string{"recipes", "list", "--json"}, cliRunOptions{env: env})
 	var envelope map[string]any
 	if result.exitCode != 0 || json.Unmarshal([]byte(result.stdout), &envelope) != nil || envelope["ok"] != true {
 		t.Fatalf("JSON contract changed: %+v", result)
 	}
-	events := read()
+	events := waitAnalyticsEvents(t, read, 1)
 	if len(events) != 1 || events[0].Properties["result_count"] != float64(1) {
 		t.Fatalf("wrong recipe event: %+v", events)
 	}
