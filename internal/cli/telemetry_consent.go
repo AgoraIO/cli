@@ -18,7 +18,7 @@ const (
 const telemetryDisclosure = `Agora CLI can collect usage statistics to improve the product:
 recipes/init command results, stages, duration, version, OS/architecture,
 public recipe/template IDs and coarse AI-tool categories. Events use a random
-installation ID; optional webpage source IDs can link CLI and website usage.
+installation ID for CLI usage only; website identities are not linked.
 No code, conversation content, secrets, project names or local paths are collected.
 Details: https://agoraio.github.io/cli/telemetry.html
 You can stop collection at any time with: agora telemetry disable`

@@ -150,6 +150,9 @@ DO_NOT_TRACK=1 agora <command>
 
 Full telemetry contract (events, fields, sinks): /cli/md/telemetry.md
 
+CLI analytics uses a local random installation ID after explicit consent.
+It does not accept website identities or source sessions through shell or MCP.
+
 CLI analytics sends in the background and drains writes for at most five seconds at shell/MCP completion. It does not wait for HTTP responses or retry failed batches; a completed write does not confirm ingestion.
 
 ## Support
@@ -159,7 +162,3 @@ CLI analytics sends in the background and drains writes for at most five seconds
 - Security disclosure: security@agora.io (see SECURITY.md)
 - Documentation: https://agoraio.github.io/cli/
 - Agora Console: https://console.agora.io
-
-Optional analytics attribution: agora.init, agora.recipes.list and
-agora.recipes.show accept sourceDistinctId and sourceSessionId, paired for a
-single tool call. They are optional, never credentials, and never persisted.

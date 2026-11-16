@@ -253,22 +253,20 @@ func mcpTools() []map[string]any {
 		mcpTool("agora.quickstart.env_write", "Write env values into a previously-cloned quickstart", map[string]string{"dir": "string", "template": "string", "scenario": "string", "project": "string"}),
 
 		// Recipe catalog
-		mcpTool("agora.recipes.list", "List recipes from the Agora catalog", map[string]string{"type": "string", "sourceDistinctId": "string", "sourceSessionId": "string"}),
-		mcpTool("agora.recipes.show", "Show one recipe from the Agora catalog", map[string]string{"slug": "string", "sourceDistinctId": "string", "sourceSessionId": "string"}),
+		mcpTool("agora.recipes.list", "List recipes from the Agora catalog", map[string]string{"type": "string"}),
+		mcpTool("agora.recipes.show", "Show one recipe from the Agora catalog", map[string]string{"slug": "string"}),
 
 		// Init: the recommended end-to-end flow
 		mcpTool("agora.init", "Create or bind a project and initialize an official quickstart or recipe", map[string]string{
-			"sourceDistinctId": "string",
-			"sourceSessionId":  "string",
-			"name":             "string",
-			"dir":              "string",
-			"template":         "string",
-			"recipe":           "string",
-			"scenario":         "string",
-			"project":          "string",
-			"newProject":       "boolean",
-			"rtmDataCenter":    "string",
-			"features":         "array",
+			"name":          "string",
+			"dir":           "string",
+			"template":      "string",
+			"recipe":        "string",
+			"scenario":      "string",
+			"project":       "string",
+			"newProject":    "boolean",
+			"rtmDataCenter": "string",
+			"features":      "array",
 		}),
 	}
 }
@@ -343,7 +341,7 @@ func (a *App) callMCPTool(name string, args map[string]any, progress progressEmi
 	}
 	var op *analyticsOperation
 	if command != "" {
-		op = a.beginAnalytics(command, "mcp", stringArg(args, "sourceDistinctId"), stringArg(args, "sourceSessionId"))
+		op = a.beginAnalytics(command, "mcp")
 		defer func() { op.finish(err) }()
 	}
 	return a.dispatchMCPTool(name, args, progress, op)

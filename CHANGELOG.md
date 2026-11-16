@@ -17,6 +17,7 @@ Earlier entries pre-date this convention and only carry their version's compare 
 
 ### Changed
 
+- Remove website-to-CLI analytics attribution flags and MCP arguments. Usage events now use only the local installation ID; explicit consent and opt-out controls remain required.
 - Rename the `project show --json` token debug status to `signalingTokenDebugEnabled` and remove the misleading token capability warning from `project doctor`. Update consumers of the old `tokenEnabled` result field.
 
 ## [0.2.10] - 2026-09-20
@@ -429,8 +430,8 @@ Set `AGORA_ALLOW_UPGRADE_IN_CI=1` only when a CI job intentionally needs to muta
   Explicit enable commands disclose and grant consent; disable commands revoke
   it. Status adds `consent`, and `captureActive` now requires granted consent.
 
-- Add opt-out-aware recipes/init events for shell and MCP, optional one-call
-  anonymous webpage attribution, bounded capture and coarse Agent classification.
+- Add opt-out-aware recipes/init events for shell and MCP, bounded capture,
+  CLI-local installation identity and coarse Agent classification.
 - This source build has no embedded collector URL; activation needs deployment
   configuration and updated privacy/consent controls. Stable command JSON and
   business exit codes are unchanged. Sentry transport remains a placeholder.

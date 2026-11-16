@@ -1312,20 +1312,15 @@ Recommended pattern:
 
 ## Anonymous recipes/init analytics
 
-Optional `--source-distinct-id` and `--source-session-id` flags on `init`,
-`recipes list`, and `recipes show` attribute one command to the originating
-Recipes browser/session. They never affect resource authorization or persist
-into later commands. Omission or invalid context uses a local random CLI ID;
-invalid shell context emits a fixed stderr notice. JSON stdout and business
-exit codes remain unchanged. MCP equivalents are `sourceDistinctId` and
-`sourceSessionId` on `agora.init`, `agora.recipes.list`, `agora.recipes.show`.
-
-Events use `source_session_id`, not the browser-managed PostHog `$session_id`.
-Separate attempts have separate `operation_id` values; retries do not carry
-web context implicitly. Missing explicit consent, opt-out or a missing collector
-URL means no capture. JSON, CI, MCP, quiet, non-TTY and no-input calls never
-prompt or infer consent; `--yes`, environment enable flags and source IDs do not
-grant consent. Explicit `telemetry enable` and
+CLI analytics uses a persistent local random installation ID; it does not
+link website identities or sessions. The former `--source-distinct-id` and
+`--source-session-id` flags and MCP `sourceDistinctId` / `sourceSessionId`
+arguments have been removed. Update previously copied commands to omit them.
+Separate attempts have separate `operation_id` values.
+Missing explicit consent, opt-out or a missing collector URL means no capture.
+JSON, CI, MCP, quiet, non-TTY and no-input calls never prompt or infer consent;
+`--yes` and environment enable flags do not grant consent.
+Explicit `telemetry enable` and
 `config update --telemetry-enabled=true` print the disclosure to stderr and save
 consent. Agents must obtain user approval before running either enable command.
 Disable commands save refusal. Existing JSON stdout framing and business exit

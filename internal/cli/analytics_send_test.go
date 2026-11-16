@@ -40,7 +40,7 @@ func TestAnalyticsFinishDoesNotWaitForResponse(t *testing.T) {
 			defer server.Close()
 			defer close(release)
 			a := analyticsTestApp(t, server.URL)
-			op := a.beginAnalytics("recipes list", "shell", "", "")
+			op := a.beginAnalytics("recipes list", "shell")
 			finished := make(chan struct{})
 			go func() { op.finish(nil); close(finished) }()
 			select {
@@ -92,7 +92,7 @@ func TestAnalyticsDoesNotRetryOrFollowRedirects(t *testing.T) {
 			defer server.Close()
 			a := analyticsTestApp(t, server.URL)
 			for range 2 {
-				op := a.beginAnalytics("recipes list", "mcp", "", "")
+				op := a.beginAnalytics("recipes list", "mcp")
 				if op == nil {
 					t.Fatal("a previous response suppressed a later operation")
 				}

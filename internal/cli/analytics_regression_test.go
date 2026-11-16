@@ -53,7 +53,7 @@ func TestAnalyticsLiveMCPPreference(t *testing.T) {
 	if err := writeSecureJSON(state.ConfigFilePath, cfg); err != nil {
 		t.Fatal(err)
 	}
-	op := a.beginAnalytics("recipes list", "mcp", "", "")
+	op := a.beginAnalytics("recipes list", "mcp")
 	if op == nil {
 		t.Fatal("persisted re-enable did not resume capture")
 	}
@@ -78,7 +78,7 @@ func TestAnalyticsOptOutBeforeNextBatch(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	op := a.beginAnalytics("init", "mcp", "", "")
+	op := a.beginAnalytics("init", "mcp")
 	select {
 	case <-first:
 	case <-time.After(time.Second):

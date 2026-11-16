@@ -73,11 +73,11 @@ func waitAnalytics(t *testing.T, read func() []analyticsEvent, ready func([]anal
 	}
 }
 
-func TestAnalyticsAttributionPrivacyAndStages(t *testing.T) {
+func TestAnalyticsInstallationPrivacyAndStages(t *testing.T) {
 	server, read := analyticsRecorder(t)
 	a := analyticsTestApp(t, server.URL)
 	a.osEnv = map[string]string{"CLAUDECODE": "1", "CLAUDE_CODE_ENTRYPOINT": "cli", "ANTHROPIC_MODEL": "private-model", "SECRET_TOKEN": "private-token"}
-	op := a.beginAnalytics("init", "shell", "browser-123", "session-456")
+	op := a.beginAnalytics("init", "shell")
 	op.source("recipe", "hotel-reception")
 	op.beginStage("clone")
 	op.finish(&cliError{Code: "RECIPE_NOT_FOUND", Message: "private-token /private/home/project"})
@@ -86,8 +86,8 @@ func TestAnalyticsAttributionPrivacyAndStages(t *testing.T) {
 		t.Fatalf("want start, two stages, final; got %+v", events)
 	}
 	for _, e := range events {
-		if e.DistinctID != "browser-123" || e.OperationID != op.id || e.Properties["source_session_id"] != "session-456" {
-			t.Fatalf("bad attribution: %+v", e)
+		if !strings.HasPrefix(e.DistinctID, "cli:") || e.OperationID != op.id || e.Properties["source_session_id"] != nil {
+			t.Fatalf("bad installation identity: %+v", e)
 		}
 	}
 	var final analyticsEvent
@@ -103,12 +103,12 @@ func TestAnalyticsAttributionPrivacyAndStages(t *testing.T) {
 	if strings.Contains(string(b), "private-") || strings.Contains(string(b), "/private/home") {
 		t.Fatalf("sensitive data leaked: %s", b)
 	}
-	next := a.beginAnalytics("recipes list", "shell", "", "")
+	next := a.beginAnalytics("recipes list", "shell")
 	next.finish(nil)
 	all := waitAnalyticsEvents(t, read, 5)
 	last := all[len(all)-1]
-	if !strings.HasPrefix(last.DistinctID, "cli:") || last.Properties["source_session_id"] != nil || last.OperationID == op.id {
-		t.Fatalf("web identity persisted: %+v", last)
+	if last.DistinctID != events[0].DistinctID || last.Properties["source_session_id"] != nil || last.OperationID == op.id {
+		t.Fatalf("installation identity or operation isolation changed: %+v", last)
 	}
 	info, err := os.Stat(filepath.Join(a.env["AGORA_HOME"], "analytics-id"))
 	if err != nil {
@@ -138,7 +138,7 @@ func TestAnalyticsOptOutAndEndpointSafety(t *testing.T) {
 			default:
 				a.env[key] = "0"
 			}
-			op := a.beginAnalytics("init", "shell", "browser", "session")
+			op := a.beginAnalytics("init", "shell")
 			if op != nil {
 				op.finish(nil)
 				t.Fatal("disabled transport created an operation")
@@ -153,7 +153,7 @@ func TestAnalyticsOptOutAndEndpointSafety(t *testing.T) {
 	}
 }
 
-func TestAnalyticsMCPIsolationAndInvalidSource(t *testing.T) {
+func TestAnalyticsMCPIgnoresLegacyWebIdentity(t *testing.T) {
 	server, read := analyticsRecorder(t)
 	a := analyticsTestApp(t, server.URL)
 	for _, args := range []map[string]any{{"sourceDistinctId": "browser", "sourceSessionId": "session"}, {"sourceDistinctId": "browser"}} {
@@ -169,11 +169,11 @@ func TestAnalyticsMCPIsolationAndInvalidSource(t *testing.T) {
 		}
 	}
 	slices.SortFunc(finals, func(a, b analyticsEvent) int { return a.Timestamp.Compare(b.Timestamp) })
-	if len(finals) != 2 || finals[0].OperationID == finals[1].OperationID || finals[0].DistinctID != "browser" || !strings.HasPrefix(finals[1].DistinctID, "cli:") {
+	if len(finals) != 2 || finals[0].OperationID == finals[1].OperationID || !strings.HasPrefix(finals[0].DistinctID, "cli:") || finals[0].DistinctID != finals[1].DistinctID {
 		t.Fatalf("bad MCP isolation: %+v", finals)
 	}
 	for _, e := range finals {
-		if e.Properties["invocation_channel"] != "mcp" {
+		if e.Properties["invocation_channel"] != "mcp" || e.Properties["source_session_id"] != nil {
 			t.Fatal("wrong MCP channel")
 		}
 	}
@@ -206,7 +206,7 @@ func TestAnalyticsNetworkFailureIsBounded(t *testing.T) {
 	defer server.Close()
 	a := analyticsTestApp(t, server.URL)
 	start := time.Now()
-	op := a.beginAnalytics("init", "shell", "", "")
+	op := a.beginAnalytics("init", "shell")
 	op.finish(errors.New("private error"))
 	if time.Since(start) > 1500*time.Millisecond {
 		t.Fatal("analytics delayed command beyond bounded flush")
@@ -227,6 +227,37 @@ func TestAnalyticsAgentClassification(t *testing.T) {
 		family, surface, source := analyticsAgent(tc.env)
 		if family != tc.family || surface != tc.surface || source != tc.source {
 			t.Fatalf("classification: %s %s %s", family, surface, source)
+		}
+	}
+}
+
+func TestAnalyticsWebIdentityInputsRemoved(t *testing.T) {
+	for _, command := range [][]string{{"init"}, {"recipes", "list"}, {"recipes", "show"}} {
+		for _, flag := range []string{"source-distinct-id", "source-session-id"} {
+			a := analyticsTestApp(t, "")
+			root := a.buildRoot()
+			cmd, _, err := root.Find(command)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if cmd.Flags().Lookup(flag) != nil {
+				t.Fatalf("%v still accepts %s", command, flag)
+			}
+			root.SetOut(&bytes.Buffer{})
+			root.SetErr(&bytes.Buffer{})
+			root.SetArgs(append(append([]string{}, command...), "--"+flag, "legacy-web-id"))
+			if err := root.Execute(); err == nil || !strings.Contains(err.Error(), "unknown flag") {
+				t.Fatalf("legacy web flag was not rejected: %v", err)
+			}
+		}
+	}
+	for _, tool := range mcpTools() {
+		schema, _ := tool["inputSchema"].(map[string]any)
+		properties, _ := schema["properties"].(map[string]any)
+		for _, key := range []string{"sourceDistinctId", "sourceSessionId"} {
+			if _, exists := properties[key]; exists {
+				t.Fatalf("MCP tool %v still advertises %s", tool["name"], key)
+			}
 		}
 	}
 }

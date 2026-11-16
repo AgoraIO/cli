@@ -7,7 +7,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"net/http"
 	"net/http/httptrace"
 	"net/url"
@@ -28,7 +27,7 @@ var analyticsEndpoint = ""
 // This bounds connection setup and writing, not waiting for a response.
 const analyticsSendTimeout = 5 * time.Second
 
-var analyticsIDPattern = regexp.MustCompile(`^[A-Za-z0-9_.$:-]{1,200}$`)
+var analyticsIDPattern = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`)
 var analyticsSlugPattern = regexp.MustCompile(`^[a-z0-9]+(?:-[a-z0-9]+)*$`)
 var analyticsVersionPattern = regexp.MustCompile(`^[A-Za-z0-9.+_-]{0,64}$`)
 var analyticsCodePattern = regexp.MustCompile(`^[A-Z][A-Z0-9_]{0,63}$`)
@@ -168,12 +167,11 @@ func (a *App) analyticsIdentity() string {
 	return "cli:" + id
 }
 
-func (a *App) beginAnalytics(command, channel, distinct, session string) *analyticsOperation {
+func (a *App) beginAnalytics(command, channel string) *analyticsOperation {
 	endpoint := a.analyticsURL()
 	if !a.analyticsEnabled() || endpoint == "" {
 		return nil
 	}
-	id := ""
 	props := map[string]any{"command": command, "os": runtime.GOOS, "arch": runtime.GOARCH, "invocation_channel": channel}
 	version, _ := versionInfo()["version"].(string)
 	if !analyticsVersionPattern.MatchString(version) {
@@ -182,13 +180,7 @@ func (a *App) beginAnalytics(command, channel, distinct, session string) *analyt
 	props["cli_version"] = version
 	family, surface, source := analyticsAgent(a.osEnv)
 	props["agent_family"], props["agent_surface"], props["agent_detection_source"] = family, surface, source
-	if distinct != "" && session != "" && analyticsIDPattern.MatchString(distinct) && analyticsIDPattern.MatchString(session) {
-		id = distinct
-		props["source_session_id"] = session
-	}
-	if id == "" {
-		id = a.analyticsIdentity()
-	}
+	id := a.analyticsIdentity()
 	if id == "" {
 		return nil
 	}
@@ -410,16 +402,10 @@ func analyticsFor(cmd *cobra.Command) *analyticsOperation {
 }
 
 func (a *App) instrumentAnalytics(cmd *cobra.Command, command string) {
-	var distinct, session string
-	cmd.Flags().StringVar(&distinct, "source-distinct-id", "", "optional anonymous Recipes browser ID (paired with --source-session-id)")
-	cmd.Flags().StringVar(&session, "source-session-id", "", "optional source webpage session ID (paired with --source-distinct-id)")
 	run := cmd.RunE
 	cmd.RunE = func(cmd *cobra.Command, args []string) (err error) {
 		a.maybePromptTelemetryConsent(cmd)
-		if (distinct != "" || session != "") && !(distinct != "" && session != "" && analyticsIDPattern.MatchString(distinct) && analyticsIDPattern.MatchString(session)) {
-			fmt.Fprintln(cmd.ErrOrStderr(), "Ignoring invalid or incomplete analytics source context.")
-		}
-		op := a.beginAnalytics(command, "shell", distinct, session)
+		op := a.beginAnalytics(command, "shell")
 		ctx := cmd.Context()
 		cmd.SetContext(context.WithValue(ctx, analyticsContextKey{}, op))
 		defer func() { op.finish(err); cmd.SetContext(ctx) }()

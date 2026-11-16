@@ -24,15 +24,15 @@ defaults to `https://ph.agora.io`, overridable with
 `CLI_TELEMETRY_POSTHOG_HOST`. This is the BFF's upstream, not the CLI collector URL.
 
 Before the first instrumented command with a configured collector, an interactive
-pretty terminal displays the data categories, random installation ID, optional
-webpage linkage, documentation link and disable command, then asks
+pretty terminal displays the data categories, random installation ID,
+documentation link and disable command, then asks
 `Allow usage collection? [y/N]:`. Only `y` or `yes` grants consent. Enter or `no`
 saves a refusal and suppresses future prompts. EOF, interrupted input or a failed
 save never grants consent. The prompt itself sends no event or analytics ID.
 
 JSON, CI, MCP, quiet, non-TTY and `--yes` / `AGORA_NO_INPUT` executions never
 prompt or assume consent. Until consent is saved they run normally without
-capture, even with `AGORA_TELEMETRY_ENABLED=1` or webpage source IDs.
+capture, even with `AGORA_TELEMETRY_ENABLED=1`.
 
 Consent is saved locally as `telemetryConsent` in the existing private
 `config.json`; locate it with `agora config path --json`. Values are `unknown`
@@ -71,42 +71,19 @@ transport and no runtime opt-out. A previously granted consent never overrides
 The Sentry diagnostics transport is still a placeholder; configuring analytics
 does not enable raw exception reporting.
 
-## Anonymous identity and optional webpage attribution
+## CLI installation identity
 
-Without web context, the CLI uses a random ID in `analytics-id` under its private
-config directory (file mode 0600). This identifies a CLI configuration directory,
-not a verified person. Removing that file resets future local attribution.
+The CLI uses a random ID in `analytics-id` under its private config directory
+(file mode 0600). This persists across commands and identifies a CLI configuration
+directory, not a verified person. Removing the file resets the ID for future events;
+it does not delete events already collected. Treat these as linkable usage events,
+not irreversibly anonymous aggregate statistics.
 
-Recipes can pass its anonymous browser and source session IDs for one command:
-
-```sh
-agora init demo --recipe hotel-reception \
-  --source-distinct-id <browser-id> \
-  --source-session-id <web-session-id> --json
-```
-
-The same optional flags are available on `recipes list` and `recipes show`.
-MCP tools `agora.init`, `agora.recipes.list`, and `agora.recipes.show` accept
-`sourceDistinctId` and `sourceSessionId`. The parameters are not persisted.
-Missing/invalid paired values fall back to the CLI anonymous ID without blocking
-the command. Invalid shell context produces a fixed stderr notice with no IDs.
-
-With valid source context, events use the browser distinct ID and store the
-web session as `source_session_id`. They do **not** set PostHog `$session_id`
-or pretend the browser remained active while CLI commands ran. Join webpage
-`$session_id` to CLI `source_session_id`. Deduplicate repeated copies by
-`(distinct_id, webpage session, recipe ID)`; use a defined conversion window
-(recommended: seven days). `operation_id` identifies a command attempt and
-changes on retry. `event_id` identifies an event for delivery deduplication.
-A start event may precede recipe validation; join subsequent events by
-`operation_id` to obtain the validated recipe identity.
-
-Web IDs can appear in copied prompts, AI conversations and shell history.
-Forwarded prompts retain the original source. Neither these IDs nor inferred
-Agent labels authenticate users, clients or resource ownership. The website
-must not attach IDs when analytics is unavailable or opted out, and must only
-add these flags once the installed CLI version supports them. Website copy
-adaptation is a separate release from this CLI implementation.
+CLI activity is not linked to website identities or sessions. Shell commands and
+MCP tools do not accept webpage attribution parameters. The collector accepts
+only `cli:`-prefixed installation UUIDs and rejects webpage session properties.
+`operation_id` identifies one command attempt and changes on retry; `event_id`
+identifies one event for delivery deduplication.
 
 ## Events
 
@@ -156,7 +133,7 @@ The anonymous collector validates a strict shared schema, limits size/rate,
 deduplicates event IDs, and constructs PostHog events with `app=cli`, explicit
 environment, person profile processing disabled and GeoIP enrichment disabled.
 It never forwards business authorization or client IP headers. Public project
-tokens and browser IDs are not secrets or authentication. A shared PostHog
+tokens and installation IDs are not secrets or authentication. A shared PostHog
 project still permits forged events through its public capture token.
 
 Before activation, configure the deployment's data region, IP-discard setting,

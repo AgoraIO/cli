@@ -27,7 +27,7 @@ func TestCLIAnalyticsInitStagesAndFailure(t *testing.T) {
 			if fail {
 				repo = filepath.Join(root, "missing-private-repo")
 			}
-			args := []string{"init", "analytics-demo", "--template", "nextjs", "--scenario", "video-call", "--new-project", "--dir", filepath.Join(root, "demo"), "--source-distinct-id", "browser", "--source-session-id", "session", "--json"}
+			args := []string{"init", "analytics-demo", "--template", "nextjs", "--scenario", "video-call", "--new-project", "--dir", filepath.Join(root, "demo"), "--json"}
 			result := runCLI(t, args, cliRunOptions{env: map[string]string{"AGORA_HOME": "", "XDG_CONFIG_HOME": configHome, "AGORA_API_BASE_URL": api.baseURL, "AGORA_QUICKSTART_NEXTJS_VIDEO_CALL_REPO_URL": repo, "AGORA_TELEMETRY_URL": collector.URL, "DO_NOT_TRACK": "", "AGORA_SENTRY_ENABLED": "1", "AGORA_TELEMETRY_ENABLED": "1"}, workdir: root})
 			if !fail && result.exitCode != 0 {
 				t.Fatalf("init failed: %+v", result)
@@ -39,8 +39,8 @@ func TestCLIAnalyticsInitStagesAndFailure(t *testing.T) {
 			stages := map[string]bool{}
 			finals := 0
 			for _, e := range events {
-				if e.DistinctID != "browser" || e.Properties["source_session_id"] != "session" {
-					t.Fatalf("lost attribution: %+v", e)
+				if !strings.HasPrefix(e.DistinctID, "cli:") || e.Properties["source_session_id"] != nil {
+					t.Fatalf("unexpected analytics identity: %+v", e)
 				}
 				if e.Event == "cli_init_stage_completed" {
 					stage, _ := e.Properties["stage"].(string)

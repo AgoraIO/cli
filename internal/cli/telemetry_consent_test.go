@@ -40,7 +40,7 @@ func TestTelemetryConsentLegacyAndInvalidConfig(t *testing.T) {
 				t.Fatal("legacy opt-out lost")
 			}
 			for _, channel := range []string{"shell", "mcp"} {
-				if op := a.beginAnalytics("init", channel, "browser", "session"); op != nil {
+				if op := a.beginAnalytics("init", channel); op != nil {
 					op.finish(nil)
 					t.Fatal("capture started without consent")
 				}
@@ -76,7 +76,7 @@ func TestTelemetryConsentPromptPersistence(t *testing.T) {
 			if err := a.promptTelemetryConsent(input, &out); (err != nil) != tc.wantError {
 				t.Fatalf("prompt error: %v", err)
 			}
-			if !strings.Contains(out.String(), "[y/N]") || !strings.Contains(out.String(), "optional webpage source IDs") {
+			if !strings.Contains(out.String(), "[y/N]") || !strings.Contains(out.String(), "website identities are not linked") {
 				t.Fatal("missing disclosure/default-no")
 			}
 			if len(read()) != 0 {
@@ -95,7 +95,7 @@ func TestTelemetryConsentPromptPersistence(t *testing.T) {
 					t.Fatal("choice did not survive reload")
 				}
 			}
-			op := a.beginAnalytics("recipes list", "shell", "", "")
+			op := a.beginAnalytics("recipes list", "shell")
 			if tc.want == telemetryConsentGranted {
 				if op == nil {
 					t.Fatal("consent did not enable capture")
@@ -204,7 +204,7 @@ func TestCLITelemetryConsentJSON(t *testing.T) {
 	env := map[string]string{"AGORA_HOME": t.TempDir(), "AGORA_TELEMETRY_URL": server.URL, "DO_NOT_TRACK": "", "AGORA_SENTRY_ENABLED": "1", "AGORA_TELEMETRY_ENABLED": "1"}
 	for _, args := range [][]string{
 		{"recipes", "list", "--type", "invalid", "--json", "--yes"},
-		{"recipes", "list", "--type", "invalid", "--source-distinct-id", "browser", "--source-session-id", "session", "--json"},
+		{"recipes", "list", "--type", "invalid", "--json"},
 	} {
 		result := runCLI(t, args, cliRunOptions{env: env})
 		if strings.Contains(result.stderr, "Allow usage collection?") {
