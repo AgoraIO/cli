@@ -175,7 +175,7 @@ func (a *App) buildTelemetryCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "telemetry",
 		Short: "Inspect or update telemetry preferences",
-		Long:  "Telemetry reports recipes/init usage only after explicit consent and when a collector is configured. It never includes tokens or app certificates. DO_NOT_TRACK=1 disables telemetry at runtime.",
+		Long:  "Telemetry reports recipes/init/project create usage by default when a collector is configured. A first-use notice is printed to stderr. It never includes tokens or app certificates. DO_NOT_TRACK=1 disables telemetry at runtime.",
 		Example: example(`
   agora telemetry status
   agora telemetry disable
@@ -198,8 +198,8 @@ func (a *App) buildTelemetryCommand() *cobra.Command {
 	})
 	cmd.AddCommand(&cobra.Command{
 		Use:   "enable",
-		Short: "Consent to usage collection and enable telemetry",
-		Long:  telemetryDisclosure + "\n\nRunning this command explicitly consents to usage collection, including in JSON/non-interactive mode.",
+		Short: "Enable usage telemetry",
+		Long:  telemetryDisclosure + "\n\nEnable the saved preference. Runtime opt-out still takes precedence.",
 		Example: example(`
   agora telemetry enable
   agora telemetry enable --json
@@ -232,19 +232,13 @@ func (a *App) renderTelemetry(cmd *cobra.Command) error {
 		"action":              "status",
 		"transportConfigured": a.analyticsURL() != "",
 		"captureActive":       a.analyticsEnabled() && a.analyticsURL() != "",
-		"consent":             a.currentTelemetryConsent(),
 		"configPath":          path,
 		"doNotTrack":          strings.TrimSpace(a.env["DO_NOT_TRACK"]) != "",
-		"enabled":             a.currentTelemetryPreference() && strings.TrimSpace(a.env["DO_NOT_TRACK"]) == "",
+		"enabled":             a.cfg.TelemetryEnabled,
 	})
 }
 
 func (a *App) setTelemetry(cmd *cobra.Command, enabled bool) error {
-	if enabled {
-		if _, err := fmt.Fprintln(cmd.ErrOrStderr(), telemetryDisclosure); err != nil {
-			return err
-		}
-	}
 	path, err := resolveConfigFilePath(a.env)
 	if err != nil {
 		return err
@@ -252,13 +246,15 @@ func (a *App) setTelemetry(cmd *cobra.Command, enabled bool) error {
 	if err := a.persistTelemetryChoice(enabled); err != nil {
 		return err
 	}
+	if enabled {
+		a.maybeShowTelemetryNotice(cmd)
+	}
 	return renderResult(cmd, "telemetry", map[string]any{
 		"action":              map[bool]string{true: "enable", false: "disable"}[enabled],
-		"consent":             a.currentTelemetryConsent(),
 		"transportConfigured": a.analyticsURL() != "",
 		"captureActive":       a.analyticsEnabled() && a.analyticsURL() != "",
 		"configPath":          path,
-		"enabled":             enabled && strings.TrimSpace(a.env["DO_NOT_TRACK"]) == "",
+		"enabled":             enabled,
 		"doNotTrack":          strings.TrimSpace(a.env["DO_NOT_TRACK"]) != "",
 	})
 }
@@ -526,13 +522,6 @@ func (a *App) buildConfigCommand() *cobra.Command {
 			next := a.cfg
 			if cmd.Flags().Changed("telemetry-enabled") {
 				next.TelemetryEnabled = telemetryEnabled
-				next.TelemetryConsent = telemetryConsentDenied
-				if telemetryEnabled {
-					if _, err := fmt.Fprintln(cmd.ErrOrStderr(), telemetryDisclosure); err != nil {
-						return err
-					}
-					next.TelemetryConsent = telemetryConsentGranted
-				}
 			}
 			if cmd.Flags().Changed("browser-auto-open") {
 				next.BrowserAutoOpen = browserAutoOpen
@@ -555,10 +544,13 @@ func (a *App) buildConfigCommand() *cobra.Command {
 			}
 			a.cfg = next
 			a.applyConfigToEnv()
+			if cmd.Flags().Changed("telemetry-enabled") && telemetryEnabled {
+				a.maybeShowTelemetryNotice(cmd)
+			}
 			return renderResult(cmd, "config update", next)
 		},
 	}
-	update.Flags().BoolVar(&telemetryEnabled, "telemetry-enabled", false, "persist telemetry choice; true explicitly consents to usage collection, false disables it")
+	update.Flags().BoolVar(&telemetryEnabled, "telemetry-enabled", false, "persist usage telemetry preference")
 	update.Flags().BoolVar(&browserAutoOpen, "browser-auto-open", false, "persist browser auto-open preference; use --browser-auto-open=false to disable")
 	update.Flags().StringVar(&cfg.LogLevel, "log-level", cfg.LogLevel, "persist default log level")
 	update.Flags().BoolVar(&debug, "debug", false, "persist the --debug preference (echo structured logs to stderr); use --debug=false to disable")
@@ -648,7 +640,7 @@ func (a *App) buildProjectCreate() *cobra.Command {
 				}
 				return renderResult(cmd, "project create", result)
 			}
-			data, err := a.projectCreate(args[0], template, features, normalizedRTMDataCenter, idempotencyKey)
+			data, err := a.projectCreate(args[0], template, features, normalizedRTMDataCenter, idempotencyKey, analyticsFor(cmd))
 			if err != nil {
 				return err
 			}
@@ -661,6 +653,7 @@ func (a *App) buildProjectCreate() *cobra.Command {
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "return the planned project create result without creating remote resources")
 	cmd.Flags().StringVar(&idempotencyKey, "idempotency-key", "", "caller-provided key for safe retries when supported by the API")
 	_ = cmd.RegisterFlagCompletionFunc("template", completeProjectPresetIDs)
+	a.instrumentAnalytics(cmd, "project create")
 	return cmd
 }
 

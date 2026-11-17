@@ -17,7 +17,11 @@ Earlier entries pre-date this convention and only carry their version's compare 
 
 ### Changed
 
-- Remove website-to-CLI analytics attribution flags and MCP arguments. Usage events now use only the local installation ID; explicit consent and opt-out controls remain required.
+- Default configured usage collection to enabled with a best-effort first-use stderr notice. Remove consent prompts, `telemetryConsent` config and `consent` status fields; `enabled` now strictly reports the saved preference.
+- Observe project creation at the shared call boundary, including nested init calls; retain validated App IDs before later setup can fail.
+- Hand off allowlisted NDJSON to a detached sender with bounded queues and local drain. MCP reads the switch once per call. No retries, persistence or production activation.
+
+- Remove website-to-CLI analytics attribution flags and MCP arguments. Usage events now use only the local installation ID; default collection requires a configured collector and honors saved/runtime opt-out.
 - Rename the `project show --json` token debug status to `signalingTokenDebugEnabled` and remove the misleading token capability warning from `project doctor`. Update consumers of the old `tokenEnabled` result field.
 
 ## [0.2.10] - 2026-09-20
@@ -416,26 +420,3 @@ Set `AGORA_ALLOW_UPGRADE_IN_CI=1` only when a CI job intentionally needs to muta
 [0.1.6]: https://github.com/AgoraIO/cli/compare/v0.1.5...v0.1.6
 [0.1.5]: https://github.com/AgoraIO/cli/compare/v0.1.4...v0.1.5
 [0.1.4]: https://github.com/AgoraIO/cli/releases/tag/v0.1.4
-
-### Unreleased — anonymous core-flow analytics
-
-- Finish CLI analytics delivery after the request is fully written, without
-  waiting for an HTTP response. Shell and MCP use the same five-second maximum
-  write-drain budget. Do not retry, replay, or process response-based cooldown.
-
-- Require explicit consent before recipes/init capture. Interactive terminals
-  disclose collection and ask once with a default-no answer; JSON/CI/MCP and
-  no-input runs never infer consent. Persist the choice in `telemetryConsent`;
-  legacy enabled preferences stay undecided and legacy opt-out remains off.
-  Explicit enable commands disclose and grant consent; disable commands revoke
-  it. Status adds `consent`, and `captureActive` now requires granted consent.
-
-- Add opt-out-aware recipes/init events for shell and MCP, bounded capture,
-  CLI-local installation identity and coarse Agent classification.
-- This source build has no embedded collector URL; activation needs deployment
-  configuration and updated privacy/consent controls. Stable command JSON and
-  business exit codes are unchanged. Sentry transport remains a placeholder.
-
-- Fix live MCP analytics opt-out by checking persisted preferences before each
-  operation/batch; preserve explicit process opt-out and fail closed on invalid
-  configuration. Treat EOF as failure and emit validate once per init attempt.

@@ -1,0 +1,97 @@
+package cli
+
+import (
+	"bytes"
+	"errors"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+)
+
+type failingNoticeWriter struct{}
+
+func (failingNoticeWriter) Write([]byte) (int, error) { return 0, errors.New("closed") }
+
+func TestTelemetryNoticeAndPreference(t *testing.T) {
+	for _, quiet := range []bool{false, true} {
+		a := analyticsTestApp(t, "https://collector.example/events")
+		a.rootQuiet = quiet
+		path, _ := resolveConfigFilePath(a.env)
+		before, _ := os.ReadFile(path)
+		var out bytes.Buffer
+		a.showTelemetryNotice(&out, a.analyticsEnabled())
+		marker := filepath.Join(a.env["AGORA_HOME"], "telemetry-notice-shown")
+		_, err := os.Stat(marker)
+		if quiet {
+			if out.Len() != 0 || !os.IsNotExist(err) {
+				t.Fatal("quiet notice was recorded")
+			}
+			a.rootQuiet = false
+			a.showTelemetryNotice(&out, a.analyticsEnabled())
+		}
+		if !strings.Contains(out.String(), "App IDs") || strings.Contains(out.String(), "[y/N]") {
+			t.Fatal("missing disclosure or interactive prompt")
+		}
+		length := out.Len()
+		a.showTelemetryNotice(&out, a.analyticsEnabled())
+		if out.Len() != length {
+			t.Fatal("notice repeated")
+		}
+		after, _ := os.ReadFile(path)
+		if !bytes.Equal(before, after) {
+			t.Fatal("notice overwrote config")
+		}
+		if err := a.persistTelemetryChoice(false); err != nil {
+			t.Fatal(err)
+		}
+		if a.analyticsEnabled() {
+			t.Fatal("disable lost")
+		}
+	}
+}
+
+func TestTelemetryNoticeFailureDoesNotGrantMarker(t *testing.T) {
+	a := analyticsTestApp(t, "https://collector.example/events")
+	a.showTelemetryNotice(failingNoticeWriter{}, true)
+	if _, err := os.Stat(filepath.Join(a.env["AGORA_HOME"], "telemetry-notice-shown")); !os.IsNotExist(err) {
+		t.Fatal("failed write marked shown")
+	}
+	// Printing a notice after another command disables collection never rewrites its preference.
+	if err := a.persistTelemetryChoice(false); err != nil {
+		t.Fatal(err)
+	}
+	a.showTelemetryNotice(&bytes.Buffer{}, true)
+	cfg, valid := a.currentTelemetryConfig()
+	if !valid || cfg.TelemetryEnabled {
+		t.Fatal("notice changed saved disable")
+	}
+}
+
+func TestCLITelemetryDefaultJSONAndExcludedCommands(t *testing.T) {
+	server, read := analyticsRecorder(t)
+	env := map[string]string{"AGORA_HOME": t.TempDir(), "AGORA_TELEMETRY_URL": server.URL, "DO_NOT_TRACK": "", "AGORA_SENTRY_ENABLED": "1", "AGORA_TELEMETRY_ENABLED": "1"}
+	for _, args := range [][]string{{"recipes", "--help"}, {"version", "--json"}, {"project", "create", "demo", "--dry-run", "--json"}, {"completion", "bash"}} {
+		result := runCLI(t, args, cliRunOptions{env: env})
+		if strings.Contains(result.stderr, "Agora CLI collects") {
+			t.Fatalf("excluded notice: %v", args)
+		}
+	}
+	if len(read()) != 0 {
+		t.Fatal("excluded commands captured")
+	}
+	result := runCLI(t, []string{"recipes", "list", "--type", "invalid", "--json"}, cliRunOptions{env: env})
+	if !strings.Contains(result.stderr, "Agora CLI collects") || strings.Contains(result.stdout, "Agora CLI collects") {
+		t.Fatal("wrong notice stream")
+	}
+	waitAnalyticsEvents(t, read, 1)
+	env["DO_NOT_TRACK"] = "1"
+	status := runCLI(t, []string{"telemetry", "status", "--json"}, cliRunOptions{env: env})
+	if !strings.Contains(status.stdout, `"enabled":true`) || !strings.Contains(status.stdout, `"captureActive":false`) || strings.Contains(status.stdout, `"consent"`) {
+		t.Fatalf("wrong preference status: %s", status.stdout)
+	}
+	disabled := runCLI(t, []string{"telemetry", "disable", "--json"}, cliRunOptions{env: env})
+	if strings.Contains(disabled.stderr, "Agora CLI collects") {
+		t.Fatal("disable notice")
+	}
+}

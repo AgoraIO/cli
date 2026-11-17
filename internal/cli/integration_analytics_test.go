@@ -35,7 +35,14 @@ func TestCLIAnalyticsInitStagesAndFailure(t *testing.T) {
 			if fail && result.exitCode == 0 {
 				t.Fatal("missing repository should fail")
 			}
-			events := read()
+			events := waitAnalytics(t, read, func(events []analyticsEvent) bool {
+				for _, e := range events {
+					if e.Event == "cli_init_completed" {
+						return true
+					}
+				}
+				return false
+			})
 			stages := map[string]bool{}
 			finals := 0
 			for _, e := range events {

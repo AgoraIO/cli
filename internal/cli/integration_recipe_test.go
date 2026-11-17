@@ -124,7 +124,24 @@ func TestCLIInitFromOfficialRecipeUsesCatalogEnvContract(t *testing.T) {
 				}
 
 				stageCounts := map[string]int{}
-				for _, event := range readEvents() {
+				events := waitAnalytics(t, readEvents, func(events []analyticsEvent) bool {
+					for _, e := range events {
+						if e.Event == "cli_init_completed" {
+							return true
+						}
+					}
+					return false
+				})
+				creations := 0
+				for _, e := range events {
+					if e.Event == "cli_project_create_completed" {
+						creations++
+					}
+				}
+				if (tc.reuse && creations != 0) || (!tc.reuse && creations != 1) {
+					t.Fatalf("wrong creation count %d", creations)
+				}
+				for _, event := range events {
 					if event.Event == "cli_init_stage_completed" {
 						stage, _ := event.Properties["stage"].(string)
 						stageCounts[stage]++

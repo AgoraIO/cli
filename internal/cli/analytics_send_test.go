@@ -1,13 +1,12 @@
 package cli
 
 import (
-	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -110,31 +109,49 @@ func TestAnalyticsDoesNotRetryOrFollowRedirects(t *testing.T) {
 	}
 }
 
-func TestAnalyticsUnfinishedTLSHandshakeHonorsCancellation(t *testing.T) {
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = listener.Close() }()
-	stop := make(chan struct{})
-	defer close(stop)
-	go func() {
-		conn, acceptErr := listener.Accept()
-		if acceptErr != nil {
-			return
-		}
-		defer func() { _ = conn.Close() }()
-		<-stop // Deliberately never complete the TLS handshake.
-	}()
-	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
-	defer cancel()
-	req, err := http.NewRequest(http.MethodPost, "https://"+listener.Addr().String(), strings.NewReader("{}"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	start := time.Now()
-	writeAnalyticsRequest(ctx, &http.Client{}, req)
-	if time.Since(start) > time.Second {
-		t.Fatal("failed sending ignored cancellation")
+func TestAnalyticsStalledTLSBoundsShellAndMCPCompletion(t *testing.T) {
+	for _, channel := range []string{"shell", "mcp"} {
+		t.Run(channel, func(t *testing.T) {
+			listener, err := net.Listen("tcp", "127.0.0.1:0")
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer func() { _ = listener.Close() }()
+			stop, accepted := make(chan struct{}), make(chan struct{})
+			defer close(stop)
+			go func() {
+				conn, acceptErr := listener.Accept()
+				if acceptErr != nil {
+					return
+				}
+				defer func() { _ = conn.Close() }()
+				close(accepted)
+				<-stop // Keep TLS setup stalled beyond the command's drain budget.
+			}()
+			a := analyticsTestApp(t, "https://"+listener.Addr().String())
+			start := time.Now()
+			if channel == "shell" {
+				a.root = a.buildRoot()
+				a.root.SetArgs([]string{"recipes", "list", "--type", "invalid", "--json"})
+				err = a.root.Execute()
+			} else {
+				_, err = a.callMCPTool("agora.recipes.list", map[string]any{"type": "invalid"}, nil)
+			}
+			elapsed := time.Since(start)
+			var businessErr *cliError
+			if !errors.As(err, &businessErr) || businessErr.Code != "RECIPE_TYPE_INVALID" {
+				t.Fatalf("telemetry changed business error: %v", err)
+			}
+			// Allow scheduling overhead around the one-second timer, but reject
+			// a multi-second drain such as the previous five-second budget.
+			if elapsed > 1500*time.Millisecond {
+				t.Fatalf("telemetry delayed %s completion: %s", channel, elapsed)
+			}
+			select {
+			case <-accepted:
+			case <-time.After(time.Second):
+				t.Fatal("test did not exercise a stalled TLS connection")
+			}
+		})
 	}
 }

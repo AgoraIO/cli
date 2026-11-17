@@ -384,7 +384,7 @@ func (a *App) initProject(name, targetDir string, template quickstartTemplate, e
 		return nil, err
 	}
 	op.beginStage("project_resolve")
-	resolution, err := a.resolveInitProjectForScaffold(name, createFeatures, existingProject, rtmDataCenter, newProject, promptForReuse, promptOut, promptIn, progress)
+	resolution, err := a.resolveInitProjectForScaffold(name, createFeatures, existingProject, rtmDataCenter, newProject, promptForReuse, promptOut, promptIn, progress, op)
 	if err != nil {
 		return nil, err
 	}
@@ -436,7 +436,8 @@ func (a *App) initProject(name, targetDir string, template quickstartTemplate, e
 	return result, nil
 }
 
-func (a *App) resolveInitProjectForScaffold(name string, createFeatures []string, existingProject string, rtmDataCenter string, newProject bool, promptForReuse bool, promptOut io.Writer, promptIn io.Reader, progress progressEmitter) (initProjectResolution, error) {
+func (a *App) resolveInitProjectForScaffold(name string, createFeatures []string, existingProject string, rtmDataCenter string, newProject bool, promptForReuse bool, promptOut io.Writer, promptIn io.Reader, progress progressEmitter, operations ...*analyticsOperation) (initProjectResolution, error) {
+	op := firstAnalytics(operations)
 	var target projectTarget
 	projectAction := "existing"
 	projectSelectionReason := "explicit_project"
@@ -511,7 +512,7 @@ func (a *App) resolveInitProjectForScaffold(name string, createFeatures []string
 	if needsCreate {
 		featuresToEnable := createFeatures
 		progress.emit("project:create", "Creating Agora project", map[string]any{"projectName": name, "features": featuresToEnable})
-		projectResult, err := a.projectCreate(name, "", featuresToEnable, rtmDataCenter, "")
+		projectResult, err := a.projectCreate(name, "", featuresToEnable, rtmDataCenter, "", op)
 		if err != nil {
 			return initProjectResolution{}, err
 		}
@@ -532,6 +533,7 @@ func (a *App) resolveInitProjectForScaffold(name string, createFeatures []string
 		progress.emit("project:reuse", "Reusing existing Agora project", map[string]any{"projectId": target.project.ProjectID, "projectName": target.project.Name})
 	}
 
+	op.setAppID(target.project.AppID)
 	return initProjectResolution{
 		target:                 target,
 		projectAction:          projectAction,

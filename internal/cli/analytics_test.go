@@ -40,6 +40,15 @@ func analyticsRecorder(t *testing.T) (*httptest.Server, func() []analyticsEvent)
 
 func analyticsTestApp(t *testing.T, endpoint string) *App {
 	t.Helper()
+	t.Cleanup(func() {
+		deadline := time.Now().Add(5 * time.Second)
+		for analyticsChildren.Load() != 0 && time.Now().Before(deadline) {
+			time.Sleep(time.Millisecond)
+		}
+		if analyticsChildren.Load() != 0 {
+			t.Error("sender children were not reaped")
+		}
+	})
 	a := &App{env: map[string]string{"AGORA_HOME": t.TempDir(), "AGORA_TELEMETRY_URL": endpoint}, osEnv: map[string]string{}, cfg: defaultConfig(), httpClient: &http.Client{Timeout: time.Second}}
 	if err := a.persistTelemetryChoice(true); err != nil {
 		t.Fatal(err)
@@ -56,13 +65,13 @@ func waitAnalyticsEvents(t *testing.T, read func() []analyticsEvent, count int) 
 
 func waitAnalytics(t *testing.T, read func() []analyticsEvent, ready func([]analyticsEvent) bool) []analyticsEvent {
 	t.Helper()
-	deadline := time.NewTimer(2 * time.Second)
+	deadline := time.NewTimer(5 * time.Second)
 	defer deadline.Stop()
 	tick := time.NewTicker(time.Millisecond)
 	defer tick.Stop()
 	for {
 		events := read()
-		if ready(events) {
+		if ready(events) && analyticsChildren.Load() == 0 {
 			return events
 		}
 		select {

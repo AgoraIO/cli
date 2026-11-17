@@ -1,14 +1,11 @@
 package cli
 
 import (
-	"bytes"
 	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"net/http"
-	"net/http/httptrace"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -24,8 +21,7 @@ import (
 // with -ldflags; local verification uses AGORA_TELEMETRY_URL.
 var analyticsEndpoint = ""
 
-// This bounds connection setup and writing, not waiting for a response.
-const analyticsSendTimeout = 5 * time.Second
+const analyticsSendTimeout = 3 * time.Second
 
 var analyticsIDPattern = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`)
 var analyticsSlugPattern = regexp.MustCompile(`^[a-z0-9]+(?:-[a-z0-9]+)*$`)
@@ -42,7 +38,6 @@ type analyticsEvent struct {
 }
 
 type analyticsOperation struct {
-	app          *App
 	command      string
 	id           string
 	distinctID   string
@@ -50,9 +45,9 @@ type analyticsOperation struct {
 	started      time.Time
 	stage        string
 	stageStarted time.Time
-	events       chan analyticsEvent
-	done         chan struct{}
-	cancel       context.CancelFunc
+	sender       *analyticsPipe
+	endpoint     string
+	attempted    bool
 }
 
 type analyticsContextKey struct{}
@@ -72,8 +67,7 @@ func (a *App) analyticsEnabled() bool {
 	if a.analyticsOptedOut() {
 		return false
 	}
-	cfg, valid := a.currentTelemetryConfig()
-	return valid && cfg.TelemetryEnabled && cfg.TelemetryConsent == telemetryConsentGranted
+	return a.cfg.TelemetryEnabled
 }
 
 func (a *App) analyticsOptedOut() bool {
@@ -106,11 +100,17 @@ func (a *App) currentTelemetryConfig() (appConfig, bool) {
 	if err != nil {
 		return appConfig{}, false
 	}
+	var fields map[string]json.RawMessage
+	if json.Unmarshal(data, &fields) != nil || fields == nil {
+		return appConfig{}, false
+	}
+	if enabled, ok := fields["telemetryEnabled"]; ok && string(enabled) != "true" && string(enabled) != "false" {
+		return appConfig{}, false
+	}
 	config := defaultConfig()
 	if json.Unmarshal(data, &config) != nil {
 		return appConfig{}, false
 	}
-	config.TelemetryConsent = normalizeTelemetryConsent(config.TelemetryConsent)
 	return config, true
 }
 
@@ -169,7 +169,11 @@ func (a *App) analyticsIdentity() string {
 
 func (a *App) beginAnalytics(command, channel string) *analyticsOperation {
 	endpoint := a.analyticsURL()
-	if !a.analyticsEnabled() || endpoint == "" {
+	enabled := a.analyticsEnabled()
+	if channel == "mcp" {
+		enabled = a.currentTelemetryPreference() && !a.analyticsOptedOut()
+	}
+	if !enabled || endpoint == "" {
 		return nil
 	}
 	props := map[string]any{"command": command, "os": runtime.GOOS, "arch": runtime.GOARCH, "invocation_channel": channel}
@@ -184,9 +188,7 @@ func (a *App) beginAnalytics(command, channel string) *analyticsOperation {
 	if id == "" {
 		return nil
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	op := &analyticsOperation{app: a, command: command, id: analyticsUUID(), distinctID: id, properties: props, started: time.Now(), events: make(chan analyticsEvent, 64), done: make(chan struct{}), cancel: cancel}
-	go op.deliver(ctx, endpoint)
+	op := &analyticsOperation{command: command, id: analyticsUUID(), distinctID: id, properties: props, started: time.Now(), endpoint: endpoint}
 	if command == "init" {
 		op.emit("cli_init_started", nil)
 		op.beginStage("validate")
@@ -244,10 +246,7 @@ func (op *analyticsOperation) emit(name string, fields map[string]any) {
 		props[k] = v
 	}
 	e := analyticsEvent{Event: name, EventID: analyticsUUID(), OperationID: op.id, DistinctID: op.distinctID, Timestamp: time.Now().UTC(), Properties: props}
-	select {
-	case op.events <- e:
-	default:
-	}
+	op.submit(e)
 }
 
 func (op *analyticsOperation) beginStage(stage string) {
@@ -302,98 +301,12 @@ func (op *analyticsOperation) finish(err error) {
 	if op.command == "init" && failedStage != "" {
 		fields["failed_stage"] = failedStage
 	}
-	op.emit(event, fields)
-	close(op.events)
-	timer := time.NewTimer(analyticsSendTimeout)
-	defer timer.Stop()
-	select {
-	case <-op.done:
-	case <-timer.C:
+	if op.command != "project create" {
+		op.emit(event, fields)
 	}
-	op.cancel()
-}
-
-func (op *analyticsOperation) deliver(ctx context.Context, endpoint string) {
-	defer close(op.done)
-	transport := http.DefaultTransport.(*http.Transport).Clone()
-	// Each batch gets its own HTTP/1 connection. Closing it after writing must
-	// not reset an HTTP/2 stream or replay a request on a reused connection.
-	transport.DisableKeepAlives = true
-	transport.Protocols = new(http.Protocols)
-	transport.Protocols.SetHTTP1(true)
-	client := &http.Client{Transport: transport, CheckRedirect: func(_ *http.Request, _ []*http.Request) error { return http.ErrUseLastResponse }}
-	defer transport.CloseIdleConnections()
-	for {
-		var first analyticsEvent
-		select {
-		case <-ctx.Done():
-			return
-		case e, ok := <-op.events:
-			if !ok {
-				return
-			}
-			first = e
-		}
-		events := []analyticsEvent{first}
-	drain:
-		for len(events) < 20 {
-			select {
-			case e, ok := <-op.events:
-				if !ok {
-					break drain
-				}
-				events = append(events, e)
-			default:
-				break drain
-			}
-		}
-		if !op.app.analyticsEnabled() {
-			return // Discard this operation's remaining events after opt-out.
-		}
-		body, err := json.Marshal(map[string]any{"events": events})
-		if err != nil {
-			continue
-		}
-		req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(body))
-		if err != nil {
-			continue
-		}
-		req.Header.Set("Content-Type", "application/json")
-		writeAnalyticsRequest(ctx, client, req)
+	if op.sender != nil {
+		op.sender.close()
 	}
-}
-
-// Wait only until net/http has written the complete request, or sending fails.
-// A completed write is not an acknowledgement or an ingestion confirmation.
-func writeAnalyticsRequest(ctx context.Context, client *http.Client, req *http.Request) {
-	ctx, cancel := context.WithTimeout(ctx, analyticsSendTimeout)
-	defer cancel()
-	written := make(chan struct{}, 1)
-	trace := &httptrace.ClientTrace{WroteRequest: func(info httptrace.WroteRequestInfo) {
-		if info.Err == nil {
-			select {
-			case written <- struct{}{}:
-			default:
-			}
-		}
-	}}
-	req = req.WithContext(httptrace.WithClientTrace(ctx, trace))
-	req.GetBody = nil // No redirects or automatic body replay.
-	finished := make(chan struct{})
-	go func() {
-		defer close(finished)
-		response, _ := client.Do(req)
-		if response != nil {
-			_ = response.Body.Close()
-		}
-	}()
-	select {
-	case <-written:
-	case <-finished:
-	case <-ctx.Done():
-	}
-	cancel()
-	<-finished // Join local cleanup; do not wait for the server's response.
 }
 
 func analyticsFor(cmd *cobra.Command) *analyticsOperation {
@@ -404,7 +317,10 @@ func analyticsFor(cmd *cobra.Command) *analyticsOperation {
 func (a *App) instrumentAnalytics(cmd *cobra.Command, command string) {
 	run := cmd.RunE
 	cmd.RunE = func(cmd *cobra.Command, args []string) (err error) {
-		a.maybePromptTelemetryConsent(cmd)
+		if dry, _ := cmd.Flags().GetBool("dry-run"); dry {
+			return run(cmd, args)
+		}
+		a.maybeShowTelemetryNotice(cmd)
 		op := a.beginAnalytics(command, "shell")
 		ctx := cmd.Context()
 		cmd.SetContext(context.WithValue(ctx, analyticsContextKey{}, op))
@@ -428,4 +344,29 @@ func (op *analyticsOperation) source(kind, id string) {
 	if kind == "recipe" {
 		op.properties["recipe_id"] = id
 	}
+}
+
+var analyticsAppIDPattern = regexp.MustCompile(`^[0-9a-fA-F]{32}$`)
+var analyticsPlatformPattern = regexp.MustCompile(`^[a-z0-9]{1,20}$`)
+
+func (op *analyticsOperation) setAppID(id string) {
+	if op == nil || !analyticsAppIDPattern.MatchString(id) || op.properties["app_id"] != nil {
+		return
+	}
+	op.properties["app_id"] = id
+}
+
+func (op *analyticsOperation) projectCreated(id string, started time.Time, err error) {
+	if op == nil {
+		return
+	}
+	if err == nil {
+		op.setAppID(id)
+	}
+	outcome, code := analyticsOutcome(err)
+	exit := 0
+	if err != nil {
+		exit = exitCodeForError(err)
+	}
+	op.emit("cli_project_create_completed", map[string]any{"outcome": outcome, "error_code": code, "duration_ms": time.Since(started).Milliseconds(), "exit_code": exit})
 }

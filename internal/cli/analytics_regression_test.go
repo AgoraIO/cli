@@ -60,7 +60,7 @@ func TestAnalyticsLiveMCPPreference(t *testing.T) {
 	op.finish(nil)
 }
 
-func TestAnalyticsOptOutBeforeNextBatch(t *testing.T) {
+func TestAnalyticsPolicySnapshotForRunningOperation(t *testing.T) {
 	first := make(chan struct{})
 	release := make(chan struct{})
 	var calls atomic.Int32
@@ -92,8 +92,12 @@ func TestAnalyticsOptOutBeforeNextBatch(t *testing.T) {
 	op.beginStage("clone")
 	close(release)
 	op.finish(nil)
-	if calls.Load() != 1 {
-		t.Fatalf("queued batches sent after opt-out: %d", calls.Load())
+	deadline := time.Now().Add(time.Second)
+	for calls.Load() < 4 && time.Now().Before(deadline) {
+		time.Sleep(time.Millisecond)
+	}
+	if calls.Load() != 4 {
+		t.Fatalf("running operation changed snapshot: %d", calls.Load())
 	}
 }
 
@@ -156,13 +160,13 @@ func TestAnalyticsLiveConfigFailsClosedAndHonorsEnvironment(t *testing.T) {
 			if err := writeSecureJSON(state.ConfigFilePath, cfg); err != nil {
 				t.Fatal(err)
 			}
-			if a.analyticsEnabled() != !explicit {
+			if (a.currentTelemetryPreference() && !a.analyticsOptedOut()) != !explicit {
 				t.Fatal("persisted enable or explicit opt-out ignored")
 			}
 			if err := os.WriteFile(state.ConfigFilePath, []byte("{invalid"), 0o600); err != nil {
 				t.Fatal(err)
 			}
-			if a.analyticsEnabled() {
+			if a.beginAnalytics("recipes list", "mcp") != nil {
 				t.Fatal("unreadable preference must fail closed")
 			}
 		})

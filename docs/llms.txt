@@ -141,7 +141,7 @@ Stable error codes: /cli/md/error-codes.md
 
 ## Telemetry
 
-Configured analytics reports recipes/init usage only after explicit consent and never includes Agora App Certificates or OAuth tokens. A legacy enabled preference does not count as consent. JSON/CI/MCP/no-input runs never prompt or infer consent. Obtain the user's approval before running `agora telemetry enable` or `agora config update --telemetry-enabled=true`; these commands explicitly consent. Status includes `consent` and `captureActive`; `config get` includes `telemetryConsent`. This source build has no embedded collector URL; Sentry diagnostics remains a placeholder. Disable with any of:
+Configured analytics collects recipes/init/project create usage by default, with a first-use notice on stderr and opt-out controls. No consent prompt/fields remain. Status enabled is saved preference; captureActive combines runtime policy and URL. This source build has no embedded collector URL; Sentry diagnostics remains a placeholder. Disable with any of:
 ```
 agora telemetry disable
 agora config update --telemetry-enabled=false
@@ -150,10 +150,10 @@ DO_NOT_TRACK=1 agora <command>
 
 Full telemetry contract (events, fields, sinks): /cli/md/telemetry.md
 
-CLI analytics uses a local random installation ID after explicit consent.
+CLI analytics uses a local random installation ID and validated project App IDs.
 It does not accept website identities or source sessions through shell or MCP.
 
-CLI analytics sends in the background and drains writes for at most five seconds at shell/MCP completion. It does not wait for HTTP responses or retry failed batches; a completed write does not confirm ingestion.
+CLI analytics uses one detached NDJSON sender per operation with 20-event queues, 100 ms local drain, three-second HTTP/EOF budgets and at most two children per parent. No retry or ingestion guarantee. MCP reads preferences once per tool call; active operations retain their snapshot. Creation results observe the shared createProject call. SSP never forwards event_id or custom PostHog UUID.
 
 ## Support
 

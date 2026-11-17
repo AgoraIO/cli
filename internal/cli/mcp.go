@@ -84,6 +84,7 @@ Notes for agents:
 			if transport != "stdio" {
 				return fmt.Errorf("unsupported MCP transport %q; use stdio", transport)
 			}
+			a.maybeShowTelemetryNotice(cmd)
 			return a.serveMCP(cmd.InOrStdin(), cmd.OutOrStdout())
 		},
 	}
@@ -181,7 +182,7 @@ func mcpTools() []map[string]any {
 		mcpTool("agora.config.get", "Read persisted CLI defaults", nil),
 
 		// Telemetry
-		mcpTool("agora.telemetry.status", "Show telemetry preference, explicit consent, capture status and DO_NOT_TRACK detection", nil),
+		mcpTool("agora.telemetry.status", "Show saved telemetry preference, effective capture status and DO_NOT_TRACK detection", nil),
 
 		// Upgrade guidance
 		mcpTool("agora.upgrade.check", "Resolve the latest release and report what would happen", nil),
@@ -334,6 +335,8 @@ func (a *App) callMCPTool(name string, args map[string]any, progress progressEmi
 	switch name {
 	case "agora.init":
 		command = "init"
+	case "agora.project.create":
+		command = "project create"
 	case "agora.recipes.list":
 		command = "recipes list"
 	case "agora.recipes.show":
@@ -380,11 +383,10 @@ func (a *App) dispatchMCPTool(name string, args map[string]any, progress progres
 		return map[string]any{
 			"action":              "status",
 			"transportConfigured": a.analyticsURL() != "",
-			"captureActive":       a.analyticsEnabled() && a.analyticsURL() != "",
-			"consent":             a.currentTelemetryConsent(),
+			"captureActive":       a.currentTelemetryPreference() && !a.analyticsOptedOut() && a.analyticsURL() != "",
 			"configPath":          path,
 			"doNotTrack":          strings.TrimSpace(a.env["DO_NOT_TRACK"]) != "",
-			"enabled":             a.currentTelemetryPreference() && strings.TrimSpace(a.env["DO_NOT_TRACK"]) == "",
+			"enabled":             a.currentTelemetryPreference(),
 		}, nil
 
 	case "agora.upgrade.check":
@@ -430,6 +432,7 @@ func (a *App) dispatchMCPTool(name string, args map[string]any, progress progres
 			features,
 			rtmDataCenter,
 			stringArg(args, "idempotencyKey"),
+			op,
 		)
 		if err == nil {
 			progress.emit("project:created", "Agora project ready", map[string]any{"projectId": result["projectId"], "projectName": result["projectName"]})
