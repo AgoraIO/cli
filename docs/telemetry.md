@@ -117,8 +117,14 @@ A successful write or HTTP response is not proof of PostHog query availability.
 
 CLI → SSP anonymous collector → PostHog. SSP keeps its 20-event/64 KiB batch
 limits, 4 KiB event limit, strict schema, rate limits, environment label and
-per-process deduplication. No auth or client IP is forwarded. Person profiles
-and GeoIP are disabled. Cross-replica/restart duplicates remain possible.
+per-process deduplication. No auth or client IP is forwarded. SSP explicitly
+sets `$process_person_profile: true` to allow PostHog to create/update a Person
+for the existing random installation ID. This Person groups installation
+history and supports cohorts; it is not a verified natural person. No identify
+or alias request, user attributes, name, email or website identity is added.
+Person processing/storage and applicable plan usage may increase. GeoIP remains
+disabled. Cross-replica/restart duplicates remain possible. Actual Person
+creation must be verified on the deployed PostHog instance.
 PostHog is sent no uuid or event_id property; it must assign its own UUID.
 Before activation, test the actual deployment accepts omitted uuid and query
 results have generated UUIDs. Local mock success cannot establish that.

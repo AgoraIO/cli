@@ -147,7 +147,7 @@ SSP 只修改埋点接收协议、对应校验与转发：增加项目创建事�
 
 必须同步修改 collector 的事件与命令匹配规则：init 允许现有 init 事件及嵌套的 cli_project_create_completed；project create 允许项目创建事件；recipes 保持各自事件匹配。当前代码对 init 只接受 cli_init_ 前缀，若只更新 schema，新增创建事件会被拒绝。项目创建事件的 outcome、duration_ms、exit_code 是 createProject 调用自己的结果，不能套用外层 init 的最终退出码。
 
-保留现有大小限制、限流、内部事件去重和环境标记；保留关闭 person profile 处理及 GeoIP 的设置。采集地址为空、SSP 未配置转发 Token、远端返回错误都不构成 CLI 业务失败；status 的本地配置状态不证明远端可用。
+保留现有大小限制、限流、内部事件去重和环境标记；2026-11-18 按用户要求开启 PostHog Person 处理（`$process_person_profile: true`），按已有随机安装 distinct_id 创建或更新安装画像；GeoIP 继续关闭。安装画像不代表已验证的自然人，不新增 identify/alias 调用、用户属性、姓名、邮箱或网站身份。Person 处理及存储可能增加，对应套餐用量及实际画像创建需在部署环境验证。采集地址为空、SSP 未配置转发 Token、远端返回错误都不构成 CLI 业务失败；status 的本地配置状态不证明远端可用。
 
 不新增业务接口，不修改业务接口返回，不增加身份关联、协议版本或开发中间版本的兼容机制。
 

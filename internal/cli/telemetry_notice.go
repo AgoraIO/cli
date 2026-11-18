@@ -11,7 +11,8 @@ import (
 const telemetryDisclosure = `Agora CLI collects usage statistics by default when a collector is configured:
 recipes/init/project create results, stages, duration, version, OS/architecture,
 public recipe/template IDs, Agora App IDs and coarse AI-tool categories.
-Events use a random installation ID; website identities are not linked.
+Events use a random installation ID with an installation profile in PostHog;
+website identities are not linked.
 No code, conversation content, secrets, project names or local paths are collected.
 Details: https://agoraio.github.io/cli/telemetry.html
 Disable: agora telemetry disable, DO_NOT_TRACK=1 or AGORA_TELEMETRY_ENABLED=0`

@@ -40,3 +40,9 @@
 - 未配置生产采集地址或 Token；源码内嵌地址仍为空。未部署、发布、修改远端或验证真实入库。
 
 缺失事件不能证明业务失败，创建调用失败不能证明服务端没有创建。统计仅代表观测到的调用成功次数或按合法 App ID 去重的观测项目数，不是完整项目台账。
+
+## 2026-11-18 范围调整
+
+用户要求开启安装画像。当前 collector 改为 `$process_person_profile: true`，按已有安装 ID 允许创建/更新 PostHog Person；GeoIP 继续关闭。上文关闭 Person 的描述及对应测试记录是 2026-11-17 的历史状态。当前测试与告知说明已同步；真实 PostHog Person 创建、实际套餐用量仍需部署环境验证。
+
+本次调整验证：collector 7 项测试通过；CLI 告知定向测试通过；BFF typecheck 和修改代码 Biome 通过；本地 CLI→SSP→模拟 PostHog 收到 10 条事件，断言 Person 处理为 true 且 GeoIP 仍关闭。模拟接收器未验证真实 Person 创建。
