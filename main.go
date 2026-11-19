@@ -8,6 +8,9 @@ import (
 )
 
 func main() {
+	if cli.RunAnalyticsSender(os.Args[1:], os.Stdin) {
+		return
+	}
 	app, err := cli.NewApp()
 	if err != nil {
 		if cli.JSONRequested(os.Args[1:]) {

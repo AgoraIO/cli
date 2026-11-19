@@ -4,80 +4,87 @@ title: Telemetry
 
 # Telemetry
 
-Agora CLI telemetry is limited to operational diagnostics such as command
-failures and local log metadata. It **never** includes OAuth tokens, app
-certificates, dotenv secrets, or project env values. Field redaction is
-enforced by `redactTelemetryFields` in
-[`internal/cli/telemetry.go`](https://github.com/AgoraIO/cli/blob/main/internal/cli/telemetry.go),
-which matches the `token | secret | password | api[_-]?key | authorization`
-key pattern (case-insensitive) and replaces the value with the literal
-`[REDACTED]`.
+Agora CLI can report Recipes usage, init stages/results and project creation
+results to the CLI BFF, which forwards allowlisted events to PostHog. Capture is
+enabled by default when a valid collector URL is configured, unless the user
+opts out. The embedded collector URL is currently empty; deployment and release
+configuration are required before production capture is active.
 
-> **Status (current release):** the on/off contract below is fully
-> wired. The transport (Sentry SDK) is not yet linked into the binary,
-> so all telemetry calls are no-ops at runtime. The next release will
-> wire Sentry; the surface and field schema will not change.
+Events contain a random local installation ID, a per-operation ID, CLI version,
+OS/architecture, coarse AI-tool categories, public recipe/template IDs, timings
+and structured results. Project/init events can include validated Agora App IDs.
+An installation profile can be created in PostHog; website identities are not
+linked. OAuth tokens, App Certificates, project names, source code, conversation
+content, local paths and raw errors are not included.
+
+Recipe init attempts are labeled as Recipe usage even if the catalog lookup
+fails. Only attempts with a confirmed public catalog entry include a Recipe ID.
+When reporting per-Recipe results, show unconfirmed attempts separately.
+An existing target directory is reported as a local validation failure.
+
+## Delivery
+
+Each instrumented shell command collects its events in memory and flushes them
+when the operation finishes. MCP flushes after each instrumented tool call,
+independently of other calls and without waiting for the MCP server to exit.
+
+The CLI passes one JSON batch through stdin to a detached sender subprocess.
+The sender makes one HTTP request with a ten-second timeout. The business
+command waits only for a local handoff of at most 100 ms, not for the network
+response. Telemetry failures do not change business output or exit codes.
+
+The complete request is limited to 64 KiB. There is no separate event-count or
+per-event size cap. If an operation exceeds the request limit, its entire batch
+is dropped. There is no disk queue or retry. A crash or forced termination before
+handoff can lose all events for that operation; long-running operations are not
+visible in telemetry until they finish. Successful delivery is best effort and
+does not prove that PostHog has made the events available for queries.
+
+The sender honors `HTTP_PROXY`, `HTTPS_PROXY`, `NO_PROXY` and their lowercase
+forms, as the business HTTP client does. It also preserves `SSL_CERT_FILE` and
+`SSL_CERT_DIR` for custom certificate authorities. Other parent environment
+variables are not inherited. Business authorization headers are not attached to
+telemetry requests, and redirects are not followed.
 
 ## Inspect or change the setting
 
-Telemetry is enabled by default in the local config.
-
 ```bash
-agora telemetry status
-agora telemetry disable
-agora telemetry enable
-```
-
-For scripts, prefer JSON:
-
-```bash
+agora telemetry status --json
 agora telemetry disable --json
+agora telemetry enable --json
 ```
 
-## Opt-out signals
+`enabled` reports the saved preference. `transportConfigured` reports whether a
+valid collector URL is configured. `captureActive` combines the preference,
+runtime opt-out and transport configuration; it does not confirm delivery.
+A first-use disclosure is printed to stderr unless quiet mode suppresses it.
 
-The CLI honors **all** of the following — any one of them disables
-telemetry for the current process:
+Any of these signals disables capture:
 
-| Signal | Notes |
-|--------|-------|
-| `DO_NOT_TRACK=<any non-empty>` | Standard cross-tool convention. Also suppresses local file logs for that process. |
-| `AGORA_SENTRY_ENABLED=0` | Hard env override. Wins over the config file. |
-| `agora telemetry disable` | Persists `telemetryEnabled: false` to the config. |
-| `agora config update --telemetry-enabled=false` | Equivalent to `agora telemetry disable`. |
+| Signal | Effect |
+|--------|--------|
+| `DO_NOT_TRACK=<any non-empty>` | Runtime opt-out. Also suppresses local file logs. |
+| `AGORA_TELEMETRY_ENABLED=0` | Runtime opt-out for usage capture. |
+| `AGORA_SENTRY_ENABLED=0` | Runtime opt-out honored by usage capture. |
+| `agora telemetry disable` | Saves `telemetryEnabled: false`. |
+| `agora config update --telemetry-enabled=false` | Saves the same preference. |
 
-```bash
-DO_NOT_TRACK=1 agora project list --json
-AGORA_SENTRY_ENABLED=0 agora init my-app --template nextjs --json
-```
+Shell commands use their startup preference. A running MCP server rereads the
+saved preference when each tool call starts. A preference change does not alter
+an operation that has already started.
 
-## Field schema
+## Collector configuration
 
-The wire-up plan documents the **exact** field set the Sentry-backed
-sink will send. Until then the table below is forward-looking; treat it
-as the specification, not the production behavior:
+`AGORA_TELEMETRY_URL` overrides the release-embedded collector URL. Only HTTPS
+URLs, or HTTP URLs on loopback for local verification, are accepted. URLs with
+credentials, query parameters or fragments are rejected.
 
-| Field           | Type   | Example                            | Notes |
-|-----------------|--------|------------------------------------|-------|
-| `command`       | string | `"project create"`                 | Stable label from `agora introspect --json`. |
-| `exitCode`      | int    | `1`                                | Process exit code at failure. |
-| `commitSha`     | string | `"abc1234"`                        | Build-time injected. |
-| `os`            | string | `"darwin/arm64"`                   | Runtime, not host-specific. |
-| `installMethod` | string | `"installer"` / `"npm"` / `"brew"` | From the install provenance receipt. |
-| `agentLabel`    | string | `"cursor"`                         | From `agent_infer.go`. |
+The existing operational-diagnostics sink is separate from these usage events;
+its Sentry transport remains a placeholder. Usage capture does not require an
+OAuth login or a client-side PostHog API key.
 
-Explicitly **never** sent:
-
-- OAuth tokens or session refresh tokens.
-- Agora App Certificate values.
-- Project names or App IDs (use opaque hashes if needed in the future).
-- Local file paths beyond the rotating log file path basename.
-
-## Where the config lives
+The configuration location is available with:
 
 ```bash
 agora config path
 ```
-
-The same directory holds the rotating log file (`agora-cli.log`) and
-the project list cache used by shell completion.

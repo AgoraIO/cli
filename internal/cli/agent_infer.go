@@ -12,14 +12,16 @@ func agentLabelFromOSEnv(env map[string]string) string {
 	switch {
 	case nonEmptyEnv(env, "CURSOR_AGENT"):
 		return "cursor"
-	case nonEmptyEnv(env, "CLAUDE_CODE"):
+	case nonEmptyEnv(env, "CLAUDE_CODE") || nonEmptyEnv(env, "CLAUDECODE"):
 		return "claude-code"
 	case hasEnvPrefix(env, "CLINE_"):
 		return "cline"
 	case hasEnvPrefix(env, "WINDSURF_"):
 		return "windsurf"
-	case hasEnvPrefix(env, "OPENAI_CODEX_"):
+	case nonEmptyEnv(env, "CODEX_THREAD_ID") || hasEnvPrefix(env, "OPENAI_CODEX_"):
 		return "codex"
+	case nonEmptyEnv(env, "KIRO_SESSION_ID"):
+		return "kiro"
 	case hasEnvPrefix(env, "AIDER_"):
 		return "aider"
 	default:

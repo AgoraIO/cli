@@ -175,7 +175,7 @@ func (a *App) buildTelemetryCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "telemetry",
 		Short: "Inspect or update telemetry preferences",
-		Long:  "Telemetry is limited to operational diagnostics and never includes tokens or app certificates. DO_NOT_TRACK=1 disables telemetry at runtime.",
+		Long:  "Telemetry reports recipes/init/project create usage by default when a collector is configured. A first-use notice is printed to stderr. It never includes tokens or app certificates. DO_NOT_TRACK=1 disables telemetry at runtime.",
 		Example: example(`
   agora telemetry status
   agora telemetry disable
@@ -199,6 +199,7 @@ func (a *App) buildTelemetryCommand() *cobra.Command {
 	cmd.AddCommand(&cobra.Command{
 		Use:   "enable",
 		Short: "Enable telemetry",
+		Long:  telemetryDisclosure + "\n\nEnable the saved preference. Runtime opt-out still takes precedence.",
 		Example: example(`
   agora telemetry enable
   agora telemetry enable --json
@@ -228,30 +229,33 @@ func (a *App) renderTelemetry(cmd *cobra.Command) error {
 		return err
 	}
 	return renderResult(cmd, "telemetry", map[string]any{
-		"action":     "status",
-		"configPath": path,
-		"doNotTrack": strings.TrimSpace(a.env["DO_NOT_TRACK"]) != "",
-		"enabled":    a.cfg.TelemetryEnabled && strings.TrimSpace(a.env["DO_NOT_TRACK"]) == "",
+		"action":              "status",
+		"transportConfigured": a.analyticsURL() != "",
+		"captureActive":       a.analyticsEnabled() && a.analyticsURL() != "",
+		"configPath":          path,
+		"doNotTrack":          strings.TrimSpace(a.env["DO_NOT_TRACK"]) != "",
+		"enabled":             a.cfg.TelemetryEnabled,
 	})
 }
 
 func (a *App) setTelemetry(cmd *cobra.Command, enabled bool) error {
-	next := a.cfg
-	next.TelemetryEnabled = enabled
 	path, err := resolveConfigFilePath(a.env)
 	if err != nil {
 		return err
 	}
-	if err := writeSecureJSON(path, next); err != nil {
+	if err := a.persistTelemetryChoice(enabled); err != nil {
 		return err
 	}
-	a.cfg = next
-	a.applyConfigToEnv()
+	if enabled {
+		a.maybeShowTelemetryNotice(cmd)
+	}
 	return renderResult(cmd, "telemetry", map[string]any{
-		"action":     map[bool]string{true: "enable", false: "disable"}[enabled],
-		"configPath": path,
-		"enabled":    enabled && strings.TrimSpace(a.env["DO_NOT_TRACK"]) == "",
-		"doNotTrack": strings.TrimSpace(a.env["DO_NOT_TRACK"]) != "",
+		"action":              map[bool]string{true: "enable", false: "disable"}[enabled],
+		"transportConfigured": a.analyticsURL() != "",
+		"captureActive":       a.analyticsEnabled() && a.analyticsURL() != "",
+		"configPath":          path,
+		"enabled":             enabled,
+		"doNotTrack":          strings.TrimSpace(a.env["DO_NOT_TRACK"]) != "",
 	})
 }
 
@@ -540,6 +544,9 @@ func (a *App) buildConfigCommand() *cobra.Command {
 			}
 			a.cfg = next
 			a.applyConfigToEnv()
+			if cmd.Flags().Changed("telemetry-enabled") && telemetryEnabled {
+				a.maybeShowTelemetryNotice(cmd)
+			}
 			return renderResult(cmd, "config update", next)
 		},
 	}
@@ -633,7 +640,7 @@ func (a *App) buildProjectCreate() *cobra.Command {
 				}
 				return renderResult(cmd, "project create", result)
 			}
-			data, err := a.projectCreate(args[0], template, features, normalizedRTMDataCenter, idempotencyKey)
+			data, err := a.projectCreate(args[0], template, features, normalizedRTMDataCenter, idempotencyKey, analyticsFor(cmd))
 			if err != nil {
 				return err
 			}
@@ -646,6 +653,7 @@ func (a *App) buildProjectCreate() *cobra.Command {
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "return the planned project create result without creating remote resources")
 	cmd.Flags().StringVar(&idempotencyKey, "idempotency-key", "", "caller-provided key for safe retries when supported by the API")
 	_ = cmd.RegisterFlagCompletionFunc("template", completeProjectPresetIDs)
+	a.instrumentAnalytics(cmd, "project create")
 	return cmd
 }
 

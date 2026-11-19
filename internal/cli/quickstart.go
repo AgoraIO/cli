@@ -541,7 +541,8 @@ Python and Go quickstarts receive backend AGORA_APP_ID and AGORA_APP_CERTIFICATE
 	return cmd
 }
 
-func (a *App) quickstartCreate(template quickstartTemplate, targetDir, explicitProject string, templateOnly, promptForProject bool, promptOut io.Writer, promptIn io.Reader, ref string, progress progressEmitter) (map[string]any, error) {
+func (a *App) quickstartCreate(template quickstartTemplate, targetDir, explicitProject string, templateOnly, promptForProject bool, promptOut io.Writer, promptIn io.Reader, ref string, progress progressEmitter, operations ...*analyticsOperation) (map[string]any, error) {
+	op := firstAnalytics(operations)
 	if !template.Available || strings.TrimSpace(template.RepoURL) == "" {
 		return nil, &cliError{Message: fmt.Sprintf("Quickstart template %q is not available yet.", template.ID), Code: "QUICKSTART_TEMPLATE_UNAVAILABLE"}
 	}
@@ -591,6 +592,7 @@ func (a *App) quickstartCreate(template quickstartTemplate, targetDir, explicitP
 	if overrideKey != "" {
 		progress.emit("clone:override", fmt.Sprintf("Using repo override from %s", overrideKey), map[string]any{"repoUrl": repoURL, "envVar": overrideKey})
 	}
+	op.beginStage("clone")
 	if err := cloneScaffoldRepo(repoURL, absTarget, ref, progress, &template); err != nil {
 		return nil, err
 	}
@@ -603,6 +605,7 @@ func (a *App) quickstartCreate(template quickstartTemplate, targetDir, explicitP
 		if !ok {
 			return nil, &cliError{Message: fmt.Sprintf("Quickstart template %q does not define an env target yet.", template.ID), Code: "QUICKSTART_TEMPLATE_ENV_UNSUPPORTED"}
 		}
+		op.beginStage("env_write")
 		writtenPath, _, err := seedQuickstartEnv(absTarget, template, layout, boundProject.project)
 		if err != nil {
 			if cleanupErr := os.RemoveAll(absTarget); cleanupErr != nil {
@@ -610,6 +613,7 @@ func (a *App) quickstartCreate(template quickstartTemplate, targetDir, explicitP
 			}
 			return nil, fmt.Errorf("failed to configure quickstart env after clone: %v; removed %s", err, absTarget)
 		}
+		op.beginStage("binding_write")
 		if err := writeLocalProjectBinding(absTarget, localProjectBinding{
 			ProjectID:   boundProject.project.ProjectID,
 			ProjectName: boundProject.project.Name,

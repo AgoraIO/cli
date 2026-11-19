@@ -58,6 +58,9 @@ var cliRunMu sync.Mutex
 // the integration suite deterministic across GitHub's Linux/macOS/Windows
 // runners while still exercising the same App.Execute path.
 func TestMain(m *testing.M) {
+	if RunAnalyticsSender(os.Args[1:], os.Stdin) {
+		os.Exit(0)
+	}
 	if os.Getenv("GO_WANT_CLI_HELPER_PROCESS") == "1" {
 		cliArgs := helperCLIArgs()
 		if len(cliArgs) == 0 {

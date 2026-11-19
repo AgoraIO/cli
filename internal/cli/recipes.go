@@ -99,6 +99,9 @@ func (a *App) buildRecipesListCommand() *cobra.Command {
 `),
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			result, err := a.listRecipes(recipeType)
+			if op := analyticsFor(cmd); op != nil && err == nil {
+				op.properties["result_count"] = len(result.Items)
+			}
 			if err != nil {
 				return err
 			}
@@ -110,12 +113,13 @@ func (a *App) buildRecipesListCommand() *cobra.Command {
 			})
 		},
 	}
+	a.instrumentAnalytics(cmd, "recipes list")
 	cmd.Flags().StringVar(&recipeType, "type", "all", "recipe type: all, ai, or rtc")
 	return cmd
 }
 
 func (a *App) buildRecipesShowCommand() *cobra.Command {
-	return &cobra.Command{
+	cmd := &cobra.Command{
 		Use:   "show <slug>",
 		Short: "Show one Agora recipe",
 		Args:  cobra.ExactArgs(1),
@@ -125,6 +129,9 @@ func (a *App) buildRecipesShowCommand() *cobra.Command {
 `),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			recipe, err := a.getRecipe(args[0])
+			if err == nil {
+				analyticsFor(cmd).source("recipe", recipe.Slug)
+			}
 			if err != nil {
 				return err
 			}
@@ -134,6 +141,8 @@ func (a *App) buildRecipesShowCommand() *cobra.Command {
 			})
 		},
 	}
+	a.instrumentAnalytics(cmd, "recipes show")
+	return cmd
 }
 
 func normalizeRecipeType(value string) (string, error) {
@@ -210,10 +219,13 @@ func (a *App) getRecipe(slug string) (recipeDetail, error) {
 	return response.Recipe, nil
 }
 
-func (a *App) initRecipeProject(name, targetDir string, recipe recipeDetail, existingProject string, features []string, rtmDataCenter string, newProject bool, promptForReuse bool, promptOut io.Writer, promptIn io.Reader, progress progressEmitter) (map[string]any, error) {
+func (a *App) initRecipeProject(name, targetDir string, recipe recipeDetail, existingProject string, features []string, rtmDataCenter string, newProject bool, promptForReuse bool, promptOut io.Writer, promptIn io.Reader, progress progressEmitter, operations ...*analyticsOperation) (map[string]any, error) {
+	op := firstAnalytics(operations)
+	op.source("recipe", recipe.Slug)
 	if err := validateRecipeCLIConfig(recipe.CLI); err != nil {
 		return nil, err
 	}
+	op.beginStage("local_validate")
 	absTarget, err := resolveScaffoldTarget(targetDir)
 	if err != nil {
 		return nil, err
@@ -224,10 +236,18 @@ func (a *App) initRecipeProject(name, targetDir string, recipe recipeDetail, exi
 	if err != nil {
 		return nil, err
 	}
-	resolution, err := a.resolveInitProjectForScaffold(name, createFeatures, existingProject, rtmDataCenter, newProject, promptForReuse, promptOut, promptIn, progress)
+	op.beginStage("project_resolve")
+	resolution, err := a.resolveInitProjectForScaffold(name, createFeatures, existingProject, rtmDataCenter, newProject, promptForReuse, promptOut, promptIn, progress, op)
 	if err != nil {
 		return nil, err
 	}
+	if op != nil {
+		op.properties["project_action"] = "reused"
+		if resolution.projectAction == "created" {
+			op.properties["project_action"] = "created"
+		}
+	}
+	op.beginStage("clone")
 	if err := cloneScaffoldRepo(recipe.MainRepoURL, absTarget, "", progress); err != nil {
 		return nil, err
 	}
@@ -241,6 +261,7 @@ func (a *App) initRecipeProject(name, targetDir string, recipe recipeDetail, exi
 		Recipe:      recipe.Slug,
 	}
 	envPath := filepath.ToSlash(filepath.Clean(recipe.CLI.Env.TargetPath))
+	op.beginStage("env_write")
 	writtenEnv, err := writeCredentialEnv(credentialEnvTarget{
 		Path:              filepath.Join(absTarget, filepath.FromSlash(recipe.CLI.Env.TargetPath)),
 		ExamplePath:       filepath.Join(absTarget, filepath.FromSlash(recipe.CLI.Env.ExamplePath)),
@@ -259,10 +280,12 @@ func (a *App) initRecipeProject(name, targetDir string, recipe recipeDetail, exi
 	if recipe.CLI.RunCommand != "" {
 		nextSteps = append(nextSteps, recipe.CLI.RunCommand)
 	}
+	op.beginStage("binding_write")
 	if err := writeLocalProjectBinding(absTarget, binding); err != nil {
 		return nil, cleanupFailedScaffold(absTarget, "write .agora project metadata", err)
 	}
 	sort.Strings(written)
+	op.beginStage("context_write")
 	if err := a.persistInitProjectContext(target); err != nil {
 		return nil, err
 	}

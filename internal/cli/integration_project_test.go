@@ -14,6 +14,8 @@ import (
 )
 
 func TestCLIProjectEnvAndDoctor(t *testing.T) {
+	// Isolate upward project binding discovery from the host checkout/home.
+	t.Chdir(t.TempDir())
 	configHome := t.TempDir()
 	projectDir := t.TempDir()
 	api := newFakeCLIBFF()
@@ -341,6 +343,8 @@ func TestCLIProjectDoctorDeepDetectsWorkspaceDrift(t *testing.T) {
 }
 
 func TestCLIProjectEnvFormatsAndWriteRules(t *testing.T) {
+	// Isolate upward project binding discovery from the host checkout/home.
+	t.Chdir(t.TempDir())
 	configHome := t.TempDir()
 	projectDir := t.TempDir()
 	api := newFakeCLIBFF()
@@ -556,6 +560,8 @@ func TestCLIProjectEnvWriteRecordsProjectTypeInBinding(t *testing.T) {
 }
 
 func TestCLIFeatureEnableAndDoctorAuthError(t *testing.T) {
+	// Isolate upward project binding discovery from the host checkout/home.
+	t.Chdir(t.TempDir())
 	configHome := t.TempDir()
 	api := newFakeCLIBFF()
 	defer api.server.Close()
