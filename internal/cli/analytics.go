@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"maps"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -43,6 +44,7 @@ type analyticsOperation struct {
 	distinctID   string
 	properties   map[string]any
 	started      time.Time
+	initStarted  *analyticsEvent
 	stage        string
 	stageStarted time.Time
 	events       []json.RawMessage
@@ -190,7 +192,8 @@ func (a *App) beginAnalytics(command, channel string) *analyticsOperation {
 	}
 	op := &analyticsOperation{command: command, id: analyticsUUID(), distinctID: id, properties: props, started: time.Now(), endpoint: endpoint}
 	if command == "init" {
-		op.emit("cli_init_started", nil)
+		event := op.newEvent("cli_init_started", nil)
+		op.initStarted = &event
 		op.beginStage("validate")
 	}
 	return op
@@ -238,15 +241,13 @@ func (op *analyticsOperation) emit(name string, fields map[string]any) {
 	if op == nil {
 		return
 	}
-	props := make(map[string]any, len(op.properties)+len(fields))
-	for k, v := range op.properties {
-		props[k] = v
-	}
-	for k, v := range fields {
-		props[k] = v
-	}
-	e := analyticsEvent{Event: name, EventID: analyticsUUID(), OperationID: op.id, DistinctID: op.distinctID, Timestamp: time.Now().UTC(), Properties: props}
-	op.submit(e)
+	op.submit(op.newEvent(name, fields))
+}
+
+func (op *analyticsOperation) newEvent(name string, fields map[string]any) analyticsEvent {
+	props := maps.Clone(op.properties)
+	maps.Copy(props, fields)
+	return analyticsEvent{Event: name, EventID: analyticsUUID(), OperationID: op.id, DistinctID: op.distinctID, Timestamp: time.Now().UTC(), Properties: props}
 }
 
 func (op *analyticsOperation) beginStage(stage string) {
@@ -320,6 +321,11 @@ func (a *App) instrumentAnalytics(cmd *cobra.Command, command string) {
 		}
 		a.maybeShowTelemetryNotice(cmd)
 		op := a.beginAnalytics(command, "shell")
+		if command == "init" {
+			recipe, _ := cmd.Flags().GetString("recipe")
+			template, _ := cmd.Flags().GetString("template")
+			op.setInitSourceType(recipe, template)
+		}
 		ctx := cmd.Context()
 		cmd.SetContext(context.WithValue(ctx, analyticsContextKey{}, op))
 		defer func() { op.finish(err); cmd.SetContext(ctx) }()
@@ -332,6 +338,19 @@ func firstAnalytics(ops []*analyticsOperation) *analyticsOperation {
 		return ops[0]
 	}
 	return nil
+}
+
+func (op *analyticsOperation) setInitSourceType(recipe, template string) {
+	if op == nil {
+		return
+	}
+	recipe, template = strings.TrimSpace(recipe), strings.TrimSpace(template)
+	switch {
+	case recipe != "" && template == "":
+		op.properties["source_type"] = "recipe"
+	case template != "" && recipe == "":
+		op.properties["source_type"] = "quickstart"
+	}
 }
 
 func (op *analyticsOperation) source(kind, id string) {

@@ -371,6 +371,7 @@ func (a *App) initProject(name, targetDir string, template quickstartTemplate, e
 	if !template.Available || !template.SupportsInit {
 		return nil, &cliError{Message: fmt.Sprintf("Quickstart template %q is not supported by `agora init`. Use `agora quickstart create` instead.", template.ID), Code: "QUICKSTART_TEMPLATE_UNAVAILABLE"}
 	}
+	op.beginStage("local_validate")
 	if _, err := resolveScaffoldTarget(targetDir); err != nil {
 		return nil, err
 	}

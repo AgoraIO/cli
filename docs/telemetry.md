@@ -17,6 +17,11 @@ An installation profile can be created in PostHog; website identities are not
 linked. OAuth tokens, App Certificates, project names, source code, conversation
 content, local paths and raw errors are not included.
 
+Recipe init attempts are labeled as Recipe usage even if the catalog lookup
+fails. Only attempts with a confirmed public catalog entry include a Recipe ID.
+When reporting per-Recipe results, show unconfirmed attempts separately.
+An existing target directory is reported as a local validation failure.
+
 ## Delivery
 
 Each instrumented shell command collects its events in memory and flushes them

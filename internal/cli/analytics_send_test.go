@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"runtime"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -16,12 +17,16 @@ import (
 func TestAnalyticsSenderPreservesNetworkSettingsOnly(t *testing.T) {
 	t.Setenv("HTTPS_PROXY", "http://proxy.example:8080")
 	t.Setenv("NO_PROXY", "localhost,.internal")
-	t.Setenv("https_proxy", "http://lowercase.example:8080")
+	wantSettings := []string{"HTTPS_PROXY=http://proxy.example:8080", "NO_PROXY=localhost,.internal", "SSL_CERT_FILE=/network/ca.pem"}
+	if runtime.GOOS != "windows" {
+		t.Setenv("https_proxy", "http://lowercase.example:8080")
+		wantSettings = append(wantSettings, "https_proxy=http://lowercase.example:8080")
+	}
 	t.Setenv("SSL_CERT_FILE", "/network/ca.pem")
 	t.Setenv("AGORA_ACCESS_TOKEN", "private-business-token")
 	t.Setenv("UNRELATED_SECRET", "private")
 	env := strings.Join(analyticsSenderEnv(), "\n")
-	for _, want := range []string{"HTTPS_PROXY=http://proxy.example:8080", "NO_PROXY=localhost,.internal", "https_proxy=http://lowercase.example:8080", "SSL_CERT_FILE=/network/ca.pem"} {
+	for _, want := range wantSettings {
 		if !strings.Contains(env, want) {
 			t.Fatalf("missing network setting: %s", want)
 		}
@@ -38,8 +43,8 @@ func TestAnalyticsDetachedSenderUsesHTTPSProxy(t *testing.T) {
 		w.WriteHeader(http.StatusBadGateway)
 	}))
 	defer proxy.Close()
-	t.Setenv("HTTPS_PROXY", proxy.URL)
 	t.Setenv("https_proxy", "")
+	t.Setenv("HTTPS_PROXY", proxy.URL)
 	t.Setenv("NO_PROXY", "")
 	t.Setenv("no_proxy", "")
 	a := analyticsTestApp(t, "https://collector.example.invalid/api/telemetry/v1/events")

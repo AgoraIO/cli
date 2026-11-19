@@ -48,9 +48,27 @@ func (op *analyticsOperation) flush() {
 	if len(op.events) == 0 {
 		return
 	}
+	events := op.events
+	if start := op.initStarted; start != nil {
+		// The start keeps its original timestamp. Only source attribution can
+		// be added later, after resolving the public catalog entry.
+		for _, key := range []string{"source_type", "source_id", "recipe_id"} {
+			if value, ok := op.properties[key]; ok {
+				start.Properties[key] = value
+			}
+		}
+		if !validAnalyticsEvent(*start) {
+			return
+		}
+		first, err := json.Marshal(start)
+		if err != nil {
+			return
+		}
+		events = append([]json.RawMessage{first}, events...)
+	}
 	body, err := json.Marshal(struct {
 		Events []json.RawMessage `json:"events"`
-	}{Events: op.events})
+	}{Events: events})
 	op.events = nil
 	if err != nil || len(body) > analyticsRequestLimit {
 		return
@@ -227,7 +245,7 @@ func validAnalyticsEvent(e analyticsEvent) bool {
 				return false
 			}
 		case "stage", "failed_stage":
-			if !oneOf(str, "validate", "source_resolve", "project_resolve", "clone", "env_write", "binding_write", "context_write", "agent_rules_write") {
+			if !oneOf(str, "validate", "source_resolve", "local_validate", "project_resolve", "clone", "env_write", "binding_write", "context_write", "agent_rules_write") {
 				return false
 			}
 		case "outcome":

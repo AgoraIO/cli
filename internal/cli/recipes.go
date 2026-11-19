@@ -225,6 +225,7 @@ func (a *App) initRecipeProject(name, targetDir string, recipe recipeDetail, exi
 	if err := validateRecipeCLIConfig(recipe.CLI); err != nil {
 		return nil, err
 	}
+	op.beginStage("local_validate")
 	absTarget, err := resolveScaffoldTarget(targetDir)
 	if err != nil {
 		return nil, err

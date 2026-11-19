@@ -4,10 +4,12 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"sync"
@@ -115,8 +117,74 @@ func TestAnalyticsInstallationPrivacyAndStages(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if info.Mode().Perm()&0o077 != 0 {
+	if runtime.GOOS != "windows" && info.Mode().Perm()&0o077 != 0 {
 		t.Fatal("anonymous ID is not private")
+	}
+}
+
+func TestAnalyticsRecipeInitAttributionAndLocalValidation(t *testing.T) {
+	target := t.TempDir()
+	for _, channel := range []string{"shell", "mcp"} {
+		for _, lookupFailed := range []bool{false, true} {
+			scenario := "existing target"
+			if lookupFailed {
+				scenario = "recipe API failure"
+			}
+			t.Run(channel+"/"+scenario, func(t *testing.T) {
+				collector, read := analyticsRecorder(t)
+				api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+					if lookupFailed {
+						w.WriteHeader(http.StatusServiceUnavailable)
+						return
+					}
+					_, _ = io.WriteString(w, `{"schemaVersion":1,"recipe":{"slug":"hotel","title":"Hotel","mainRepoUrl":"https://github.com/AgoraIO/hotel","recipeRawUrl":"https://example.com/RECIPE.md","type":"ai","official":true,"cli":{"projectType":"python","env":{"examplePath":".env.example","targetPath":".env","appIdKey":"AGORA_APP_ID","appCertificateKey":"AGORA_APP_CERTIFICATE"}}}}`)
+				}))
+				defer api.Close()
+				a := analyticsTestApp(t, collector.URL)
+				a.env["AGORA_RECIPES_BASE_URL"] = api.URL
+
+				var err error
+				if channel == "shell" {
+					a.root = a.buildRoot()
+					a.root.SetOut(io.Discard)
+					a.root.SetErr(io.Discard)
+					a.root.SetArgs([]string{"init", "demo", "--recipe", "hotel", "--dir", target, "--json"})
+					err = a.root.Execute()
+				} else {
+					_, err = a.callMCPTool("agora.init", map[string]any{"name": "demo", "recipe": "hotel", "dir": target}, nil)
+				}
+				wantStage, wantCode, wantID := "local_validate", "QUICKSTART_TARGET_EXISTS", any("hotel")
+				if lookupFailed {
+					wantStage, wantCode, wantID = "source_resolve", "RECIPE_API_FAILED", nil
+				}
+				var businessErr *cliError
+				if !errors.As(err, &businessErr) || businessErr.Code != wantCode {
+					t.Fatalf("expected %s, got %v", wantCode, err)
+				}
+
+				events := waitAnalytics(t, read, func(events []analyticsEvent) bool {
+					return len(events) > 0 && events[len(events)-1].Event == "cli_init_completed"
+				})
+				first, last := events[0], events[len(events)-1]
+				if first.Event != "cli_init_started" || first.OperationID != last.OperationID {
+					t.Fatalf("unexpected init lifecycle: %+v", events)
+				}
+				for _, event := range []analyticsEvent{first, last} {
+					p := event.Properties
+					if p["source_type"] != "recipe" || p["source_id"] != wantID || p["recipe_id"] != wantID {
+						t.Errorf("unexpected recipe attribution for %s: %v", event.Event, p)
+					}
+				}
+				if last.Properties["failed_stage"] != wantStage || last.Properties["error_code"] != wantCode {
+					t.Errorf("unexpected failure: %v", last.Properties)
+				}
+				if !lookupFailed && !slices.ContainsFunc(events, func(e analyticsEvent) bool {
+					return e.Properties["stage"] == "source_resolve" && e.Properties["outcome"] == "success"
+				}) {
+					t.Error("expected source resolution to succeed before local validation")
+				}
+			})
+		}
 	}
 }
 

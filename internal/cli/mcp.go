@@ -345,6 +345,9 @@ func (a *App) callMCPTool(name string, args map[string]any, progress progressEmi
 	var op *analyticsOperation
 	if command != "" {
 		op = a.beginAnalytics(command, "mcp")
+		if command == "init" {
+			op.setInitSourceType(stringArg(args, "recipe"), stringArg(args, "template"))
+		}
 		defer func() { op.finish(err) }()
 	}
 	return a.dispatchMCPTool(name, args, progress, op)
