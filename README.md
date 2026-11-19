@@ -244,10 +244,7 @@ Reads and updates local CLI defaults such as output mode, log level, and browser
 
 ### `telemetry`
 
-Usage statistics are enabled by default when a collector is configured, with a
-first-use notice on stderr for shell, JSON, CI and MCP. Use
-`agora telemetry disable`, `DO_NOT_TRACK=1` or `AGORA_TELEMETRY_ENABLED=0`
-to opt out; `agora telemetry enable` restores the saved preference. See [what is collected and where the choice is saved](docs/telemetry.md).
+Reads and updates telemetry preferences. `DO_NOT_TRACK=1` disables telemetry at runtime.
 
 ### `open`
 
@@ -425,8 +422,3 @@ Full guide with debug logging, CI tips, completion troubleshooting, and the `--d
 - Security policy: [SECURITY.md](SECURITY.md)
 - Support and contact channels: [SUPPORT.md](SUPPORT.md)
 - Contributor and agent guide: [AGENTS.md](AGENTS.md), plus [CONTRIBUTING.md](CONTRIBUTING.md)
-
-Recipes/init analytics uses a local random installation ID and does not link
-CLI activity to website identities or sessions. Capture requires
-a configured collector and the saved preference, and honors opt-out; see
-[Telemetry](docs/telemetry.md).

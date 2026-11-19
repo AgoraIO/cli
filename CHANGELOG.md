@@ -17,11 +17,6 @@ Earlier entries pre-date this convention and only carry their version's compare 
 
 ### Changed
 
-- Default configured usage collection to enabled with a best-effort first-use stderr notice. Remove consent prompts, `telemetryConsent` config and `consent` status fields; `enabled` now strictly reports the saved preference.
-- Observe project creation at the shared call boundary, including nested init calls; retain validated App IDs before later setup can fail.
-- Hand off allowlisted NDJSON to a detached sender with bounded queues and local drain. MCP reads the switch once per call. No retries, persistence or production activation.
-
-- Remove website-to-CLI analytics attribution flags and MCP arguments. Usage events now use only the local installation ID; default collection requires a configured collector and honors saved/runtime opt-out.
 - Rename the `project show --json` token debug status to `signalingTokenDebugEnabled` and remove the misleading token capability warning from `project doctor`. Update consumers of the old `tokenEnabled` result field.
 
 ## [0.2.10] - 2026-09-20

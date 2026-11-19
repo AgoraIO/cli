@@ -86,7 +86,7 @@ Update persisted CLI defaults
 | `--debug` | `bool` | — | persist the --debug preference (echo structured logs to stderr); use --debug=false to disable |
 | `--log-level` | `string` | `info` | persist default log level |
 | `--output` | `output` | `pretty` | persist default output mode (pretty or json) |
-| `--telemetry-enabled` | `bool` | — | persist usage telemetry preference |
+| `--telemetry-enabled` | `bool` | — | persist telemetry preference; use --telemetry-enabled=false to disable |
 
 ### `agora doctor`
 
@@ -424,7 +424,7 @@ _No local flags. Inherited parent and global flags still apply; run `agora <comm
 
 ### `agora telemetry enable`
 
-Enable usage telemetry
+Enable telemetry
 
 _No local flags. Inherited parent and global flags still apply; run `agora <command> --help` for the full flag set._
 

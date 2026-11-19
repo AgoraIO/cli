@@ -198,7 +198,7 @@ func (a *App) buildTelemetryCommand() *cobra.Command {
 	})
 	cmd.AddCommand(&cobra.Command{
 		Use:   "enable",
-		Short: "Enable usage telemetry",
+		Short: "Enable telemetry",
 		Long:  telemetryDisclosure + "\n\nEnable the saved preference. Runtime opt-out still takes precedence.",
 		Example: example(`
   agora telemetry enable
@@ -550,7 +550,7 @@ func (a *App) buildConfigCommand() *cobra.Command {
 			return renderResult(cmd, "config update", next)
 		},
 	}
-	update.Flags().BoolVar(&telemetryEnabled, "telemetry-enabled", false, "persist usage telemetry preference")
+	update.Flags().BoolVar(&telemetryEnabled, "telemetry-enabled", false, "persist telemetry preference; use --telemetry-enabled=false to disable")
 	update.Flags().BoolVar(&browserAutoOpen, "browser-auto-open", false, "persist browser auto-open preference; use --browser-auto-open=false to disable")
 	update.Flags().StringVar(&cfg.LogLevel, "log-level", cfg.LogLevel, "persist default log level")
 	update.Flags().BoolVar(&debug, "debug", false, "persist the --debug preference (echo structured logs to stderr); use --debug=false to disable")

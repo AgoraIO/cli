@@ -141,7 +141,7 @@ Stable error codes: /cli/md/error-codes.md
 
 ## Telemetry
 
-Configured analytics collects recipes/init/project create usage by default, with a first-use notice on stderr and opt-out controls. No consent prompt/fields remain. Status enabled is saved preference; captureActive combines runtime policy and URL. This source build has no embedded collector URL; Sentry diagnostics remains a placeholder. Disable with any of:
+Telemetry is operational diagnostics only and never includes Agora App Certificates or OAuth tokens. Disable with any of:
 ```
 agora telemetry disable
 agora config update --telemetry-enabled=false
@@ -149,11 +149,6 @@ DO_NOT_TRACK=1 agora <command>
 ```
 
 Full telemetry contract (events, fields, sinks): /cli/md/telemetry.md
-
-CLI analytics uses a local random installation ID and validated project App IDs.
-It does not accept website identities or source sessions through shell or MCP.
-
-CLI analytics uses one detached NDJSON sender per operation with 20-event queues, 100 ms local drain, three-second HTTP/EOF budgets and at most two children per parent. No retry or ingestion guarantee. MCP reads preferences once per tool call; active operations retain their snapshot. Creation results observe the shared createProject call. SSP never forwards event_id or custom PostHog UUID.
 
 ## Support
 

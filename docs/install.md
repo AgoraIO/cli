@@ -6,16 +6,6 @@ title: Install Agora CLI
 
 This page lists the supported installation paths for Agora CLI and the direct installers for macOS, Linux, and Windows.
 
-## Usage statistics and your choice
-
-Installing or upgrading does not consent to usage collection. When a collector
-is configured, the CLI asks before the first interactive recipes/init command;
-the default answer is no. JSON, CI and MCP runs do not prompt and collect nothing
-without previously saved consent. You can explicitly consent with
-`agora telemetry enable` or stop collection with `agora telemetry disable`.
-The choice is saved in your local CLI config, outside project repositories.
-See [Telemetry](telemetry.md) for the data categories and controls.
-
 ## Installer sources
 
 Use the Agora CDN as the canonical installer source:

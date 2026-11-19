@@ -1308,30 +1308,3 @@ Recommended pattern:
 ./agora init my-go-demo --template go --json
 ./agora quickstart env write my-go-demo --json
 ```
-
-## CLI usage analytics
-
-Recipes, init and actual project creation use default-on collection with a
-configured collector, saved telemetryEnabled preference and runtime opt-out.
-A best-effort first-use notice goes to stderr, including JSON/CI/MCP; quiet
-suppresses only the notice. No prompts or consent fields remain. Help, version,
-completion, dry-run and disable emit no events or notice.
-
-Status `enabled` is the saved preference. `captureActive` combines that preference,
-valid collector URL and runtime opt-out. `transportConfigured` only means a
-valid local URL. Removed `consent` and `config get.telemetryConsent` have no
-compatibility layer. Business JSON framing and exit codes are unchanged.
-
-CLI snapshots preference at startup; MCP reads once per tool call and fails
-closed for capture on read errors. Existing operations can finish after disable.
-Events travel as allowlisted NDJSON to one detached sender per operation, with
-20-event queues on both sides and at most two children per parent. Local drain
-is bounded to 100 ms; the business command never waits for HTTP. Each POST has
-one event (at most 4 KiB), with a three-second request budget and three-second
-EOF tail budget. There is no retry, persistent queue or delivery guarantee.
-
-Creation events observe createProject itself, not subsequent setup. Valid
-32-hex app_id is retained immediately; early events omit it. Count successful
-calls or distinct observed app_id values, not a complete project inventory.
-SSP keeps event_id only for internal dedup; PostHog receives no custom UUID.
-See [Telemetry](telemetry.md) for the full event, privacy and loss contract.
