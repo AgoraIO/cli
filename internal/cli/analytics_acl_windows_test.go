@@ -2,6 +2,7 @@ package cli
 
 import (
 	"path/filepath"
+	"strings"
 	"testing"
 	"unsafe"
 
@@ -26,6 +27,12 @@ func TestAnalyticsInstallationIDWindowsACL(t *testing.T) {
 	if err != nil || dacl == nil {
 		t.Fatalf("installation ID must have a DACL, got %v", err)
 	}
+	var computerName [256]uint16
+	size := uint32(len(computerName))
+	if err := windows.GetComputerName(&computerName[0], &size); err != nil {
+		t.Fatal(err)
+	}
+	localDomain := windows.UTF16ToString(computerName[:size])
 	for i := range uint32(dacl.AceCount) {
 		var ace *windows.ACCESS_ALLOWED_ACE
 		if err := windows.GetAce(dacl, i, &ace); err != nil {
@@ -41,8 +48,17 @@ func TestAnalyticsInstallationIDWindowsACL(t *testing.T) {
 			continue
 		}
 		principal := (*windows.SID)(unsafe.Pointer(&ace.SidStart))
-		if !principal.Equals(owner) && !principal.IsWellKnown(windows.WinLocalSystemSid) && !principal.IsWellKnown(windows.WinBuiltinAdministratorsSid) {
-			t.Errorf("installation ID is readable by unexpected principal %s", principal)
+		if principal.Equals(owner) || principal.IsWellKnown(windows.WinLocalSystemSid) || principal.IsWellKnown(windows.WinBuiltinAdministratorsSid) {
+			continue
 		}
+		// The local built-in Administrator has a machine-specific SID with RID 500,
+		// separate from the well-known Administrators group SID.
+		if principal.SubAuthorityCount() == 5 && principal.SubAuthority(4) == 500 {
+			_, domain, accountType, err := principal.LookupAccount("")
+			if err == nil && accountType == windows.SidTypeUser && strings.EqualFold(domain, localDomain) {
+				continue
+			}
+		}
+		t.Errorf("installation ID is readable by unexpected principal %s", principal)
 	}
 }
