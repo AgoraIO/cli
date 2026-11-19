@@ -1,111 +1,109 @@
 package cli
 
 import (
-	"bufio"
 	"bytes"
-	"context"
 	"encoding/json"
-	"errors"
 	"io"
 	"net/http"
 	"os"
 	"os/exec"
 	"strings"
-	"sync/atomic"
 	"time"
 )
 
 const analyticsSenderCommand = "__telemetry-send"
-const analyticsQueueSize = 20
-const analyticsEventLimit = 4096
+const analyticsRequestLimit = 64 * 1024
 const analyticsHandoffTimeout = 100 * time.Millisecond
 
-// Process-wide, including multiple App instances in an embedding host.
-var analyticsChildren atomic.Int32
-
-type analyticsPipe struct {
-	events chan []byte
-	done   chan struct{}
-	pipe   io.WriteCloser
+type analyticsBatch struct {
+	Events []analyticsEvent `json:"events"`
 }
 
 func (op *analyticsOperation) submit(event analyticsEvent) {
+	if op.batchBytes > analyticsRequestLimit || !validAnalyticsEvent(event) {
+		return
+	}
 	body, err := json.Marshal(event)
-	if err != nil || len(body) > analyticsEventLimit || !validAnalyticsEvent(event) {
+	if err != nil {
 		return
 	}
-	if !op.attempted {
-		op.attempted = true
-		op.sender = startAnalyticsPipe(op.endpoint)
+	size := op.batchBytes
+	if size == 0 {
+		size = len(`{"events":[]}`)
 	}
-	if op.sender == nil {
+	if len(op.events) > 0 {
+		size++ // comma between events
+	}
+	size += len(body)
+	op.batchBytes = size
+	if size > analyticsRequestLimit {
+		// Drop an oversized operation as a whole rather than send a partial lifecycle.
+		op.events = nil
 		return
 	}
-	select {
-	case op.sender.events <- body:
-	default:
-	}
+	op.events = append(op.events, json.RawMessage(body))
 }
 
-func startAnalyticsPipe(endpoint string) *analyticsPipe {
-	for {
-		n := analyticsChildren.Load()
-		if n >= 2 {
-			return nil
-		}
-		if analyticsChildren.CompareAndSwap(n, n+1) {
-			break
-		}
+func (op *analyticsOperation) flush() {
+	if len(op.events) == 0 {
+		return
 	}
-	release := func() { analyticsChildren.Add(-1) }
+	body, err := json.Marshal(struct {
+		Events []json.RawMessage `json:"events"`
+	}{Events: op.events})
+	op.events = nil
+	if err != nil || len(body) > analyticsRequestLimit {
+		return
+	}
 	executable, err := os.Executable()
 	if err != nil {
-		release()
-		return nil
+		return
 	}
-	cmd := exec.Command(executable, analyticsSenderCommand, endpoint)
+	cmd := exec.Command(executable, analyticsSenderCommand, op.endpoint)
 	detachAnalyticsProcess(cmd)
-	// An explicit empty environment avoids passing business authentication to the child.
-	cmd.Env = []string{}
+	cmd.Env = analyticsSenderEnv()
 	pipe, err := cmd.StdinPipe()
 	if err != nil {
-		release()
-		return nil
+		return
 	}
 	// nil stdout/stderr are connected to the null device by os/exec.
 	if err := cmd.Start(); err != nil {
 		_ = pipe.Close()
-		release()
-		return nil
+		return
 	}
-	go func() { _ = cmd.Wait(); release() }()
-	sender := &analyticsPipe{events: make(chan []byte, analyticsQueueSize), done: make(chan struct{}), pipe: pipe}
-	go func() {
-		defer close(sender.done)
-		defer func() { _ = pipe.Close() }()
-		for body := range sender.events {
-			if _, err := pipe.Write(append(body, '\n')); err != nil {
-				return
-			}
-		}
-	}()
-	return sender
+	go func() { _ = cmd.Wait() }()
+	handoffAnalyticsBatch(pipe, body)
 }
 
-func (s *analyticsPipe) close() {
-	close(s.events)
+func analyticsSenderEnv() []string {
+	// Preserve network settings without inheriting business credentials.
+	env := []string{}
+	for _, key := range []string{"HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY", "http_proxy", "https_proxy", "no_proxy", "SSL_CERT_FILE", "SSL_CERT_DIR"} {
+		if value, ok := os.LookupEnv(key); ok {
+			env = append(env, key+"="+value)
+		}
+	}
+	return env
+}
+
+func handoffAnalyticsBatch(pipe io.WriteCloser, body []byte) {
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		defer func() { _ = pipe.Close() }()
+		_, _ = pipe.Write(body)
+	}()
 	timer := time.NewTimer(analyticsHandoffTimeout)
 	defer timer.Stop()
 	select {
-	case <-s.done:
+	case <-done:
 	case <-timer.C:
-		// Closing an os.File pipe interrupts a blocked writer on supported platforms.
-		_ = s.pipe.Close()
+		_ = pipe.Close()
 	}
 }
 
 // RunAnalyticsSender recognizes the private entry before config/session loading.
-// Its only input is allowlisted NDJSON; it cannot execute business commands.
+// Its only input is an allowlisted JSON batch; it cannot execute business commands.
 func RunAnalyticsSender(args []string, input io.Reader) bool {
 	if len(args) == 0 || args[0] != analyticsSenderCommand {
 		return false
@@ -113,77 +111,47 @@ func RunAnalyticsSender(args []string, input io.Reader) bool {
 	if len(args) == 2 {
 		a := &App{env: map[string]string{"AGORA_TELEMETRY_URL": args[1]}}
 		if endpoint := a.analyticsURL(); endpoint != "" {
-			sendAnalyticsStream(input, endpoint)
+			sendAnalyticsBatch(input, endpoint)
 		}
 	}
 	return true
 }
 
-func sendAnalyticsStream(input io.Reader, endpoint string) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	events := make(chan []byte, analyticsQueueSize)
-	go func() {
-		// ReadSlice lets us discard an oversized line and continue with later events.
-		reader := bufio.NewReaderSize(input, analyticsEventLimit+1)
-		for {
-			line, err := reader.ReadSlice('\n')
-			oversized := errors.Is(err, bufio.ErrBufferFull)
-			if oversized {
-				for errors.Is(err, bufio.ErrBufferFull) {
-					_, err = reader.ReadSlice('\n')
-				}
-			} else if err == nil && len(line)-1 <= analyticsEventLimit {
-				var event analyticsEvent
-				decoder := json.NewDecoder(bytes.NewReader(line))
-				decoder.DisallowUnknownFields()
-				if decoder.Decode(&event) == nil && validAnalyticsEvent(event) {
-					canonical, marshalErr := json.Marshal(event)
-					if marshalErr != nil {
-						continue
-					}
-					select {
-					case events <- canonical:
-					default:
-					}
-				}
-			}
-			if err != nil {
-				// Start the tail budget on EOF, including any HTTP already in flight.
-				time.AfterFunc(analyticsSendTimeout, cancel)
-				close(events)
-				return
-			}
+func sendAnalyticsBatch(input io.Reader, endpoint string) {
+	data, err := io.ReadAll(io.LimitReader(input, analyticsRequestLimit+1))
+	if err != nil || len(data) > analyticsRequestLimit {
+		return
+	}
+	var batch analyticsBatch
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	decoder.DisallowUnknownFields()
+	if decoder.Decode(&batch) != nil || len(batch.Events) == 0 {
+		return
+	}
+	if decoder.Decode(new(any)) != io.EOF {
+		return
+	}
+	for _, event := range batch.Events {
+		if !validAnalyticsEvent(event) {
+			return
 		}
-	}()
+	}
+	body, err := json.Marshal(batch)
+	if err != nil || len(body) > analyticsRequestLimit {
+		return
+	}
 	transport := http.DefaultTransport.(*http.Transport).Clone()
-	transport.DisableKeepAlives = true
-	transport.Proxy = nil
-	transport.Protocols = new(http.Protocols)
-	transport.Protocols.SetHTTP1(true)
 	defer transport.CloseIdleConnections()
 	client := &http.Client{Transport: transport, Timeout: analyticsSendTimeout, CheckRedirect: func(_ *http.Request, _ []*http.Request) error { return http.ErrUseLastResponse }}
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case event, ok := <-events:
-			if !ok {
-				return
-			}
-			body := append([]byte(`{"events":[`), event...)
-			body = append(body, ']', '}')
-			req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(body))
-			if err != nil {
-				continue
-			}
-			req.Header.Set("Content-Type", "application/json")
-			req.GetBody = nil
-			response, _ := client.Do(req)
-			if response != nil {
-				_ = response.Body.Close()
-			}
-		}
+	req, err := http.NewRequest(http.MethodPost, endpoint, bytes.NewReader(body))
+	if err != nil {
+		return
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.GetBody = nil
+	response, _ := client.Do(req)
+	if response != nil {
+		_ = response.Body.Close()
 	}
 }
 

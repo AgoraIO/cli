@@ -7,10 +7,53 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
 )
+
+func TestAnalyticsSenderPreservesNetworkSettingsOnly(t *testing.T) {
+	t.Setenv("HTTPS_PROXY", "http://proxy.example:8080")
+	t.Setenv("NO_PROXY", "localhost,.internal")
+	t.Setenv("https_proxy", "http://lowercase.example:8080")
+	t.Setenv("SSL_CERT_FILE", "/network/ca.pem")
+	t.Setenv("AGORA_ACCESS_TOKEN", "private-business-token")
+	t.Setenv("UNRELATED_SECRET", "private")
+	env := strings.Join(analyticsSenderEnv(), "\n")
+	for _, want := range []string{"HTTPS_PROXY=http://proxy.example:8080", "NO_PROXY=localhost,.internal", "https_proxy=http://lowercase.example:8080", "SSL_CERT_FILE=/network/ca.pem"} {
+		if !strings.Contains(env, want) {
+			t.Fatalf("missing network setting: %s", want)
+		}
+	}
+	if strings.Contains(env, "AGORA_ACCESS_TOKEN=") || strings.Contains(env, "UNRELATED_SECRET=") {
+		t.Fatal("business environment inherited by sender")
+	}
+}
+
+func TestAnalyticsDetachedSenderUsesHTTPSProxy(t *testing.T) {
+	received := make(chan string, 1)
+	proxy := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		received <- r.Method + " " + r.Host
+		w.WriteHeader(http.StatusBadGateway)
+	}))
+	defer proxy.Close()
+	t.Setenv("HTTPS_PROXY", proxy.URL)
+	t.Setenv("https_proxy", "")
+	t.Setenv("NO_PROXY", "")
+	t.Setenv("no_proxy", "")
+	a := analyticsTestApp(t, "https://collector.example.invalid/api/telemetry/v1/events")
+	op := a.beginAnalytics("recipes list", "shell")
+	op.finish(nil)
+	select {
+	case got := <-received:
+		if got != "CONNECT collector.example.invalid:443" {
+			t.Fatalf("unexpected proxy request: %s", got)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("detached sender ignored HTTPS_PROXY")
+	}
+}
 
 func TestAnalyticsFinishDoesNotWaitForResponse(t *testing.T) {
 	for _, flushHeaders := range []bool{false, true} {

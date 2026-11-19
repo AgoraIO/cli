@@ -10,9 +10,7 @@ import (
 	"net/url"
 	"os"
 	"strconv"
-	"sync/atomic"
 	"testing"
-	"time"
 )
 
 func TestAnalyticsLiveMCPPreference(t *testing.T) {
@@ -61,43 +59,23 @@ func TestAnalyticsLiveMCPPreference(t *testing.T) {
 }
 
 func TestAnalyticsPolicySnapshotForRunningOperation(t *testing.T) {
-	first := make(chan struct{})
-	release := make(chan struct{})
-	var calls atomic.Int32
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		_, _ = io.Copy(io.Discard, r.Body)
-		if calls.Add(1) == 1 {
-			close(first)
-			<-release
-		}
-		w.WriteHeader(http.StatusAccepted)
-	}))
-	defer server.Close()
+	server, read := analyticsRecorder(t)
 	a := analyticsTestApp(t, server.URL)
 	state, err := ensureAppConfigState(a.env)
 	if err != nil {
 		t.Fatal(err)
 	}
 	op := a.beginAnalytics("init", "mcp")
-	select {
-	case <-first:
-	case <-time.After(time.Second):
-		t.Fatal("initial batch not sent")
-	}
 	cfg := state.Config
 	cfg.TelemetryEnabled = false
 	if err := writeSecureJSON(state.ConfigFilePath, cfg); err != nil {
 		t.Fatal(err)
 	}
 	op.beginStage("clone")
-	close(release)
 	op.finish(nil)
-	deadline := time.Now().Add(time.Second)
-	for calls.Load() < 4 && time.Now().Before(deadline) {
-		time.Sleep(time.Millisecond)
-	}
-	if calls.Load() != 4 {
-		t.Fatalf("running operation changed snapshot: %d", calls.Load())
+	events := waitAnalyticsEvents(t, read, 4)
+	if len(events) != 4 {
+		t.Fatalf("running operation changed snapshot: %+v", events)
 	}
 }
 

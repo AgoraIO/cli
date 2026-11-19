@@ -21,7 +21,7 @@ import (
 // with -ldflags; local verification uses AGORA_TELEMETRY_URL.
 var analyticsEndpoint = ""
 
-const analyticsSendTimeout = 3 * time.Second
+const analyticsSendTimeout = 10 * time.Second
 
 var analyticsIDPattern = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`)
 var analyticsSlugPattern = regexp.MustCompile(`^[a-z0-9]+(?:-[a-z0-9]+)*$`)
@@ -45,9 +45,9 @@ type analyticsOperation struct {
 	started      time.Time
 	stage        string
 	stageStarted time.Time
-	sender       *analyticsPipe
+	events       []json.RawMessage
+	batchBytes   int
 	endpoint     string
-	attempted    bool
 }
 
 type analyticsContextKey struct{}
@@ -304,9 +304,7 @@ func (op *analyticsOperation) finish(err error) {
 	if op.command != "project create" {
 		op.emit(event, fields)
 	}
-	if op.sender != nil {
-		op.sender.close()
-	}
+	op.flush()
 }
 
 func analyticsFor(cmd *cobra.Command) *analyticsOperation {

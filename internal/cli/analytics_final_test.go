@@ -125,102 +125,136 @@ func TestAnalyticsCreationAuthFailureAndInvalidAppID(t *testing.T) {
 	}
 }
 
-func TestAnalyticsStreamingBeyondThreeSecondsAndLimits(t *testing.T) {
-	server, read := analyticsRecorder(t)
+func TestAnalyticsBatchIsDeferredUntilFinish(t *testing.T) {
+	var calls atomic.Int32
+	received := make(chan []analyticsEvent, 1)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var batch analyticsBatch
+		if err := json.NewDecoder(r.Body).Decode(&batch); err != nil {
+			t.Error(err)
+			return
+		}
+		calls.Add(1)
+		received <- batch.Events
+		// All lifecycle events arrive together, even with a slow acknowledgement.
+		time.Sleep(600 * time.Millisecond)
+		w.WriteHeader(http.StatusAccepted)
+	}))
+	defer server.Close()
 	a := analyticsTestApp(t, server.URL)
-	op := a.beginAnalytics("init", "mcp")
-	deadline := time.Now().Add(time.Second)
-	for len(read()) < 1 && time.Now().Before(deadline) {
-		time.Sleep(time.Millisecond)
+	op := a.beginAnalytics("init", "shell")
+	for _, stage := range []string{"source_resolve", "project_resolve", "clone", "env_write", "binding_write", "context_write"} {
+		op.beginStage(stage)
 	}
-	if len(read()) != 1 {
-		t.Fatal("start not received before completion")
+	if calls.Load() != 0 {
+		t.Fatal("sent before operation finished")
 	}
-	time.Sleep(3100 * time.Millisecond)
-	op.beginStage("clone")
+	started := time.Now()
 	op.finish(nil)
-	events := waitAnalyticsEvents(t, read, 4)
-	if len(events) != 4 {
-		t.Fatalf("sender expired while operation open: %d", len(events))
+	if time.Since(started) > 500*time.Millisecond {
+		t.Fatal("finish waited for network")
 	}
-
-	// Both active child slots remain in use until EOF/network completion.
-	first := a.beginAnalytics("init", "mcp")
-	second := a.beginAnalytics("init", "mcp")
-	third := a.beginAnalytics("init", "mcp")
-	if first.sender == nil || second.sender == nil || third.sender != nil || !third.attempted {
-		t.Fatal("child limit not enforced")
+	select {
+	case events := <-received:
+		if len(events) != 9 || events[0].Event != "cli_init_started" || events[len(events)-1].Event != "cli_init_completed" {
+			t.Fatalf("missing batch lifecycle: %+v", events)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("batch missing")
 	}
-	first.finish(nil)
-	second.finish(nil)
-	deadline = time.Now().Add(time.Second)
-	for analyticsChildren.Load() != 0 && time.Now().Before(deadline) {
-		time.Sleep(time.Millisecond)
+	if calls.Load() != 1 {
+		t.Fatal("operation sent multiple requests")
 	}
-	third.beginStage("clone")
-	if third.sender != nil {
-		t.Fatal("full operation retried child launch")
-	}
-	third.finish(nil)
 }
 
-func TestAnalyticsSlowPipeAndOverflow(t *testing.T) {
+func TestAnalyticsBatchHandoffAndSizeBound(t *testing.T) {
 	reader, writer := io.Pipe()
 	defer func() { _ = reader.Close() }()
-	sender := &analyticsPipe{events: make(chan []byte, analyticsQueueSize), done: make(chan struct{}), pipe: writer}
-	go func() {
-		defer close(sender.done)
-		for body := range sender.events {
-			if _, err := writer.Write(body); err != nil {
-				return
-			}
-		}
-	}()
-	op := &analyticsOperation{attempted: true, sender: sender, properties: map[string]any{"command": "recipes list"}, id: analyticsUUID(), distinctID: "cli:" + analyticsUUID()}
 	started := time.Now()
-	for range 1000 {
-		op.emit("cli_recipes_list_completed", nil)
-	}
-	if len(sender.events) > 20 {
-		t.Fatal("queue exceeded limit")
-	}
-	sender.close()
+	handoffAnalyticsBatch(writer, []byte(`{"events":[]}`))
 	if time.Since(started) > 500*time.Millisecond {
 		t.Fatal("blocked on non-reading pipe")
 	}
-	select {
-	case <-sender.done:
-	case <-time.After(time.Second):
-		t.Fatal("writer not released")
+	if _, err := writer.Write([]byte("x")); err == nil {
+		t.Fatal("timed-out pipe remained open")
 	}
-}
 
-func TestAnalyticsStreamRejectsOversizeAndSecretsIndividually(t *testing.T) {
 	server, read := analyticsRecorder(t)
 	a := analyticsTestApp(t, server.URL)
 	op := a.beginAnalytics("recipes list", "shell")
-	// Build valid, maximum-length allowlisted fields, then an oversized record.
-	event := analyticsEvent{Event: "cli_recipes_list_completed", EventID: analyticsUUID(), OperationID: op.id, DistinctID: op.distinctID, Timestamp: time.Now().UTC(), Properties: op.properties}
-	event.Properties["source_type"] = "recipe"
-	event.Properties["source_id"] = strings.Repeat("a", 100)
-	event.Properties["recipe_id"] = strings.Repeat("a", 100)
-	event.Properties["cli_version"] = strings.Repeat("v", 64)
-	event.Properties["error_code"] = strings.Repeat("A", 64)
-	body, _ := json.Marshal(event)
-	if len(body) > 4096 {
-		t.Fatal("legal event exceeds contract")
+	for range 1000 {
+		op.emit("cli_recipes_list_completed", nil)
 	}
-	input := append([]byte(strings.Repeat("x", 5000)+"\n"), body...)
-	input = append(input, '\n')
-	private := bytes.Replace(body, []byte(`"properties":{`), []byte(`"properties":{"token":"private",`), 1)
-	input = append(input, private...)
-	input = append(input, '\n')
-	sendAnalyticsStream(bytes.NewReader(input), server.URL)
-	if len(read()) != 1 {
-		t.Fatalf("invalid event affected legal sibling: %+v", read())
+	if op.batchBytes <= analyticsRequestLimit || len(op.events) != 0 {
+		t.Fatal("oversized batch was retained")
 	}
 	op.finish(nil)
-	waitAnalyticsEvents(t, read, 2)
+	if len(read()) != 0 {
+		t.Fatal("sent a partial oversized operation")
+	}
+}
+
+func TestAnalyticsBatchRejectsMalformedOrPrivateInput(t *testing.T) {
+	server, read := analyticsRecorder(t)
+	a := analyticsTestApp(t, server.URL)
+	op := a.beginAnalytics("recipes list", "shell")
+	event := analyticsEvent{Event: "cli_recipes_list_completed", EventID: analyticsUUID(), OperationID: op.id, DistinctID: op.distinctID, Timestamp: time.Now().UTC(), Properties: op.properties}
+	body, _ := json.Marshal(analyticsBatch{Events: []analyticsEvent{event}})
+	private := bytes.Replace(body, []byte(`"properties":{`), []byte(`"properties":{"token":"private",`), 1)
+	for _, input := range [][]byte{private, append(bytes.Clone(body), []byte(` {}`)...), []byte(`{"events":[]}`), []byte(`{"events":null}`), []byte(`{"unknown":true,"events":[]}`), []byte(strings.Repeat(" ", analyticsRequestLimit+1)), body[:len(body)-1]} {
+		sendAnalyticsBatch(bytes.NewReader(input), server.URL)
+	}
+	if len(read()) != 0 {
+		t.Fatal("invalid batch was sent")
+	}
+	events := make([]analyticsEvent, 21)
+	for i := range events {
+		events[i] = event
+		events[i].EventID = analyticsUUID()
+	}
+	body, _ = json.Marshal(analyticsBatch{Events: events})
+	sendAnalyticsBatch(bytes.NewReader(append([]byte(strings.Repeat(" ", 5000)), body...)), server.URL)
+	if len(read()) != 21 {
+		t.Fatalf("valid batch was not sent: %d", len(read()))
+	}
+}
+
+func TestAnalyticsMCPBatchesDoNotDropWhileOtherSendersWait(t *testing.T) {
+	received := make(chan string, 3)
+	release := make(chan struct{})
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var batch analyticsBatch
+		if err := json.NewDecoder(r.Body).Decode(&batch); err != nil {
+			t.Error(err)
+			return
+		}
+		if len(batch.Events) != 3 {
+			t.Errorf("unexpected lifecycle length: %d", len(batch.Events))
+		}
+		received <- batch.Events[0].OperationID
+		<-release
+		w.WriteHeader(http.StatusAccepted)
+	}))
+	defer server.Close()
+	defer close(release)
+	a := analyticsTestApp(t, server.URL)
+	for range 3 {
+		if _, err := a.callMCPTool("agora.init", map[string]any{}, nil); err == nil {
+			t.Fatal("missing name must fail")
+		}
+	}
+	ids := map[string]bool{}
+	for range 3 {
+		select {
+		case id := <-received:
+			ids[id] = true
+		case <-time.After(2 * time.Second):
+			t.Fatal("MCP batch dropped while previous senders were waiting")
+		}
+	}
+	if len(ids) != 3 {
+		t.Fatal("MCP operation identities were shared")
+	}
 }
 
 func TestAnalyticsSenderSurvivesParentExit(t *testing.T) {
@@ -269,8 +303,7 @@ func TestAnalyticsSenderSurvivesParentExit(t *testing.T) {
 		}
 		t.Fatal("child retained output handles")
 	}
-	// The parent has exited while its sender is still blocked on the first
-	// response. Only now allow the child to post its queued stage/final events.
+	// The parent exits while the child waits for the batch response.
 	allowResponse <- struct{}{}
 	events := make([]analyticsEvent, 0, 4)
 	for range 4 {
@@ -352,50 +385,32 @@ func TestAnalyticsCLIStartupAndMCPReadFailure(t *testing.T) {
 	}
 }
 
-func TestAnalyticsRequestAndEOFBudgets(t *testing.T) {
-	received := make(chan time.Time, 3)
+func TestAnalyticsBatchRequestTimeout(t *testing.T) {
+	received := make(chan struct{})
 	release := make(chan struct{})
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = io.Copy(io.Discard, r.Body)
-		received <- time.Now()
+		close(received)
 		<-release
 	}))
 	defer server.Close()
 	defer close(release)
 	event := analyticsEvent{Event: "cli_recipes_list_completed", EventID: analyticsUUID(), OperationID: analyticsUUID(), DistinctID: "cli:" + analyticsUUID(), Timestamp: time.Now().UTC(), Properties: map[string]any{"command": "recipes list"}}
-	body, _ := json.Marshal(event)
-	input, writer := io.Pipe()
+	body, _ := json.Marshal(analyticsBatch{Events: []analyticsEvent{event}})
 	done := make(chan struct{})
-	go func() { sendAnalyticsStream(input, server.URL); _ = input.Close(); close(done) }()
-	for range 2 {
-		if _, err := writer.Write(append(bytes.Clone(body), '\n')); err != nil {
-			t.Fatal(err)
-		}
-	}
-	var first, second time.Time
-	select {
-	case first = <-received:
-	case <-time.After(time.Second):
-		t.Fatal("first request missing")
-	}
-	select {
-	case second = <-received:
-	case <-time.After(4 * time.Second):
-		t.Fatal("request timeout or continued reading failed")
-	}
-	if second.Sub(first) < 2500*time.Millisecond {
-		t.Fatal("request fixture did not stall")
-	}
-	// An open input does not impose a lifetime deadline; after EOF the second
-	// stalled request must finish within the independent tail budget.
-	_ = writer.Close()
 	started := time.Now()
+	go func() { sendAnalyticsBatch(bytes.NewReader(body), server.URL); close(done) }()
+	select {
+	case <-received:
+	case <-time.After(2 * time.Second):
+		t.Fatal("batch request missing")
+	}
 	select {
 	case <-done:
-	case <-time.After(3500 * time.Millisecond):
-		t.Fatal("EOF drain exceeded budget")
+	case <-time.After(12 * time.Second):
+		t.Fatal("request exceeded ten-second timeout")
 	}
-	if time.Since(started) > 3400*time.Millisecond {
-		t.Fatal("EOF tail was unbounded")
+	if time.Since(started) < 9*time.Second {
+		t.Fatal("request timed out before the configured ten-second budget")
 	}
 }
