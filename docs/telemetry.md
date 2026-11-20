@@ -22,6 +22,14 @@ fails. Only attempts with a confirmed public catalog entry include a Recipe ID.
 When reporting per-Recipe results, show unconfirmed attempts separately.
 An existing target directory is reported as a local validation failure.
 
+Project creation (`agora project create`, and the project step of `agora init`)
+is reported when the create API call returns, and its duration covers only that
+call. A project that is created successfully is recorded as a success even if a
+later step, such as enabling features, fails; the outer command result still
+reports that failure. A `project create` that fails before reaching the API
+(for example, invalid flags or an unreadable local context) is reported as a
+failure when the command finishes.
+
 ## Delivery
 
 Each instrumented shell command collects its events in memory and flushes them
