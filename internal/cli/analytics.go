@@ -65,24 +65,10 @@ func analyticsUUID() string {
 	return h[:8] + "-" + h[8:12] + "-" + h[12:16] + "-" + h[16:20] + "-" + h[20:]
 }
 
+// analyticsEnabled applies the shared telemetry gate to the startup
+// preference. Shell commands use this snapshot for their whole run.
 func (a *App) analyticsEnabled() bool {
-	if a.analyticsOptedOut() {
-		return false
-	}
-	return a.cfg.TelemetryEnabled
-}
-
-func (a *App) analyticsOptedOut() bool {
-	if a == nil || strings.TrimSpace(a.env["DO_NOT_TRACK"]) != "" || a.env["AGORA_TELEMETRY_ENABLED"] == "0" {
-		return true
-	}
-	sentryOverride := a.env["AGORA_SENTRY_ENABLED"]
-	if a.cfgState.ConfigFilePath != "" {
-		// applyConfigToEnv also writes this key. Only an explicit OS override
-		// should mask a preference changed since this MCP process started.
-		sentryOverride = a.osEnv["AGORA_SENTRY_ENABLED"]
-	}
-	return sentryOverride == "0"
+	return a.telemetryAllowed(a.cfg.TelemetryEnabled)
 }
 
 func (a *App) currentTelemetryPreference() bool {
@@ -173,7 +159,7 @@ func (a *App) beginAnalytics(command, channel string) *analyticsOperation {
 	endpoint := a.analyticsURL()
 	enabled := a.analyticsEnabled()
 	if channel == "mcp" {
-		enabled = a.currentTelemetryPreference() && !a.analyticsOptedOut()
+		enabled = a.telemetryAllowed(a.currentTelemetryPreference())
 	}
 	if !enabled || endpoint == "" {
 		return nil

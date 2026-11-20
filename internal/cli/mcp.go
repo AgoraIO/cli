@@ -386,7 +386,7 @@ func (a *App) dispatchMCPTool(name string, args map[string]any, progress progres
 		return map[string]any{
 			"action":              "status",
 			"transportConfigured": a.analyticsURL() != "",
-			"captureActive":       a.currentTelemetryPreference() && !a.analyticsOptedOut() && a.analyticsURL() != "",
+			"captureActive":       a.telemetryAllowed(a.currentTelemetryPreference()) && a.analyticsURL() != "",
 			"configPath":          path,
 			"doNotTrack":          strings.TrimSpace(a.env["DO_NOT_TRACK"]) != "",
 			"enabled":             a.currentTelemetryPreference(),

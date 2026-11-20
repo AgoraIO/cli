@@ -138,7 +138,7 @@ func TestAnalyticsLiveConfigFailsClosedAndHonorsEnvironment(t *testing.T) {
 			if err := writeSecureJSON(state.ConfigFilePath, cfg); err != nil {
 				t.Fatal(err)
 			}
-			if (a.currentTelemetryPreference() && !a.analyticsOptedOut()) != !explicit {
+			if a.telemetryAllowed(a.currentTelemetryPreference()) != !explicit {
 				t.Fatal("persisted enable or explicit opt-out ignored")
 			}
 			if err := os.WriteFile(state.ConfigFilePath, []byte("{invalid"), 0o600); err != nil {
