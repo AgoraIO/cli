@@ -218,9 +218,17 @@ func (a *App) beginAnalytics(command, channel string) *analyticsOperation {
 		return nil
 	}
 	op := &analyticsOperation{command: command, channel: channel, id: analyticsUUID(), distinctID: id, properties: props, started: time.Now(), endpoint: endpoint}
+	op.batchBytes = len(analyticsBatchEnvelope)
 	if command == "init" {
 		event := op.newEvent("cli_init_started", nil)
+		start, err := json.Marshal(event)
+		if err != nil {
+			return nil
+		}
 		op.initStarted = &event
+		// flush prepends this event after copying source attribution onto it,
+		// so reserve its worst-case size (plus the separating comma) up front.
+		op.batchBytes += len(start) + analyticsStartAttributionReserve + 1
 		op.beginStage(analyticsStageValidate)
 	}
 	return op

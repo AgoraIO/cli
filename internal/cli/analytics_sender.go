@@ -21,6 +21,13 @@ const analyticsHandoffTimeout = 100 * time.Millisecond
 // usage batches after the host closes stdin.
 const analyticsMCPDrainTimeout = time.Second
 
+const analyticsBatchEnvelope = `{"events":[]}`
+
+// analyticsStartAttributionReserve is the largest JSON growth of
+// cli_init_started when flush copies source attribution onto it: the longest
+// source_type value plus source_id and recipe_id at their 100-byte maximum.
+var analyticsStartAttributionReserve = len(`,"source_type":"quickstart","source_id":"` + strings.Repeat("x", 100) + `","recipe_id":"` + strings.Repeat("x", 100) + `"`)
+
 type analyticsBatch struct {
 	Events []analyticsEvent `json:"events"`
 }
@@ -33,10 +40,9 @@ func (op *analyticsOperation) submit(event analyticsEvent) {
 	if err != nil {
 		return
 	}
+	// batchBytes starts at the envelope plus any reserved cli_init_started
+	// event, so an accepted event always fits once flush prepends the start.
 	size := op.batchBytes
-	if size == 0 {
-		size = len(`{"events":[]}`)
-	}
 	if len(op.events) > 0 {
 		size++ // comma between events
 	}

@@ -204,6 +204,53 @@ func TestAnalyticsStalledTLSBoundsShellAndMCPCompletion(t *testing.T) {
 	}
 }
 
+func TestAnalyticsBatchAccountingIncludesInitStart(t *testing.T) {
+	received := make(chan int, 1)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var batch analyticsBatch
+		if err := json.NewDecoder(r.Body).Decode(&batch); err != nil {
+			t.Error(err)
+		}
+		received <- len(batch.Events)
+		w.WriteHeader(http.StatusAccepted)
+	}))
+	defer server.Close()
+	a := analyticsTestApp(t, server.URL)
+	op := a.beginAnalytics("init", "mcp")
+	// Attribution is copied onto cli_init_started only at flush; use the
+	// longest allowed values so the start grows as much as possible.
+	op.source("recipe", strings.Repeat("a", 100))
+	op.stage = ""
+	accepted := 0
+	for {
+		event := op.newEvent("cli_init_stage_completed", map[string]any{"stage": analyticsStageClone, "outcome": "success", "error_code": "", "duration_ms": 1})
+		body, err := json.Marshal(event)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if op.batchBytes+1+len(body) > analyticsRequestLimit {
+			break
+		}
+		op.submit(event)
+		accepted++
+	}
+	if len(op.events) != accepted || op.batchBytes > analyticsRequestLimit {
+		t.Fatalf("accounting rejected an event below the limit: accepted=%d kept=%d bytes=%d", accepted, len(op.events), op.batchBytes)
+	}
+	op.flush()
+	select {
+	case n := <-received:
+		if n != accepted+1 {
+			t.Fatalf("want start plus %d events, got %d", accepted, n)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("batch accepted by accounting was dropped at flush")
+	}
+	if !drainAnalyticsSends(2 * time.Second) {
+		t.Fatal("send did not finish")
+	}
+}
+
 func TestAnalyticsMCPSendsInProcessWithoutBlocking(t *testing.T) {
 	received := make(chan analyticsBatch, 1)
 	release := make(chan struct{})
