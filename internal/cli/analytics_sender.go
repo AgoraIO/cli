@@ -9,12 +9,17 @@ import (
 	"os/exec"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 )
 
 const analyticsSenderCommand = "__telemetry-send"
 const analyticsRequestLimit = 64 * 1024
 const analyticsHandoffTimeout = 100 * time.Millisecond
+
+// analyticsMCPDrainTimeout bounds how long `mcp serve` waits for in-flight
+// usage batches after the host closes stdin.
+const analyticsMCPDrainTimeout = time.Second
 
 type analyticsBatch struct {
 	Events []analyticsEvent `json:"events"`
@@ -45,9 +50,28 @@ func (op *analyticsOperation) submit(event analyticsEvent) {
 	op.events = append(op.events, json.RawMessage(body))
 }
 
+// flush hands the finished operation's batch to a sender. Shell commands
+// exit right after finishing, so they hand off to a detached subprocess that
+// outlives them. `mcp serve` is long-lived, so it sends from a goroutine in
+// process instead of spawning one subprocess per tool call. Both paths use
+// sendAnalyticsBatch, so validation, limits and the HTTP client are shared.
 func (op *analyticsOperation) flush() {
-	if len(op.events) == 0 {
+	body := op.batchBody()
+	if body == nil {
 		return
+	}
+	if op.channel == "mcp" {
+		sendAnalyticsInBackground(body, op.endpoint)
+		return
+	}
+	spawnAnalyticsSender(body, op.endpoint)
+}
+
+// batchBody returns the serialized batch for the finished operation, or nil
+// when there is nothing valid to send. It clears the buffered events.
+func (op *analyticsOperation) batchBody() []byte {
+	if len(op.events) == 0 {
+		return nil
 	}
 	events := op.events
 	if start := op.initStarted; start != nil {
@@ -59,11 +83,13 @@ func (op *analyticsOperation) flush() {
 			}
 		}
 		if !validAnalyticsEvent(*start) {
-			return
+			op.events = nil
+			return nil
 		}
 		first, err := json.Marshal(start)
 		if err != nil {
-			return
+			op.events = nil
+			return nil
 		}
 		events = append([]json.RawMessage{first}, events...)
 	}
@@ -72,13 +98,45 @@ func (op *analyticsOperation) flush() {
 	}{Events: events})
 	op.events = nil
 	if err != nil || len(body) > analyticsRequestLimit {
-		return
+		return nil
 	}
+	return body
+}
+
+// analyticsInFlight tracks in-process MCP sends so `mcp serve` can give them
+// a short, bounded chance to finish when the host closes stdin.
+var analyticsInFlight sync.WaitGroup
+
+func sendAnalyticsInBackground(body []byte, endpoint string) {
+	analyticsInFlight.Add(1)
+	go func() {
+		defer analyticsInFlight.Done()
+		sendAnalyticsBatch(bytes.NewReader(body), endpoint)
+	}()
+}
+
+// drainAnalyticsSends waits up to timeout for in-process sends to finish and
+// reports whether they all did. Requests still running are abandoned when the
+// process exits.
+func drainAnalyticsSends(timeout time.Duration) bool {
+	done := make(chan struct{})
+	go func() { analyticsInFlight.Wait(); close(done) }()
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
+	select {
+	case <-done:
+		return true
+	case <-timer.C:
+		return false
+	}
+}
+
+func spawnAnalyticsSender(body []byte, endpoint string) {
 	executable, err := os.Executable()
 	if err != nil {
 		return
 	}
-	cmd := exec.Command(executable, analyticsSenderCommand, op.endpoint)
+	cmd := exec.Command(executable, analyticsSenderCommand, endpoint)
 	detachAnalyticsProcess(cmd)
 	cmd.Env = analyticsSenderEnv()
 	pipe, err := cmd.StdinPipe()

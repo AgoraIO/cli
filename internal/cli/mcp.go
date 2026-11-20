@@ -95,6 +95,9 @@ Notes for agents:
 }
 
 func (a *App) serveMCP(in io.Reader, out io.Writer) error {
+	// Usage batches are sent in process for MCP; give the last ones a short,
+	// bounded chance to complete once the host closes the transport.
+	defer drainAnalyticsSends(analyticsMCPDrainTimeout)
 	scanner := bufio.NewScanner(in)
 	// Default Scanner has a 64 KiB line cap. Larger payloads (a quickstart
 	// create with custom args, a doctor result echoed back to the client)

@@ -77,6 +77,7 @@ type analyticsEvent struct {
 
 type analyticsOperation struct {
 	command      string
+	channel      string
 	id           string
 	distinctID   string
 	properties   map[string]any
@@ -213,7 +214,7 @@ func (a *App) beginAnalytics(command, channel string) *analyticsOperation {
 	if id == "" {
 		return nil
 	}
-	op := &analyticsOperation{command: command, id: analyticsUUID(), distinctID: id, properties: props, started: time.Now(), endpoint: endpoint}
+	op := &analyticsOperation{command: command, channel: channel, id: analyticsUUID(), distinctID: id, properties: props, started: time.Now(), endpoint: endpoint}
 	if command == "init" {
 		event := op.newEvent("cli_init_started", nil)
 		op.initStarted = &event

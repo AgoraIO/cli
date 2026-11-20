@@ -203,3 +203,45 @@ func TestAnalyticsStalledTLSBoundsShellAndMCPCompletion(t *testing.T) {
 		})
 	}
 }
+
+func TestAnalyticsMCPSendsInProcessWithoutBlocking(t *testing.T) {
+	received := make(chan analyticsBatch, 1)
+	release := make(chan struct{})
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Authorization") != "" {
+			t.Error("MCP sender attached business authorization")
+		}
+		var batch analyticsBatch
+		if err := json.NewDecoder(r.Body).Decode(&batch); err != nil {
+			t.Error(err)
+		}
+		received <- batch
+		<-release
+		w.WriteHeader(http.StatusAccepted)
+	}))
+	defer server.Close()
+	a := analyticsTestApp(t, server.URL)
+	started := time.Now()
+	if _, err := a.callMCPTool("agora.recipes.list", map[string]any{"type": "invalid"}, nil); err == nil {
+		t.Fatal("invalid type must fail")
+	}
+	if time.Since(started) > 500*time.Millisecond {
+		t.Fatal("MCP tool call waited for telemetry delivery")
+	}
+	select {
+	case batch := <-received:
+		if len(batch.Events) != 1 || batch.Events[0].Properties["invocation_channel"] != "mcp" {
+			t.Fatalf("unexpected MCP batch: %+v", batch)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("MCP batch not delivered")
+	}
+	// The request is still open in this process, so the drain must time out.
+	if drainAnalyticsSends(50 * time.Millisecond) {
+		t.Fatal("MCP delivery did not run in process")
+	}
+	close(release)
+	if !drainAnalyticsSends(2 * time.Second) {
+		t.Fatal("in-process MCP delivery did not finish")
+	}
+}
