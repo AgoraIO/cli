@@ -29,7 +29,7 @@ func (a *App) refreshProjectListCache() error {
 	return err
 }
 
-func (a *App) createProject(name, idempotencyKey string, operations ...*analyticsOperation) (projectDetail, error) {
+func (a *App) createProject(name, idempotencyKey string, op *analyticsOperation) (projectDetail, error) {
 	started := time.Now()
 	var out projectDetail
 	body := map[string]any{"name": name, "projectType": "paas"}
@@ -37,7 +37,7 @@ func (a *App) createProject(name, idempotencyKey string, operations ...*analytic
 		body["idempotencyKey"] = strings.TrimSpace(idempotencyKey)
 	}
 	err := a.apiRequest("POST", "/api/cli/v1/projects", nil, body, &out)
-	firstAnalytics(operations).projectCreated(out.AppID, started, err)
+	op.projectCreated(out.AppID, started, err)
 	return out, err
 }
 
@@ -286,7 +286,7 @@ func (a *App) enableProjectFeature(feature string, project projectDetail, region
 	}
 }
 
-func (a *App) projectCreate(name, template string, features []string, rtmDataCenter string, idempotencyKey string, operations ...*analyticsOperation) (map[string]any, error) {
+func (a *App) projectCreate(name, template string, features []string, rtmDataCenter string, idempotencyKey string, op *analyticsOperation) (map[string]any, error) {
 	ctx, err := loadContext(a.env)
 	if err != nil {
 		return nil, err
@@ -300,7 +300,7 @@ func (a *App) projectCreate(name, template string, features []string, rtmDataCen
 	if err != nil {
 		return nil, err
 	}
-	project, err := a.createProject(name, idempotencyKey, operations...)
+	project, err := a.createProject(name, idempotencyKey, op)
 	if err != nil {
 		return nil, err
 	}

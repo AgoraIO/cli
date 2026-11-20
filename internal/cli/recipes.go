@@ -219,8 +219,7 @@ func (a *App) getRecipe(slug string) (recipeDetail, error) {
 	return response.Recipe, nil
 }
 
-func (a *App) initRecipeProject(name, targetDir string, recipe recipeDetail, existingProject string, features []string, rtmDataCenter string, newProject bool, promptForReuse bool, promptOut io.Writer, promptIn io.Reader, progress progressEmitter, operations ...*analyticsOperation) (map[string]any, error) {
-	op := firstAnalytics(operations)
+func (a *App) initRecipeProject(name, targetDir string, recipe recipeDetail, existingProject string, features []string, rtmDataCenter string, newProject bool, promptForReuse bool, promptOut io.Writer, promptIn io.Reader, progress progressEmitter, op *analyticsOperation) (map[string]any, error) {
 	op.source("recipe", recipe.Slug)
 	if err := validateRecipeCLIConfig(recipe.CLI); err != nil {
 		return nil, err
@@ -240,12 +239,6 @@ func (a *App) initRecipeProject(name, targetDir string, recipe recipeDetail, exi
 	resolution, err := a.resolveInitProjectForScaffold(name, createFeatures, existingProject, rtmDataCenter, newProject, promptForReuse, promptOut, promptIn, progress, op)
 	if err != nil {
 		return nil, err
-	}
-	if op != nil {
-		op.properties["project_action"] = "reused"
-		if resolution.projectAction == "created" {
-			op.properties["project_action"] = "created"
-		}
 	}
 	op.beginStage("clone")
 	if err := cloneScaffoldRepo(recipe.MainRepoURL, absTarget, "", progress); err != nil {

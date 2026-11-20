@@ -333,13 +333,6 @@ func (a *App) instrumentAnalytics(cmd *cobra.Command, command string) {
 	}
 }
 
-func firstAnalytics(ops []*analyticsOperation) *analyticsOperation {
-	if len(ops) > 0 {
-		return ops[0]
-	}
-	return nil
-}
-
 func (op *analyticsOperation) setInitSourceType(recipe, template string) {
 	if op == nil {
 		return
@@ -371,6 +364,17 @@ func (op *analyticsOperation) setAppID(id string) {
 		return
 	}
 	op.properties["app_id"] = id
+}
+
+// setProjectAction records whether init created a project or reused one.
+func (op *analyticsOperation) setProjectAction(action string) {
+	if op == nil {
+		return
+	}
+	op.properties["project_action"] = "reused"
+	if action == "created" {
+		op.properties["project_action"] = "created"
+	}
 }
 
 func (op *analyticsOperation) projectCreated(id string, started time.Time, err error) {

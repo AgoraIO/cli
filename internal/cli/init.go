@@ -365,8 +365,7 @@ type initProjectResolution struct {
 	createdRTMDataCenter   string
 }
 
-func (a *App) initProject(name, targetDir string, template quickstartTemplate, existingProject string, features []string, rtmDataCenter string, newProject bool, promptForReuse bool, promptOut io.Writer, promptIn io.Reader, progress progressEmitter, operations ...*analyticsOperation) (map[string]any, error) {
-	op := firstAnalytics(operations)
+func (a *App) initProject(name, targetDir string, template quickstartTemplate, existingProject string, features []string, rtmDataCenter string, newProject bool, promptForReuse bool, promptOut io.Writer, promptIn io.Reader, progress progressEmitter, op *analyticsOperation) (map[string]any, error) {
 	op.source("quickstart", template.ID)
 	if !template.Available || !template.SupportsInit {
 		return nil, &cliError{Message: fmt.Sprintf("Quickstart template %q is not supported by `agora init`. Use `agora quickstart create` instead.", template.ID), Code: "QUICKSTART_TEMPLATE_UNAVAILABLE"}
@@ -390,12 +389,6 @@ func (a *App) initProject(name, targetDir string, template quickstartTemplate, e
 		return nil, err
 	}
 	target := resolution.target
-	if op != nil {
-		op.properties["project_action"] = "reused"
-		if resolution.projectAction == "created" {
-			op.properties["project_action"] = "created"
-		}
-	}
 
 	quickstartResult, err := a.quickstartCreate(template, targetDir, target.project.ProjectID, false, false, promptOut, promptIn, "", progress, op)
 	if err != nil {
@@ -437,8 +430,7 @@ func (a *App) initProject(name, targetDir string, template quickstartTemplate, e
 	return result, nil
 }
 
-func (a *App) resolveInitProjectForScaffold(name string, createFeatures []string, existingProject string, rtmDataCenter string, newProject bool, promptForReuse bool, promptOut io.Writer, promptIn io.Reader, progress progressEmitter, operations ...*analyticsOperation) (initProjectResolution, error) {
-	op := firstAnalytics(operations)
+func (a *App) resolveInitProjectForScaffold(name string, createFeatures []string, existingProject string, rtmDataCenter string, newProject bool, promptForReuse bool, promptOut io.Writer, promptIn io.Reader, progress progressEmitter, op *analyticsOperation) (initProjectResolution, error) {
 	var target projectTarget
 	projectAction := "existing"
 	projectSelectionReason := "explicit_project"
@@ -535,6 +527,7 @@ func (a *App) resolveInitProjectForScaffold(name string, createFeatures []string
 	}
 
 	op.setAppID(target.project.AppID)
+	op.setProjectAction(projectAction)
 	return initProjectResolution{
 		target:                 target,
 		projectAction:          projectAction,

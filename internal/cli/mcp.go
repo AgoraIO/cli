@@ -563,7 +563,7 @@ func (a *App) dispatchMCPTool(name string, args map[string]any, progress progres
 		if target == "" {
 			return nil, errors.New("name or dir is required")
 		}
-		return a.quickstartCreate(template, target, stringArg(args, "project"), boolArg(args, "templateOnly", false), false, io.Discard, bytes.NewReader(nil), stringArg(args, "ref"), progress)
+		return a.quickstartCreate(template, target, stringArg(args, "project"), boolArg(args, "templateOnly", false), false, io.Discard, bytes.NewReader(nil), stringArg(args, "ref"), progress, nil)
 
 	case "agora.quickstart.env_write":
 		return a.quickstartEnvWrite(defaultString(stringArg(args, "dir"), "."), stringArg(args, "template"), stringArg(args, "scenario"), stringArg(args, "project"))
