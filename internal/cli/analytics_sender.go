@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"slices"
 	"strings"
 	"time"
 )
@@ -217,15 +218,15 @@ func validAnalyticsEvent(e analyticsEvent) bool {
 				return false
 			}
 		case "agent_family":
-			if !oneOf(str, "codex", "claude-code", "kiro", "cursor", "cline", "windsurf", "aider", "custom", "unknown") {
+			if !slices.Contains(analyticsAgentFamilies, str) {
 				return false
 			}
 		case "agent_surface":
-			if !oneOf(str, "desktop", "cli", "unknown") {
+			if !slices.Contains(analyticsAgentSurfaces, str) {
 				return false
 			}
 		case "agent_detection_source":
-			if !oneOf(str, "explicit", "environment", "none") {
+			if !slices.Contains(analyticsDetectionSources, str) {
 				return false
 			}
 		case "source_type":
@@ -245,7 +246,7 @@ func validAnalyticsEvent(e analyticsEvent) bool {
 				return false
 			}
 		case "stage", "failed_stage":
-			if !oneOf(str, "validate", "source_resolve", "local_validate", "project_resolve", "clone", "env_write", "binding_write", "context_write", "agent_rules_write") {
+			if !slices.Contains(analyticsStages, str) {
 				return false
 			}
 		case "outcome":

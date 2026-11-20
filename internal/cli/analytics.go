@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"slices"
 	"strings"
 	"time"
 
@@ -28,6 +29,42 @@ var analyticsIDPattern = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{
 var analyticsSlugPattern = regexp.MustCompile(`^[a-z0-9]+(?:-[a-z0-9]+)*$`)
 var analyticsVersionPattern = regexp.MustCompile(`^[A-Za-z0-9.+_-]{0,64}$`)
 var analyticsCodePattern = regexp.MustCompile(`^[A-Z][A-Z0-9_]{0,63}$`)
+
+// Init stage names. These and the agent value sets below are part of the
+// collector allowlist: emit sites and validAnalyticsEvent share them so the
+// two can never drift.
+const (
+	analyticsStageValidate        = "validate"
+	analyticsStageSourceResolve   = "source_resolve"
+	analyticsStageLocalValidate   = "local_validate"
+	analyticsStageProjectResolve  = "project_resolve"
+	analyticsStageClone           = "clone"
+	analyticsStageEnvWrite        = "env_write"
+	analyticsStageBindingWrite    = "binding_write"
+	analyticsStageContextWrite    = "context_write"
+	analyticsStageAgentRulesWrite = "agent_rules_write"
+)
+
+var analyticsStages = []string{analyticsStageValidate, analyticsStageSourceResolve, analyticsStageLocalValidate, analyticsStageProjectResolve, analyticsStageClone, analyticsStageEnvWrite, analyticsStageBindingWrite, analyticsStageContextWrite, analyticsStageAgentRulesWrite}
+
+const (
+	analyticsAgentCustom  = "custom"
+	analyticsValueUnknown = "unknown"
+
+	analyticsSurfaceDesktop = "desktop"
+	analyticsSurfaceCLI     = "cli"
+
+	analyticsDetectionExplicit    = "explicit"
+	analyticsDetectionEnvironment = "environment"
+	analyticsDetectionNone        = "none"
+)
+
+// analyticsKnownAgentFamilies are agent labels reported as-is; any other
+// detected label is reported as analyticsAgentCustom.
+var analyticsKnownAgentFamilies = []string{"codex", "claude-code", "kiro", "cursor", "cline", "windsurf", "aider"}
+var analyticsAgentFamilies = append(slices.Clone(analyticsKnownAgentFamilies), analyticsAgentCustom, analyticsValueUnknown)
+var analyticsAgentSurfaces = []string{analyticsSurfaceDesktop, analyticsSurfaceCLI, analyticsValueUnknown}
+var analyticsDetectionSources = []string{analyticsDetectionExplicit, analyticsDetectionEnvironment, analyticsDetectionNone}
 
 type analyticsEvent struct {
 	Event       string         `json:"event"`
@@ -180,44 +217,41 @@ func (a *App) beginAnalytics(command, channel string) *analyticsOperation {
 	if command == "init" {
 		event := op.newEvent("cli_init_started", nil)
 		op.initStarted = &event
-		op.beginStage("validate")
+		op.beginStage(analyticsStageValidate)
 	}
 	return op
 }
 
 func analyticsAgent(env map[string]string) (family, surface, source string) {
-	surface, source = "unknown", "none"
+	family, surface, source = analyticsValueUnknown, analyticsValueUnknown, analyticsDetectionNone
 	label := agentLabelFromOSEnv(env)
-	family = "unknown"
 	if label == "" {
 		return
 	}
-	source = "environment"
+	source = analyticsDetectionEnvironment
 	if strings.TrimSpace(env["AGORA_AGENT"]) != "" {
-		source = "explicit"
+		source = analyticsDetectionExplicit
 	}
-	switch label {
-	case "codex", "claude-code", "kiro", "cursor", "cline", "windsurf", "aider":
+	family = analyticsAgentCustom
+	if slices.Contains(analyticsKnownAgentFamilies, label) {
 		family = label
-	default:
-		family = "custom"
 	}
 	if family == "claude-code" {
 		switch env["CLAUDE_CODE_ENTRYPOINT"] {
 		case "cli":
-			surface = "cli"
+			surface = analyticsSurfaceCLI
 		case "claude-desktop":
-			surface = "desktop"
+			surface = analyticsSurfaceDesktop
 		}
 	}
 	if family == "codex" && env["CODEX_INTERNAL_ORIGINATOR_OVERRIDE"] == "Codex Desktop" {
-		surface = "desktop"
+		surface = analyticsSurfaceDesktop
 	}
 	if family == "kiro" {
 		if env["AWS_SDK_UA_APP_ID"] == "kiro-ide" {
-			surface = "desktop"
+			surface = analyticsSurfaceDesktop
 		} else if env["KIRO_CLI_ACP_CLIENT_NAME"] == "kiro-tui" {
-			surface = "cli"
+			surface = analyticsSurfaceCLI
 		}
 	}
 	return

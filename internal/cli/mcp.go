@@ -383,14 +383,9 @@ func (a *App) dispatchMCPTool(name string, args map[string]any, progress progres
 		if err != nil {
 			return nil, err
 		}
-		return map[string]any{
-			"action":              "status",
-			"transportConfigured": a.analyticsURL() != "",
-			"captureActive":       a.telemetryAllowed(a.currentTelemetryPreference()) && a.analyticsURL() != "",
-			"configPath":          path,
-			"doNotTrack":          strings.TrimSpace(a.env["DO_NOT_TRACK"]) != "",
-			"enabled":             a.currentTelemetryPreference(),
-		}, nil
+		// MCP is long-lived: re-read the saved preference so changes made
+		// by other processes since startup are reflected.
+		return a.telemetryStatus("status", path, a.currentTelemetryPreference()), nil
 
 	case "agora.upgrade.check":
 		return a.performSelfUpdate(true)
@@ -613,7 +608,7 @@ func (a *App) dispatchMCPTool(name string, args map[string]any, progress progres
 		// scribble onto the host's stderr.
 		var promptOut bytes.Buffer
 		targetDir := defaultString(stringArg(args, "dir"), name)
-		op.beginStage("source_resolve")
+		op.beginStage(analyticsStageSourceResolve)
 		if recipeID != "" {
 			recipe, err := a.getRecipe(recipeID)
 			if err != nil {
