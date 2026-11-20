@@ -97,7 +97,7 @@ Use --feature to specify which features to enable on a newly created project (re
 				isTTY(os.Stdin)
 			progress := jsonProgressFor(a, cmd, "init")
 			op := analyticsFor(cmd)
-			op.beginStage("source_resolve")
+			op.beginStage(analyticsStageSourceResolve)
 			var result map[string]any
 			var err error
 			if strings.TrimSpace(recipeID) != "" {
@@ -117,7 +117,7 @@ Use --feature to specify which features to enable on a newly created project (re
 				return err
 			}
 			if len(agentRules) > 0 {
-				op.beginStage("agent_rules_write")
+				op.beginStage(analyticsStageAgentRulesWrite)
 				written, err := writeAgentRules(asString(result["path"]), agentRules)
 				if err != nil {
 					return err
@@ -365,13 +365,12 @@ type initProjectResolution struct {
 	createdRTMDataCenter   string
 }
 
-func (a *App) initProject(name, targetDir string, template quickstartTemplate, existingProject string, features []string, rtmDataCenter string, newProject bool, promptForReuse bool, promptOut io.Writer, promptIn io.Reader, progress progressEmitter, operations ...*analyticsOperation) (map[string]any, error) {
-	op := firstAnalytics(operations)
+func (a *App) initProject(name, targetDir string, template quickstartTemplate, existingProject string, features []string, rtmDataCenter string, newProject bool, promptForReuse bool, promptOut io.Writer, promptIn io.Reader, progress progressEmitter, op *analyticsOperation) (map[string]any, error) {
 	op.source("quickstart", template.ID)
 	if !template.Available || !template.SupportsInit {
 		return nil, &cliError{Message: fmt.Sprintf("Quickstart template %q is not supported by `agora init`. Use `agora quickstart create` instead.", template.ID), Code: "QUICKSTART_TEMPLATE_UNAVAILABLE"}
 	}
-	op.beginStage("local_validate")
+	op.beginStage(analyticsStageLocalValidate)
 	if _, err := resolveScaffoldTarget(targetDir); err != nil {
 		return nil, err
 	}
@@ -384,24 +383,18 @@ func (a *App) initProject(name, targetDir string, template quickstartTemplate, e
 	if err != nil {
 		return nil, err
 	}
-	op.beginStage("project_resolve")
+	op.beginStage(analyticsStageProjectResolve)
 	resolution, err := a.resolveInitProjectForScaffold(name, createFeatures, existingProject, rtmDataCenter, newProject, promptForReuse, promptOut, promptIn, progress, op)
 	if err != nil {
 		return nil, err
 	}
 	target := resolution.target
-	if op != nil {
-		op.properties["project_action"] = "reused"
-		if resolution.projectAction == "created" {
-			op.properties["project_action"] = "created"
-		}
-	}
 
 	quickstartResult, err := a.quickstartCreate(template, targetDir, target.project.ProjectID, false, false, promptOut, promptIn, "", progress, op)
 	if err != nil {
 		return nil, err
 	}
-	op.beginStage("context_write")
+	op.beginStage(analyticsStageContextWrite)
 	if err := a.persistInitProjectContext(target); err != nil {
 		return nil, err
 	}
@@ -437,8 +430,7 @@ func (a *App) initProject(name, targetDir string, template quickstartTemplate, e
 	return result, nil
 }
 
-func (a *App) resolveInitProjectForScaffold(name string, createFeatures []string, existingProject string, rtmDataCenter string, newProject bool, promptForReuse bool, promptOut io.Writer, promptIn io.Reader, progress progressEmitter, operations ...*analyticsOperation) (initProjectResolution, error) {
-	op := firstAnalytics(operations)
+func (a *App) resolveInitProjectForScaffold(name string, createFeatures []string, existingProject string, rtmDataCenter string, newProject bool, promptForReuse bool, promptOut io.Writer, promptIn io.Reader, progress progressEmitter, op *analyticsOperation) (initProjectResolution, error) {
 	var target projectTarget
 	projectAction := "existing"
 	projectSelectionReason := "explicit_project"
@@ -535,6 +527,7 @@ func (a *App) resolveInitProjectForScaffold(name string, createFeatures []string
 	}
 
 	op.setAppID(target.project.AppID)
+	op.setProjectAction(projectAction)
 	return initProjectResolution{
 		target:                 target,
 		projectAction:          projectAction,

@@ -219,13 +219,12 @@ func (a *App) getRecipe(slug string) (recipeDetail, error) {
 	return response.Recipe, nil
 }
 
-func (a *App) initRecipeProject(name, targetDir string, recipe recipeDetail, existingProject string, features []string, rtmDataCenter string, newProject bool, promptForReuse bool, promptOut io.Writer, promptIn io.Reader, progress progressEmitter, operations ...*analyticsOperation) (map[string]any, error) {
-	op := firstAnalytics(operations)
+func (a *App) initRecipeProject(name, targetDir string, recipe recipeDetail, existingProject string, features []string, rtmDataCenter string, newProject bool, promptForReuse bool, promptOut io.Writer, promptIn io.Reader, progress progressEmitter, op *analyticsOperation) (map[string]any, error) {
 	op.source("recipe", recipe.Slug)
 	if err := validateRecipeCLIConfig(recipe.CLI); err != nil {
 		return nil, err
 	}
-	op.beginStage("local_validate")
+	op.beginStage(analyticsStageLocalValidate)
 	absTarget, err := resolveScaffoldTarget(targetDir)
 	if err != nil {
 		return nil, err
@@ -236,18 +235,12 @@ func (a *App) initRecipeProject(name, targetDir string, recipe recipeDetail, exi
 	if err != nil {
 		return nil, err
 	}
-	op.beginStage("project_resolve")
+	op.beginStage(analyticsStageProjectResolve)
 	resolution, err := a.resolveInitProjectForScaffold(name, createFeatures, existingProject, rtmDataCenter, newProject, promptForReuse, promptOut, promptIn, progress, op)
 	if err != nil {
 		return nil, err
 	}
-	if op != nil {
-		op.properties["project_action"] = "reused"
-		if resolution.projectAction == "created" {
-			op.properties["project_action"] = "created"
-		}
-	}
-	op.beginStage("clone")
+	op.beginStage(analyticsStageClone)
 	if err := cloneScaffoldRepo(recipe.MainRepoURL, absTarget, "", progress); err != nil {
 		return nil, err
 	}
@@ -261,7 +254,7 @@ func (a *App) initRecipeProject(name, targetDir string, recipe recipeDetail, exi
 		Recipe:      recipe.Slug,
 	}
 	envPath := filepath.ToSlash(filepath.Clean(recipe.CLI.Env.TargetPath))
-	op.beginStage("env_write")
+	op.beginStage(analyticsStageEnvWrite)
 	writtenEnv, err := writeCredentialEnv(credentialEnvTarget{
 		Path:              filepath.Join(absTarget, filepath.FromSlash(recipe.CLI.Env.TargetPath)),
 		ExamplePath:       filepath.Join(absTarget, filepath.FromSlash(recipe.CLI.Env.ExamplePath)),
@@ -280,12 +273,12 @@ func (a *App) initRecipeProject(name, targetDir string, recipe recipeDetail, exi
 	if recipe.CLI.RunCommand != "" {
 		nextSteps = append(nextSteps, recipe.CLI.RunCommand)
 	}
-	op.beginStage("binding_write")
+	op.beginStage(analyticsStageBindingWrite)
 	if err := writeLocalProjectBinding(absTarget, binding); err != nil {
 		return nil, cleanupFailedScaffold(absTarget, "write .agora project metadata", err)
 	}
 	sort.Strings(written)
-	op.beginStage("context_write")
+	op.beginStage(analyticsStageContextWrite)
 	if err := a.persistInitProjectContext(target); err != nil {
 		return nil, err
 	}

@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 const telemetryDisclosure = `Agora CLI collects usage statistics by default when a collector is configured:
@@ -33,6 +34,21 @@ func (a *App) persistTelemetryChoice(enabled bool) error {
 	a.cfg = next
 	a.applyConfigToEnv()
 	return nil
+}
+
+// telemetryStatus is the shared result for `agora telemetry status|enable|disable`
+// and the agora.telemetry.status MCP tool. preference is the saved
+// telemetryEnabled value the caller considers current.
+func (a *App) telemetryStatus(action, configPath string, preference bool) map[string]any {
+	transport := a.analyticsURL() != ""
+	return map[string]any{
+		"action":              action,
+		"transportConfigured": transport,
+		"captureActive":       a.telemetryAllowed(preference) && transport,
+		"configPath":          configPath,
+		"doNotTrack":          strings.TrimSpace(a.env["DO_NOT_TRACK"]) != "",
+		"enabled":             preference,
+	}
 }
 
 func (a *App) maybeShowTelemetryNotice(cmd *cobra.Command) {

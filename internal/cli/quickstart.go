@@ -397,7 +397,7 @@ If a current project context exists, or if --project is passed, the CLI also wri
 				!isCIEnvironment(a.osEnv) &&
 				isTTY(os.Stdin)
 			progress := jsonProgressFor(a, cmd, "quickstart create")
-			result, err := a.quickstartCreate(template, targetDir, project, templateOnly, promptForProject, cmd.ErrOrStderr(), os.Stdin, ref, progress)
+			result, err := a.quickstartCreate(template, targetDir, project, templateOnly, promptForProject, cmd.ErrOrStderr(), os.Stdin, ref, progress, nil)
 			if err != nil {
 				return err
 			}
@@ -541,8 +541,7 @@ Python and Go quickstarts receive backend AGORA_APP_ID and AGORA_APP_CERTIFICATE
 	return cmd
 }
 
-func (a *App) quickstartCreate(template quickstartTemplate, targetDir, explicitProject string, templateOnly, promptForProject bool, promptOut io.Writer, promptIn io.Reader, ref string, progress progressEmitter, operations ...*analyticsOperation) (map[string]any, error) {
-	op := firstAnalytics(operations)
+func (a *App) quickstartCreate(template quickstartTemplate, targetDir, explicitProject string, templateOnly, promptForProject bool, promptOut io.Writer, promptIn io.Reader, ref string, progress progressEmitter, op *analyticsOperation) (map[string]any, error) {
 	if !template.Available || strings.TrimSpace(template.RepoURL) == "" {
 		return nil, &cliError{Message: fmt.Sprintf("Quickstart template %q is not available yet.", template.ID), Code: "QUICKSTART_TEMPLATE_UNAVAILABLE"}
 	}
@@ -592,7 +591,7 @@ func (a *App) quickstartCreate(template quickstartTemplate, targetDir, explicitP
 	if overrideKey != "" {
 		progress.emit("clone:override", fmt.Sprintf("Using repo override from %s", overrideKey), map[string]any{"repoUrl": repoURL, "envVar": overrideKey})
 	}
-	op.beginStage("clone")
+	op.beginStage(analyticsStageClone)
 	if err := cloneScaffoldRepo(repoURL, absTarget, ref, progress, &template); err != nil {
 		return nil, err
 	}
@@ -605,7 +604,7 @@ func (a *App) quickstartCreate(template quickstartTemplate, targetDir, explicitP
 		if !ok {
 			return nil, &cliError{Message: fmt.Sprintf("Quickstart template %q does not define an env target yet.", template.ID), Code: "QUICKSTART_TEMPLATE_ENV_UNSUPPORTED"}
 		}
-		op.beginStage("env_write")
+		op.beginStage(analyticsStageEnvWrite)
 		writtenPath, _, err := seedQuickstartEnv(absTarget, template, layout, boundProject.project)
 		if err != nil {
 			if cleanupErr := os.RemoveAll(absTarget); cleanupErr != nil {
@@ -613,7 +612,7 @@ func (a *App) quickstartCreate(template quickstartTemplate, targetDir, explicitP
 			}
 			return nil, fmt.Errorf("failed to configure quickstart env after clone: %v; removed %s", err, absTarget)
 		}
-		op.beginStage("binding_write")
+		op.beginStage(analyticsStageBindingWrite)
 		if err := writeLocalProjectBinding(absTarget, localProjectBinding{
 			ProjectID:   boundProject.project.ProjectID,
 			ProjectName: boundProject.project.Name,

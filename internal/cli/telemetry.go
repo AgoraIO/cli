@@ -6,10 +6,11 @@ import (
 	"time"
 )
 
-// telemetryClient is the diagnostics sink interface. Anonymous product
-// analytics uses the separate bounded collector in analytics.go. It is intentionally minimal so the production sink can
-// be swapped (e.g. for the Sentry SDK or a file sink in tests) without
-// touching call sites in app.go / commands.go.
+// telemetryClient is the diagnostics sink interface. Usage analytics uses
+// the separate bounded collector in analytics.go; both share the
+// telemetryAllowed gate below. The interface is intentionally minimal so the
+// production sink can be swapped (e.g. for the Sentry SDK or a file sink in
+// tests) without touching call sites in app.go / commands.go.
 //
 // Contract for all implementations:
 //   - All methods MUST be safe to call from any goroutine.
@@ -43,6 +44,31 @@ type telemetryClient interface {
 	Flush(timeout time.Duration) bool
 }
 
+// telemetryAllowed is the single gate for every telemetry sink (usage
+// analytics and the diagnostics client). preference is the saved
+// telemetryEnabled value: the startup snapshot for shell commands, or the
+// freshly re-read config for long-lived MCP servers.
+func (a *App) telemetryAllowed(preference bool) bool {
+	return preference && !a.telemetryOptedOut()
+}
+
+// telemetryOptedOut reports a runtime opt-out that overrides the saved
+// preference: DO_NOT_TRACK (any non-empty value), AGORA_TELEMETRY_ENABLED=0
+// or AGORA_SENTRY_ENABLED=0.
+func (a *App) telemetryOptedOut() bool {
+	if a == nil || strings.TrimSpace(a.env["DO_NOT_TRACK"]) != "" || a.env["AGORA_TELEMETRY_ENABLED"] == "0" {
+		return true
+	}
+	sentryOverride := a.env["AGORA_SENTRY_ENABLED"]
+	if a.cfgState.ConfigFilePath != "" {
+		// applyConfigToEnv also writes this key from the saved preference.
+		// Only an explicit OS override should mask a preference changed
+		// since this (possibly long-lived MCP) process started.
+		sentryOverride = a.osEnv["AGORA_SENTRY_ENABLED"]
+	}
+	return sentryOverride == "0"
+}
+
 // agoraSentryDSN is the Sentry project DSN that the CLI ships with.
 // Empty string disables Sentry transport entirely (the default until the
 // Sentry SDK is wired in for the next release). When set, events go to the
@@ -52,22 +78,15 @@ const agoraSentryDSN = ""
 // initTelemetry returns the telemetry client appropriate for the current
 // runtime. Decision order:
 //
-//  1. DO_NOT_TRACK is set → noop (Console-style hard opt-out).
-//  2. config.telemetryEnabled is false → noop.
-//  3. AGORA_SENTRY_ENABLED=0 in the environment → noop.
-//  4. agoraSentryDSN is empty (default in the current build) → noop.
-//  5. Otherwise → Sentry-backed client (placeholder until SDK wired).
+//  1. allowed is false (see App.telemetryAllowed: saved preference off,
+//     DO_NOT_TRACK, AGORA_TELEMETRY_ENABLED=0 or AGORA_SENTRY_ENABLED=0) → noop.
+//  2. agoraSentryDSN is empty (default in the current build) → noop.
+//  3. Otherwise → Sentry-backed client (placeholder until SDK wired).
 //
 // initTelemetry never returns nil; callers can rely on a usable
 // interface value without a nil check.
-func initTelemetry(configEnabled bool, env map[string]string, _ versionInformation) telemetryClient {
-	if strings.TrimSpace(env["DO_NOT_TRACK"]) != "" {
-		return noopTelemetry{}
-	}
-	if !configEnabled {
-		return noopTelemetry{}
-	}
-	if strings.TrimSpace(env["AGORA_SENTRY_ENABLED"]) == "0" {
+func initTelemetry(allowed bool, env map[string]string, _ versionInformation) telemetryClient {
+	if !allowed {
 		return noopTelemetry{}
 	}
 	if agoraSentryDSN == "" {

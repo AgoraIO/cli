@@ -184,7 +184,7 @@ func NewApp() (*App, error) {
 	// telemetry is disabled, when DO_NOT_TRACK is set, or when the
 	// Sentry DSN is empty (build without telemetry compiled in). Telemetry
 	// must never block the CLI from starting.
-	a.telemetry = initTelemetry(a.cfg.TelemetryEnabled, a.env, versionInfo())
+	a.telemetry = initTelemetry(a.telemetryAllowed(a.cfg.TelemetryEnabled), a.env, versionInfo())
 	return a, nil
 }
 

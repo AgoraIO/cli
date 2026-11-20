@@ -46,7 +46,11 @@ internal/cli/
   install_doctor.go         Top-level agora doctor — install self-test (PATH, network, auth, MCP host)
   env_help.go               agora env-help — authoritative env-var catalog
   skills.go                 agora skills — curated workflow recipes (in-binary catalog)
-  telemetry.go              telemetryClient interface + noop sink + Sentry placeholder (wire-up scheduled for next release)
+  telemetry.go              Shared telemetry gate (telemetryAllowed / runtime opt-out) + diagnostics telemetryClient interface, noop sink and Sentry placeholder (no DSN shipped)
+  telemetry_notice.go       Telemetry preference persistence, first-use disclosure, shared telemetry status result
+  analytics.go              Usage analytics: operation lifecycle, installation ID, agent classification, init stages, allowlisted values
+  analytics_sender.go       Usage analytics delivery: 64 KiB batching, allowlist validation, detached shell sender, in-process MCP sender
+  analytics_process_*.go    Per-OS detach settings for the shell sender subprocess
   local_project.go          .agora/project.json read/write; repo-local project binding
   runtime_support.go        Template/runtime detection (nextjs, python, go), CI auto-detect, banner rules
   app_test.go               Unit tests for app init and config

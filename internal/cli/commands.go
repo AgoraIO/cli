@@ -228,14 +228,7 @@ func (a *App) renderTelemetry(cmd *cobra.Command) error {
 	if err != nil {
 		return err
 	}
-	return renderResult(cmd, "telemetry", map[string]any{
-		"action":              "status",
-		"transportConfigured": a.analyticsURL() != "",
-		"captureActive":       a.analyticsEnabled() && a.analyticsURL() != "",
-		"configPath":          path,
-		"doNotTrack":          strings.TrimSpace(a.env["DO_NOT_TRACK"]) != "",
-		"enabled":             a.cfg.TelemetryEnabled,
-	})
+	return renderResult(cmd, "telemetry", a.telemetryStatus("status", path, a.cfg.TelemetryEnabled))
 }
 
 func (a *App) setTelemetry(cmd *cobra.Command, enabled bool) error {
@@ -249,14 +242,8 @@ func (a *App) setTelemetry(cmd *cobra.Command, enabled bool) error {
 	if enabled {
 		a.maybeShowTelemetryNotice(cmd)
 	}
-	return renderResult(cmd, "telemetry", map[string]any{
-		"action":              map[bool]string{true: "enable", false: "disable"}[enabled],
-		"transportConfigured": a.analyticsURL() != "",
-		"captureActive":       a.analyticsEnabled() && a.analyticsURL() != "",
-		"configPath":          path,
-		"enabled":             enabled,
-		"doNotTrack":          strings.TrimSpace(a.env["DO_NOT_TRACK"]) != "",
-	})
+	// persistTelemetryChoice updated a.cfg, so the snapshot is the new choice.
+	return renderResult(cmd, "telemetry", a.telemetryStatus(map[bool]string{true: "enable", false: "disable"}[enabled], path, a.cfg.TelemetryEnabled))
 }
 
 func (a *App) buildUpgradeCommand() *cobra.Command {

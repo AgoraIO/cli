@@ -95,6 +95,9 @@ Notes for agents:
 }
 
 func (a *App) serveMCP(in io.Reader, out io.Writer) error {
+	// Usage batches are sent in process for MCP; give the last ones a short,
+	// bounded chance to complete once the host closes the transport.
+	defer drainAnalyticsSends(analyticsMCPDrainTimeout)
 	scanner := bufio.NewScanner(in)
 	// Default Scanner has a 64 KiB line cap. Larger payloads (a quickstart
 	// create with custom args, a doctor result echoed back to the client)
@@ -383,14 +386,9 @@ func (a *App) dispatchMCPTool(name string, args map[string]any, progress progres
 		if err != nil {
 			return nil, err
 		}
-		return map[string]any{
-			"action":              "status",
-			"transportConfigured": a.analyticsURL() != "",
-			"captureActive":       a.currentTelemetryPreference() && !a.analyticsOptedOut() && a.analyticsURL() != "",
-			"configPath":          path,
-			"doNotTrack":          strings.TrimSpace(a.env["DO_NOT_TRACK"]) != "",
-			"enabled":             a.currentTelemetryPreference(),
-		}, nil
+		// MCP is long-lived: re-read the saved preference so changes made
+		// by other processes since startup are reflected.
+		return a.telemetryStatus("status", path, a.currentTelemetryPreference()), nil
 
 	case "agora.upgrade.check":
 		return a.performSelfUpdate(true)
@@ -563,7 +561,7 @@ func (a *App) dispatchMCPTool(name string, args map[string]any, progress progres
 		if target == "" {
 			return nil, errors.New("name or dir is required")
 		}
-		return a.quickstartCreate(template, target, stringArg(args, "project"), boolArg(args, "templateOnly", false), false, io.Discard, bytes.NewReader(nil), stringArg(args, "ref"), progress)
+		return a.quickstartCreate(template, target, stringArg(args, "project"), boolArg(args, "templateOnly", false), false, io.Discard, bytes.NewReader(nil), stringArg(args, "ref"), progress, nil)
 
 	case "agora.quickstart.env_write":
 		return a.quickstartEnvWrite(defaultString(stringArg(args, "dir"), "."), stringArg(args, "template"), stringArg(args, "scenario"), stringArg(args, "project"))
@@ -613,7 +611,7 @@ func (a *App) dispatchMCPTool(name string, args map[string]any, progress progres
 		// scribble onto the host's stderr.
 		var promptOut bytes.Buffer
 		targetDir := defaultString(stringArg(args, "dir"), name)
-		op.beginStage("source_resolve")
+		op.beginStage(analyticsStageSourceResolve)
 		if recipeID != "" {
 			recipe, err := a.getRecipe(recipeID)
 			if err != nil {
