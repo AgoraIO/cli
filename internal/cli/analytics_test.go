@@ -330,3 +330,61 @@ func TestAnalyticsWebIdentityInputsRemoved(t *testing.T) {
 		}
 	}
 }
+
+func TestAnalyticsProjectCreateFailureBeforeAPIIsReported(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		channel string
+		args    []string
+		mcpArgs map[string]any
+		setup   func(t *testing.T, a *App)
+	}{
+		{name: "invalid feature", channel: "shell", args: []string{"project", "create", "demo", "--feature", "bogus", "--json"}},
+		{name: "invalid rtm data center", channel: "shell", args: []string{"project", "create", "demo", "--rtm-data-center", "XX", "--json"}},
+		{name: "unreadable context", channel: "shell", args: []string{"project", "create", "demo", "--json"}, setup: func(t *testing.T, a *App) {
+			path, err := resolveContextFilePath(a.env)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(path, []byte("{invalid"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+		}},
+		{name: "missing name", channel: "mcp", mcpArgs: map[string]any{}},
+	} {
+		t.Run(tc.channel+"/"+tc.name, func(t *testing.T) {
+			server, read := analyticsRecorder(t)
+			a := analyticsTestApp(t, server.URL)
+			if tc.setup != nil {
+				tc.setup(t, a)
+			}
+			var err error
+			if tc.channel == "shell" {
+				a.root = a.buildRoot()
+				a.root.SetOut(io.Discard)
+				a.root.SetErr(io.Discard)
+				a.root.SetArgs(tc.args)
+				err = a.root.Execute()
+			} else {
+				_, err = a.callMCPTool("agora.project.create", tc.mcpArgs, nil)
+			}
+			if err == nil {
+				t.Fatal("fixture must fail before the create API call")
+			}
+			events := waitAnalyticsEvents(t, read, 1)
+			// Give a duplicate a chance to arrive before asserting exactly one.
+			time.Sleep(50 * time.Millisecond)
+			events = read()
+			if len(events) != 1 {
+				t.Fatalf("want exactly one event, got %+v", events)
+			}
+			p := events[0].Properties
+			if events[0].Event != "cli_project_create_completed" || p["outcome"] != "failure" || p["error_code"] == "" || p["exit_code"] == float64(0) || p["invocation_channel"] != tc.channel || p["app_id"] != nil {
+				t.Fatalf("unexpected pre-API failure event: %+v", events[0])
+			}
+		})
+	}
+}

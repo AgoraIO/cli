@@ -88,6 +88,9 @@ type analyticsOperation struct {
 	events       []json.RawMessage
 	batchBytes   int
 	endpoint     string
+	// projectCreateReported is set once the createProject API boundary has
+	// emitted cli_project_create_completed for this operation.
+	projectCreateReported bool
 }
 
 type analyticsContextKey struct{}
@@ -323,7 +326,10 @@ func (op *analyticsOperation) finish(err error) {
 	if op.command == "init" && failedStage != "" {
 		fields["failed_stage"] = failedStage
 	}
-	if op.command != "project create" {
+	// `project create` normally reports at the API boundary (projectCreated)
+	// so its timing excludes later feature work. A failure before that call
+	// (not logged in, unreadable context, invalid flags) reports here instead.
+	if op.command != "project create" || !op.projectCreateReported {
 		op.emit(event, fields)
 	}
 	op.flush()
@@ -411,4 +417,5 @@ func (op *analyticsOperation) projectCreated(id string, started time.Time, err e
 		exit = exitCodeForError(err)
 	}
 	op.emit("cli_project_create_completed", map[string]any{"outcome": outcome, "error_code": code, "duration_ms": time.Since(started).Milliseconds(), "exit_code": exit})
+	op.projectCreateReported = true
 }
