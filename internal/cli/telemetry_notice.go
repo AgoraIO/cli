@@ -2,18 +2,19 @@ package cli
 
 import (
 	"fmt"
-	"github.com/spf13/cobra"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/spf13/cobra"
 )
 
 const telemetryDisclosure = `Agora CLI collects usage statistics by default when a collector is configured:
 recipes/init/project create results, stages, duration, version, OS/architecture,
 public recipe/template IDs, Agora App IDs and coarse AI-tool categories.
 Events use a random installation ID with an installation profile in PostHog;
-website identities are not linked.
+Agora App IDs can be associated with Agora projects and companies.
 No code, conversation content, secrets, project names or local paths are collected.
 Details: https://agoraio.github.io/cli/telemetry.html
 Disable: agora telemetry disable, DO_NOT_TRACK=1 or AGORA_TELEMETRY_ENABLED=0`
@@ -38,16 +39,21 @@ func (a *App) persistTelemetryChoice(enabled bool) error {
 
 // telemetryStatus is the shared result for `agora telemetry status|enable|disable`
 // and the agora.telemetry.status MCP tool. preference is the saved
-// telemetryEnabled value the caller considers current.
+// telemetryEnabled value the caller considers current: the startup snapshot
+// (already updated by enable/disable) for shell commands, or the re-read config
+// for MCP. enabled is the effective value after runtime opt-outs;
+// savedPreference is the saved value itself.
 func (a *App) telemetryStatus(action, configPath string, preference bool) map[string]any {
+	enabled := a.telemetryAllowed(preference)
 	transport := a.analyticsURL() != ""
 	return map[string]any{
 		"action":              action,
 		"transportConfigured": transport,
-		"captureActive":       a.telemetryAllowed(preference) && transport,
+		"captureActive":       enabled && transport,
 		"configPath":          configPath,
 		"doNotTrack":          strings.TrimSpace(a.env["DO_NOT_TRACK"]) != "",
-		"enabled":             preference,
+		"enabled":             enabled,
+		"savedPreference":     preference,
 	}
 }
 

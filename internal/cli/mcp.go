@@ -84,7 +84,6 @@ Notes for agents:
 			if transport != "stdio" {
 				return fmt.Errorf("unsupported MCP transport %q; use stdio", transport)
 			}
-			a.maybeShowTelemetryNotice(cmd)
 			return a.serveMCP(cmd.InOrStdin(), cmd.OutOrStdout())
 		},
 	}
@@ -140,13 +139,17 @@ func (a *App) serveMCP(in io.Reader, out io.Writer) error {
 func (a *App) handleMCPRequest(req mcpRequest, encoder *json.Encoder) (any, error) {
 	switch req.Method {
 	case "initialize":
-		return map[string]any{
+		result := map[string]any{
 			"protocolVersion": mcpProtocolVersion,
 			"capabilities": map[string]any{
 				"tools": map[string]any{},
 			},
 			"serverInfo": map[string]any{"name": "agora-cli", "version": version},
-		}, nil
+		}
+		if a.analyticsURL() != "" {
+			result["instructions"] = telemetryDisclosure
+		}
+		return result, nil
 	case "tools/list":
 		return map[string]any{"tools": mcpTools()}, nil
 	case "tools/call":

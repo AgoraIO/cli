@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -86,12 +87,44 @@ func TestCLITelemetryDefaultJSONAndExcludedCommands(t *testing.T) {
 	}
 	waitAnalyticsEvents(t, read, 1)
 	env["DO_NOT_TRACK"] = "1"
-	status := runCLI(t, []string{"telemetry", "status", "--json"}, cliRunOptions{env: env})
-	if !strings.Contains(status.stdout, `"enabled":true`) || !strings.Contains(status.stdout, `"captureActive":false`) || strings.Contains(status.stdout, `"consent"`) {
-		t.Fatalf("wrong preference status: %s", status.stdout)
+	for _, action := range []string{"status", "enable"} {
+		result := runCLI(t, []string{"telemetry", action, "--json"}, cliRunOptions{env: env})
+		if result.exitCode != 0 || !strings.Contains(result.stdout, `"enabled":false`) ||
+			!strings.Contains(result.stdout, `"savedPreference":true`) ||
+			!strings.Contains(result.stdout, `"captureActive":false`) {
+			t.Fatalf("unexpected telemetry %s result: %+v", action, result)
+		}
 	}
 	disabled := runCLI(t, []string{"telemetry", "disable", "--json"}, cliRunOptions{env: env})
 	if strings.Contains(disabled.stderr, "Agora CLI collects") {
 		t.Fatal("disable notice")
+	}
+}
+
+func TestMCPTelemetryDisclosureDoesNotMarkShellNoticeShown(t *testing.T) {
+	a := analyticsTestApp(t, "https://collector.example/events")
+	cmd := a.buildMCPCommand()
+	cmd.SetArgs([]string{"serve"})
+	cmd.SetIn(strings.NewReader("{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\"}\n"))
+	var stdout, stderr bytes.Buffer
+	cmd.SetOut(&stdout)
+	cmd.SetErr(&stderr)
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+
+	var response struct {
+		Result struct {
+			Instructions string `json:"instructions"`
+		} `json:"result"`
+	}
+	if err := json.Unmarshal(stdout.Bytes(), &response); err != nil {
+		t.Fatal(err)
+	}
+	if response.Result.Instructions != telemetryDisclosure || stderr.Len() != 0 {
+		t.Fatalf("unexpected MCP disclosure: stdout=%q stderr=%q", stdout.String(), stderr.String())
+	}
+	if _, err := os.Stat(filepath.Join(a.env["AGORA_HOME"], "telemetry-notice-shown")); !os.IsNotExist(err) {
+		t.Fatalf("MCP wrote the shell notice marker: %v", err)
 	}
 }

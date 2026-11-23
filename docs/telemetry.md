@@ -13,8 +13,8 @@ configuration are required before production capture is active.
 Events contain a random local installation ID, a per-operation ID, CLI version,
 OS/architecture, coarse AI-tool categories, public recipe/template IDs, timings
 and structured results. Project/init events can include validated Agora App IDs.
-An installation profile can be created in PostHog; website identities are not
-linked. OAuth tokens, App Certificates, project names, source code, conversation
+An installation profile can be created in PostHog. Agora App IDs can be
+associated with Agora projects and companies. OAuth tokens, App Certificates, project names, source code, conversation
 content, local paths and raw errors are not included.
 
 Recipe init attempts are labeled as Recipe usage even if the catalog lookup
@@ -68,10 +68,16 @@ agora telemetry disable --json
 agora telemetry enable --json
 ```
 
-`enabled` reports the saved preference. `transportConfigured` reports whether a
-valid collector URL is configured. `captureActive` combines the preference,
-runtime opt-out and transport configuration; it does not confirm delivery.
-A first-use disclosure is printed to stderr unless quiet mode suppresses it.
+`savedPreference` reports the configured preference. `enabled` also accounts
+for runtime opt-outs. `transportConfigured` reports whether a valid collector
+URL is configured. `captureActive` requires both `enabled` and
+`transportConfigured`. It tracks whether capture can start.
+
+Shell commands print a first-use disclosure to stderr unless quiet mode
+suppresses it. MCP includes the disclosure in its initialization instructions
+when a collector is configured. MCP hosts decide how to present instructions.
+The disclosure provides notice. The first instrumented call can collect events
+when capture is active.
 
 Any of these signals disables capture:
 
