@@ -15,6 +15,10 @@ Earlier entries pre-date this convention and only carry their version's compare 
 
 ## [Unreleased]
 
+### Added
+
+- Report `savedPreference`, `transportConfigured`, and `captureActive` in telemetry status output. `enabled` continues to reflect runtime opt-outs ([#76](https://github.com/AgoraIO/cli/pull/76)).
+
 ### Changed
 
 - Rename the `project show --json` token debug status to `signalingTokenDebugEnabled` and remove the misleading token capability warning from `project doctor`. Update consumers of the old `tokenEnabled` result field.

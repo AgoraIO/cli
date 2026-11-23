@@ -6,9 +6,9 @@ import (
 	"time"
 )
 
-// telemetryClient is the diagnostics sink interface. Anonymous product
-// analytics uses the separate bounded collector in analytics.go. It is intentionally minimal so the production sink can
-// be swapped (e.g. for the Sentry SDK or a file sink in tests) without
+// telemetryClient is the diagnostics sink interface. Usage analytics uses the
+// separate bounded collector in analytics.go. This interface is minimal so the
+// sink can be swapped (e.g. for the Sentry SDK or a file sink in tests) without
 // touching call sites in app.go / commands.go.
 //
 // Contract for all implementations:

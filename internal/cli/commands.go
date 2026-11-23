@@ -234,7 +234,8 @@ func (a *App) renderTelemetry(cmd *cobra.Command) error {
 		"captureActive":       a.analyticsEnabled() && a.analyticsURL() != "",
 		"configPath":          path,
 		"doNotTrack":          strings.TrimSpace(a.env["DO_NOT_TRACK"]) != "",
-		"enabled":             a.cfg.TelemetryEnabled,
+		"enabled":             a.analyticsEnabled(),
+		"savedPreference":     a.cfg.TelemetryEnabled,
 	})
 }
 
@@ -254,7 +255,8 @@ func (a *App) setTelemetry(cmd *cobra.Command, enabled bool) error {
 		"transportConfigured": a.analyticsURL() != "",
 		"captureActive":       a.analyticsEnabled() && a.analyticsURL() != "",
 		"configPath":          path,
-		"enabled":             enabled,
+		"enabled":             a.analyticsEnabled(),
+		"savedPreference":     enabled,
 		"doNotTrack":          strings.TrimSpace(a.env["DO_NOT_TRACK"]) != "",
 	})
 }
