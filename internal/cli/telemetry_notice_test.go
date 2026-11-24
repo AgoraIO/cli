@@ -128,3 +128,20 @@ func TestMCPTelemetryDisclosureDoesNotMarkShellNoticeShown(t *testing.T) {
 		t.Fatalf("MCP wrote the shell notice marker: %v", err)
 	}
 }
+
+func TestMCPTelemetryStatusReportsEffectiveAndSavedPreference(t *testing.T) {
+	for _, optOut := range []bool{false, true} {
+		a := analyticsTestApp(t, "https://collector.example/events")
+		if optOut {
+			a.env["DO_NOT_TRACK"] = "1"
+		}
+		result, err := a.callMCPTool("agora.telemetry.status", nil, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		status := result.(map[string]any)
+		if status["savedPreference"] != true || status["enabled"] != !optOut || status["captureActive"] != !optOut || status["transportConfigured"] != true || status["doNotTrack"] != optOut {
+			t.Fatalf("optOut=%v: unexpected MCP telemetry status %v", optOut, status)
+		}
+	}
+}
