@@ -6,11 +6,11 @@ import (
 	"time"
 )
 
-// telemetryClient is the diagnostics sink interface. Usage analytics uses
-// the separate bounded collector in analytics.go; both share the
-// telemetryAllowed gate below. The interface is intentionally minimal so the
-// production sink can be swapped (e.g. for the Sentry SDK or a file sink in
-// tests) without touching call sites in app.go / commands.go.
+// telemetryClient is the diagnostics sink interface. Usage analytics uses the
+// separate bounded collector in analytics.go; both share the telemetryAllowed
+// gate below. This interface is minimal so the sink can be swapped (e.g. for
+// the Sentry SDK or a file sink in tests) without touching call sites in
+// app.go / commands.go.
 //
 // Contract for all implementations:
 //   - All methods MUST be safe to call from any goroutine.

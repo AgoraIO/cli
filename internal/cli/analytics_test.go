@@ -379,10 +379,10 @@ func TestAnalyticsProjectCreateFailureBeforeAPIIsReported(t *testing.T) {
 			if err == nil {
 				t.Fatal("fixture must fail before the create API call")
 			}
-			events := waitAnalyticsEvents(t, read, 1)
+			waitAnalyticsEvents(t, read, 1)
 			// Give a duplicate a chance to arrive before asserting exactly one.
 			time.Sleep(50 * time.Millisecond)
-			events = read()
+			events := read()
 			if len(events) != 1 {
 				t.Fatalf("want exactly one event, got %+v", events)
 			}
