@@ -37,10 +37,9 @@ For end-user behavior and machine-readable contracts, see:
 
 Requirements:
 
-- **Go** 1.26.6+ (see `go.mod`). Release builds intentionally track the current stable Go toolchain; this distributed CLI does not target older Go compiler support.
+- **Go** 1.26.11+ (see `go.mod`). Release builds intentionally track the current stable Go toolchain; this distributed CLI does not target older Go compiler support.
 - **Git**.
-- (Optional) `golangci-lint` v1.64.8 — install matches CI; instructions in
-  the next section.
+- (Optional) `golangci-lint` v2.12.2 (matches CI). See the next section for installation instructions.
 
 ```bash
 git clone https://github.com/AgoraIO/cli.git
@@ -74,10 +73,10 @@ Documentation work:
 - Run `make docs-commands` after command-tree changes; CI uses `go run ./cmd/gendocs -check`.
 - For GitHub Pages content, use `make docs-preview` (see `scripts/preview-pages-site.sh`). Published docs resolve `@@CLI_DOCS_*@@` and `@@CLI_INSTALL_*@@` tokens via `scripts/prepare-pages-site.py` and `internal-docs/pages/site.env` as documented in `docs/automation.md`.
 
-Install `golangci-lint` **v1.64.8** (matches CI). CI builds it with `go install` against your toolchain; locally prefer:
+CI uses the `golangci-lint` **v2.12.2** release binary. To build the same version with your local Go toolchain, run the following command.
 
 ```bash
-go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.64.8
+go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.12.2
 ```
 
 Or use the [install script](https://golangci-lint.run/welcome/install/) if the binary supports your `go.mod` Go version.
