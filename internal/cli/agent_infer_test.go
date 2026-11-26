@@ -13,11 +13,15 @@ func TestAgentLabelFromOSEnv(t *testing.T) {
 	}{
 		{name: "explicit wins", env: map[string]string{"AGORA_AGENT": "custom", "CURSOR_AGENT": "1"}, want: "custom"},
 		{name: "disabled", env: map[string]string{"AGORA_AGENT_DISABLE_INFER": "1", "CURSOR_AGENT": "1"}, want: ""},
+		{name: "explicit wins over codex", env: map[string]string{"AGORA_AGENT": "custom", "CODEX_THREAD_ID": "thread-123"}, want: "custom"},
+		{name: "disabled codex", env: map[string]string{"AGORA_AGENT_DISABLE_INFER": "1", "CODEX_THREAD_ID": "thread-123"}, want: ""},
 		{name: "cursor", env: map[string]string{"CURSOR_AGENT": "1"}, want: "cursor"},
 		{name: "claude code", env: map[string]string{"CLAUDE_CODE": "1"}, want: "claude-code"},
 		{name: "cline", env: map[string]string{"CLINE_SESSION": "abc"}, want: "cline"},
 		{name: "windsurf", env: map[string]string{"WINDSURF_SESSION": "abc"}, want: "windsurf"},
-		{name: "codex", env: map[string]string{"OPENAI_CODEX_SESSION": "abc"}, want: "codex"},
+		{name: "codex thread", env: map[string]string{"CODEX_THREAD_ID": "thread-123"}, want: "codex"},
+		{name: "codex legacy", env: map[string]string{"OPENAI_CODEX_SESSION": "abc"}, want: "codex"},
+		{name: "codex empty thread", env: map[string]string{"CODEX_THREAD_ID": ""}, want: ""},
 		{name: "aider", env: map[string]string{"AIDER_AUTO_COMMITS": "false"}, want: "aider"},
 		{name: "empty", env: map[string]string{}, want: ""},
 	}
@@ -33,6 +37,13 @@ func TestAgentLabelFromOSEnv(t *testing.T) {
 func TestAgoraUserAgentInfersCursorAgent(t *testing.T) {
 	got := agoraUserAgent(map[string]string{"CURSOR_AGENT": "1"})
 	if got != "agora-cli/"+version+" agent/cursor" {
+		t.Fatalf("unexpected user agent: %q", got)
+	}
+}
+
+func TestAgoraUserAgentInfersCodexThread(t *testing.T) {
+	got := agoraUserAgent(map[string]string{"CODEX_THREAD_ID": "thread-123"})
+	if got != "agora-cli/"+version+" agent/codex" {
 		t.Fatalf("unexpected user agent: %q", got)
 	}
 }

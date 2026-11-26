@@ -136,13 +136,17 @@ func (a *App) serveMCP(in io.Reader, out io.Writer) error {
 func (a *App) handleMCPRequest(req mcpRequest, encoder *json.Encoder) (any, error) {
 	switch req.Method {
 	case "initialize":
-		return map[string]any{
+		result := map[string]any{
 			"protocolVersion": mcpProtocolVersion,
 			"capabilities": map[string]any{
 				"tools": map[string]any{},
 			},
 			"serverInfo": map[string]any{"name": "agora-cli", "version": version},
-		}, nil
+		}
+		if a.analyticsURL() != "" {
+			result["instructions"] = telemetryDisclosure
+		}
+		return result, nil
 	case "tools/list":
 		return map[string]any{"tools": mcpTools()}, nil
 	case "tools/call":
@@ -181,7 +185,7 @@ func mcpTools() []map[string]any {
 		mcpTool("agora.config.get", "Read persisted CLI defaults", nil),
 
 		// Telemetry
-		mcpTool("agora.telemetry.status", "Show telemetry status and DO_NOT_TRACK detection", nil),
+		mcpTool("agora.telemetry.status", "Show saved telemetry preference, effective capture status and DO_NOT_TRACK detection", nil),
 
 		// Upgrade guidance
 		mcpTool("agora.upgrade.check", "Resolve the latest release and report what would happen", nil),
@@ -329,7 +333,30 @@ func makeMCPProgressEmitter(encoder *json.Encoder, token any) progressEmitter {
 // when serving over stdio) is never read as if it were user input. We
 // pass bytes.NewReader(nil) and io.Discard explicitly to enforce the
 // no-stdin contract at the call site.
-func (a *App) callMCPTool(name string, args map[string]any, progress progressEmitter) (any, error) {
+func (a *App) callMCPTool(name string, args map[string]any, progress progressEmitter) (result any, err error) {
+	command := ""
+	switch name {
+	case "agora.init":
+		command = "init"
+	case "agora.project.create":
+		command = "project create"
+	case "agora.recipes.list":
+		command = "recipes list"
+	case "agora.recipes.show":
+		command = "recipes show"
+	}
+	var op *analyticsOperation
+	if command != "" {
+		op = a.beginAnalytics(command, "mcp")
+		if command == "init" {
+			op.setInitSourceType(stringArg(args, "recipe"), stringArg(args, "template"))
+		}
+		defer func() { op.finish(err) }()
+	}
+	return a.dispatchMCPTool(name, args, progress, op)
+}
+
+func (a *App) dispatchMCPTool(name string, args map[string]any, progress progressEmitter, op *analyticsOperation) (any, error) {
 	switch name {
 
 	case "agora.version":
@@ -359,11 +386,16 @@ func (a *App) callMCPTool(name string, args map[string]any, progress progressEmi
 		if err != nil {
 			return nil, err
 		}
+		preference := a.currentTelemetryPreference()
+		enabled := preference && !a.analyticsOptedOut()
 		return map[string]any{
-			"action":     "status",
-			"configPath": path,
-			"doNotTrack": strings.TrimSpace(a.env["DO_NOT_TRACK"]) != "",
-			"enabled":    a.cfg.TelemetryEnabled && strings.TrimSpace(a.env["DO_NOT_TRACK"]) == "",
+			"action":              "status",
+			"transportConfigured": a.analyticsURL() != "",
+			"captureActive":       enabled && a.analyticsURL() != "",
+			"configPath":          path,
+			"doNotTrack":          strings.TrimSpace(a.env["DO_NOT_TRACK"]) != "",
+			"enabled":             enabled,
+			"savedPreference":     preference,
 		}, nil
 
 	case "agora.upgrade.check":
@@ -409,6 +441,7 @@ func (a *App) callMCPTool(name string, args map[string]any, progress progressEmi
 			features,
 			rtmDataCenter,
 			stringArg(args, "idempotencyKey"),
+			op,
 		)
 		if err == nil {
 			progress.emit("project:created", "Agora project ready", map[string]any{"projectId": result["projectId"], "projectName": result["projectName"]})
@@ -546,6 +579,9 @@ func (a *App) callMCPTool(name string, args map[string]any, progress progressEmi
 		if err != nil {
 			return nil, err
 		}
+		if op != nil {
+			op.properties["result_count"] = len(response.Items)
+		}
 		return map[string]any{"items": response.Items, "total": response.Total, "type": response.Type}, nil
 
 	case "agora.recipes.show":
@@ -553,7 +589,11 @@ func (a *App) callMCPTool(name string, args map[string]any, progress progressEmi
 		if slug == "" {
 			return nil, &cliError{Message: "recipe slug is required.", Code: "RECIPE_NOT_FOUND"}
 		}
-		return a.getRecipe(slug)
+		recipe, err := a.getRecipe(slug)
+		if err == nil {
+			op.source("recipe", recipe.Slug)
+		}
+		return recipe, err
 
 	case "agora.init":
 		name := stringArg(args, "name")
@@ -579,18 +619,19 @@ func (a *App) callMCPTool(name string, args map[string]any, progress progressEmi
 		// scribble onto the host's stderr.
 		var promptOut bytes.Buffer
 		targetDir := defaultString(stringArg(args, "dir"), name)
+		op.beginStage("source_resolve")
 		if recipeID != "" {
 			recipe, err := a.getRecipe(recipeID)
 			if err != nil {
 				return nil, err
 			}
-			return a.initRecipeProject(name, targetDir, recipe, stringArg(args, "project"), stringSliceArg(args, "features"), stringArg(args, "rtmDataCenter"), boolArg(args, "newProject", false), false, &promptOut, bytes.NewReader(nil), progress)
+			return a.initRecipeProject(name, targetDir, recipe, stringArg(args, "project"), stringSliceArg(args, "features"), stringArg(args, "rtmDataCenter"), boolArg(args, "newProject", false), false, &promptOut, bytes.NewReader(nil), progress, op)
 		}
 		template, err := selectQuickstartDefinition(templateID, scenario)
 		if err != nil {
 			return nil, err
 		}
-		return a.initProject(name, targetDir, template, stringArg(args, "project"), stringSliceArg(args, "features"), stringArg(args, "rtmDataCenter"), boolArg(args, "newProject", false), false, &promptOut, bytes.NewReader(nil), progress)
+		return a.initProject(name, targetDir, template, stringArg(args, "project"), stringSliceArg(args, "features"), stringArg(args, "rtmDataCenter"), boolArg(args, "newProject", false), false, &promptOut, bytes.NewReader(nil), progress, op)
 
 	default:
 		return nil, fmt.Errorf("unknown MCP tool %q", name)

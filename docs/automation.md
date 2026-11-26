@@ -1183,6 +1183,20 @@ Safe branch fields by command shape:
 - Show/create/update: `projectId`, `feature`, `configId`, `enabled`, `eventIds`, `urlRegion`
 - Delete: `projectId`, `feature`, `configId`, `deleted`
 
+### `telemetry status`, `telemetry enable`, `telemetry disable`
+
+The `telemetry` result reports these fields:
+
+- `action` identifies the operation as `status`, `enable`, or `disable`.
+- `configPath` is the local configuration file path.
+- `doNotTrack` indicates whether `DO_NOT_TRACK` is set to a non-empty value.
+- `savedPreference` is the configured telemetry preference.
+- `enabled` combines the preference and runtime opt-outs.
+- `transportConfigured` indicates whether a valid collector URL is configured.
+- `captureActive` requires both `enabled` and `transportConfigured`.
+
+The `agora.telemetry.status` MCP tool returns the same fields.
+
 ### `config path`
 
 Example:

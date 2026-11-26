@@ -93,6 +93,9 @@ linters:
 
     misspell:
       locale: US
+      ignore-rules:
+        # The SSP telemetry contract spells this outcome with two l's.
+        - cancelled
 
     errorlint:
       # %w wrapping is preferred but legacy %v errors are still acceptable

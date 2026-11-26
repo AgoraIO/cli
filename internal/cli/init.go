@@ -96,6 +96,8 @@ Use --feature to specify which features to enable on a newly created project (re
 				!isCIEnvironment(a.osEnv) &&
 				isTTY(os.Stdin)
 			progress := jsonProgressFor(a, cmd, "init")
+			op := analyticsFor(cmd)
+			op.beginStage("source_resolve")
 			var result map[string]any
 			var err error
 			if strings.TrimSpace(recipeID) != "" {
@@ -103,28 +105,31 @@ Use --feature to specify which features to enable on a newly created project (re
 				if recipeErr != nil {
 					return recipeErr
 				}
-				result, err = a.initRecipeProject(args[0], targetDir, recipe, existingProject, features, rtmDataCenter, newProject, promptForReuse, cmd.ErrOrStderr(), os.Stdin, progress)
+				result, err = a.initRecipeProject(args[0], targetDir, recipe, existingProject, features, rtmDataCenter, newProject, promptForReuse, cmd.ErrOrStderr(), os.Stdin, progress, op)
 			} else {
 				template, selectErr := selectQuickstartDefinition(templateID, scenario)
 				if selectErr != nil {
 					return selectErr
 				}
-				result, err = a.initProject(args[0], targetDir, template, existingProject, features, rtmDataCenter, newProject, promptForReuse, cmd.ErrOrStderr(), os.Stdin, progress)
+				result, err = a.initProject(args[0], targetDir, template, existingProject, features, rtmDataCenter, newProject, promptForReuse, cmd.ErrOrStderr(), os.Stdin, progress, op)
 			}
 			if err != nil {
 				return err
 			}
 			if len(agentRules) > 0 {
+				op.beginStage("agent_rules_write")
 				written, err := writeAgentRules(asString(result["path"]), agentRules)
 				if err != nil {
 					return err
 				}
 				result["agentRules"] = written
 			}
+			op.completeStage(nil)
 			return renderResult(cmd, "init", result)
 		},
 	}
 	cmd.Flags().StringVar(&templateID, "template", "", "quickstart template ID to use")
+	a.instrumentAnalytics(cmd, "init")
 	cmd.Flags().StringVar(&recipeID, "recipe", "", "official Agora recipe slug (run agora recipes list to discover slugs)")
 	cmd.Flags().StringVar(&scenario, "scenario", "", "quickstart scenario; omitted selects the template default")
 	cmd.Flags().StringVar(&dir, "dir", "", "target directory for the cloned quickstart; defaults to <name>")
@@ -360,10 +365,13 @@ type initProjectResolution struct {
 	createdRTMDataCenter   string
 }
 
-func (a *App) initProject(name, targetDir string, template quickstartTemplate, existingProject string, features []string, rtmDataCenter string, newProject bool, promptForReuse bool, promptOut io.Writer, promptIn io.Reader, progress progressEmitter) (map[string]any, error) {
+func (a *App) initProject(name, targetDir string, template quickstartTemplate, existingProject string, features []string, rtmDataCenter string, newProject bool, promptForReuse bool, promptOut io.Writer, promptIn io.Reader, progress progressEmitter, operations ...*analyticsOperation) (map[string]any, error) {
+	op := firstAnalytics(operations)
+	op.source("quickstart", template.ID)
 	if !template.Available || !template.SupportsInit {
 		return nil, &cliError{Message: fmt.Sprintf("Quickstart template %q is not supported by `agora init`. Use `agora quickstart create` instead.", template.ID), Code: "QUICKSTART_TEMPLATE_UNAVAILABLE"}
 	}
+	op.beginStage("local_validate")
 	if _, err := resolveScaffoldTarget(targetDir); err != nil {
 		return nil, err
 	}
@@ -376,16 +384,24 @@ func (a *App) initProject(name, targetDir string, template quickstartTemplate, e
 	if err != nil {
 		return nil, err
 	}
-	resolution, err := a.resolveInitProjectForScaffold(name, createFeatures, existingProject, rtmDataCenter, newProject, promptForReuse, promptOut, promptIn, progress)
+	op.beginStage("project_resolve")
+	resolution, err := a.resolveInitProjectForScaffold(name, createFeatures, existingProject, rtmDataCenter, newProject, promptForReuse, promptOut, promptIn, progress, op)
 	if err != nil {
 		return nil, err
 	}
 	target := resolution.target
+	if op != nil {
+		op.properties["project_action"] = "reused"
+		if resolution.projectAction == "created" {
+			op.properties["project_action"] = "created"
+		}
+	}
 
-	quickstartResult, err := a.quickstartCreate(template, targetDir, target.project.ProjectID, false, false, promptOut, promptIn, "", progress)
+	quickstartResult, err := a.quickstartCreate(template, targetDir, target.project.ProjectID, false, false, promptOut, promptIn, "", progress, op)
 	if err != nil {
 		return nil, err
 	}
+	op.beginStage("context_write")
 	if err := a.persistInitProjectContext(target); err != nil {
 		return nil, err
 	}
@@ -421,7 +437,8 @@ func (a *App) initProject(name, targetDir string, template quickstartTemplate, e
 	return result, nil
 }
 
-func (a *App) resolveInitProjectForScaffold(name string, createFeatures []string, existingProject string, rtmDataCenter string, newProject bool, promptForReuse bool, promptOut io.Writer, promptIn io.Reader, progress progressEmitter) (initProjectResolution, error) {
+func (a *App) resolveInitProjectForScaffold(name string, createFeatures []string, existingProject string, rtmDataCenter string, newProject bool, promptForReuse bool, promptOut io.Writer, promptIn io.Reader, progress progressEmitter, operations ...*analyticsOperation) (initProjectResolution, error) {
+	op := firstAnalytics(operations)
 	var target projectTarget
 	projectAction := "existing"
 	projectSelectionReason := "explicit_project"
@@ -496,7 +513,7 @@ func (a *App) resolveInitProjectForScaffold(name string, createFeatures []string
 	if needsCreate {
 		featuresToEnable := createFeatures
 		progress.emit("project:create", "Creating Agora project", map[string]any{"projectName": name, "features": featuresToEnable})
-		projectResult, err := a.projectCreate(name, "", featuresToEnable, rtmDataCenter, "")
+		projectResult, err := a.projectCreate(name, "", featuresToEnable, rtmDataCenter, "", op)
 		if err != nil {
 			return initProjectResolution{}, err
 		}
@@ -517,6 +534,7 @@ func (a *App) resolveInitProjectForScaffold(name string, createFeatures []string
 		progress.emit("project:reuse", "Reusing existing Agora project", map[string]any{"projectId": target.project.ProjectID, "projectName": target.project.Name})
 	}
 
+	op.setAppID(target.project.AppID)
 	return initProjectResolution{
 		target:                 target,
 		projectAction:          projectAction,
