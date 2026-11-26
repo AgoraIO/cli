@@ -192,6 +192,8 @@ func RunAnalyticsSender(args []string, input io.Reader) bool {
 		return false
 	}
 	if len(args) == 2 {
+		// The parent picked the operation's regional collector (global or
+		// CN); analyticsURL only re-validates it with the shared URL rules.
 		a := &App{env: map[string]string{"AGORA_TELEMETRY_URL": args[1]}}
 		if endpoint := a.analyticsURL(); endpoint != "" {
 			sendAnalyticsBatch(input, endpoint)
@@ -291,6 +293,10 @@ func validAnalyticsEvent(e analyticsEvent) bool {
 			}
 		case "agent_detection_source":
 			if !slices.Contains(analyticsDetectionSources, str) {
+				return false
+			}
+		case "region":
+			if !slices.Contains(analyticsRegions, str) {
 				return false
 			}
 		case "source_type":

@@ -15,7 +15,8 @@ OS/architecture, coarse AI-tool categories, public recipe/template IDs, timings
 and structured results. Project/init events can include validated Agora App IDs.
 An installation profile can be created in PostHog. Agora App IDs can be
 associated with Agora projects and companies. OAuth tokens, App Certificates, project names, source code, conversation
-content, local paths and raw errors are not included.
+content, local paths and raw errors are not included. This describes the
+default `full` mode used for the global region; see [Regions](#regions).
 
 Recipe init attempts are labeled as Recipe usage even if the catalog lookup
 fails. Only attempts with a confirmed public catalog entry include a Recipe ID.
@@ -27,8 +28,42 @@ is reported when the create API call returns, and its duration covers only that
 call. A project that is created successfully is recorded as a success even if a
 later step, such as enabling features, fails; the outer command result still
 reports that failure. A `project create` that fails before reaching the API
-(for example, invalid flags or an unreadable local context) is reported as a
-failure when the command finishes.
+(for example, invalid flags) is reported as a failure when the command
+finishes.
+
+## Regions
+
+Each operation is captured under the control-plane region the CLI targets
+when it starts. That is the region saved in the local CLI context by
+`agora login --region`, or `cn` when `AGORA_API_BASE_URL` points at the
+built-in CN API host. `agora mcp serve` resolves the region again for every
+tool call, so a login into another region applies to the next call.
+
+Each region has a capture mode:
+
+| Mode | Behavior |
+|------|----------|
+| `full` | The events and properties described above. |
+| `aggregate` | The same events without a persistent identity: the installation ID file is neither read nor created, each operation gets a fresh random `distinct_id`, and Agora App IDs are never sent. |
+| `off` | Nothing is sent. The installation ID file is neither read nor created, and no first-use notice is shown. |
+
+The global region uses `full` and the global collector. The CN region defaults
+to `off`. CN events go only to a separately configured CN collector and never
+to the global collector, so CN usage is not transferred across borders. CN
+capture is active only when both a CN mode other than `off` and a valid CN
+collector URL are configured (`AGORA_TELEMETRY_CN_MODE` and
+`AGORA_TELEMETRY_CN_URL` for local verification). Otherwise it is `off`.
+Events sent to the CN collector carry `region: "cn"`. Global events do not
+carry a region property. All opt-outs below apply to both regions.
+
+If the local CLI context cannot be read, the region is unknown and nothing is
+captured for that operation. A user who has never logged in and has no CN API
+override is treated as global. This is a known gap: such a user may be in
+China, but the CLI has no region signal until login.
+
+The first-use notice for `aggregate` mode is shorter and says that no
+installation ID or App ID is sent. It is tracked separately from the `full`
+notice, so a user who later uses a `full` region still sees the full notice.
 
 ## Delivery
 
@@ -69,13 +104,18 @@ agora telemetry enable --json
 ```
 
 `savedPreference` reports the configured preference. `enabled` also accounts
-for runtime opt-outs. `transportConfigured` reports whether a valid collector
-URL is configured. `captureActive` requires both `enabled` and
-`transportConfigured`. It tracks whether capture can start.
+for runtime opt-outs. `region` is `global`, `cn` or `unknown`.
+`transportConfigured` reports whether a valid collector URL is configured for
+that region. `captureMode` is the effective mode (`off`, `aggregate` or
+`full`). `captureActive` is true when `captureMode` is not `off`. It tracks
+whether capture can start.
 
 Shell commands print a first-use disclosure to stderr unless quiet mode
-suppresses it. MCP includes the disclosure in its initialization instructions
-when a collector is configured. MCP hosts decide how to present instructions.
+suppresses it or the operation's mode is `off`. MCP includes the disclosure for
+the current region's effective mode in its initialization instructions, and
+omits it when that mode is `off`. If the region is unknown at initialization,
+MCP uses the global rules for the disclosure; each tool call is still gated
+on its own region. MCP hosts decide how to present instructions.
 The disclosure provides notice. The first instrumented call can collect events
 when capture is active.
 
@@ -95,9 +135,13 @@ an operation that has already started.
 
 ## Collector configuration
 
-`AGORA_TELEMETRY_URL` overrides the release-embedded collector URL. Only HTTPS
-URLs, or HTTP URLs on loopback for local verification, are accepted. URLs with
-credentials, query parameters or fragments are rejected.
+`AGORA_TELEMETRY_URL` overrides the release-embedded global collector URL. It
+never applies to CN operations. `AGORA_TELEMETRY_CN_URL` and
+`AGORA_TELEMETRY_CN_MODE` override the release-embedded CN collector URL
+(empty by default) and CN mode (`off` by default). Only HTTPS URLs, or HTTP
+URLs on loopback for local verification, are accepted. URLs with credentials,
+query parameters or fragments are rejected. A CN mode other than `off`,
+`aggregate` or `full` means `off`.
 
 The existing operational-diagnostics sink is separate from these usage events;
 its Sentry transport remains a placeholder. Usage capture does not require an

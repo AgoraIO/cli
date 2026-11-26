@@ -136,6 +136,18 @@ func (a *App) serveMCP(in io.Reader, out io.Writer) error {
 	return nil
 }
 
+// mcpInitializeCaptureMode picks the disclosure for MCP initialize. It is the
+// current region's effective mode; when the region cannot be determined it
+// uses the global logic instead. Tool calls still gate per call.
+func (a *App) mcpInitializeCaptureMode() string {
+	preference := a.analyticsPreference("mcp")
+	region, mode, _ := a.analyticsCapture(preference)
+	if region == analyticsValueUnknown && a.analyticsURL() != "" && a.telemetryAllowed(preference) {
+		return analyticsModeFull
+	}
+	return mode
+}
+
 func (a *App) handleMCPRequest(req mcpRequest, encoder *json.Encoder) (any, error) {
 	switch req.Method {
 	case "initialize":
@@ -146,8 +158,8 @@ func (a *App) handleMCPRequest(req mcpRequest, encoder *json.Encoder) (any, erro
 			},
 			"serverInfo": map[string]any{"name": "agora-cli", "version": version},
 		}
-		if a.analyticsURL() != "" {
-			result["instructions"] = telemetryDisclosure
+		if text := telemetryDisclosureFor(a.mcpInitializeCaptureMode()); text != "" {
+			result["instructions"] = text
 		}
 		return result, nil
 	case "tools/list":
