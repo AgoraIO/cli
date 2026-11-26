@@ -220,7 +220,7 @@ func renderResult(cmd *cobra.Command, command string, data any) error {
 		printBlock(out, "Version", [][2]string{{"Version", asString(m["version"])}, {"Commit", asString(m["commit"])}, {"Built", asString(m["date"])}})
 	case "telemetry":
 		m := data.(map[string]any)
-		printBlock(out, "Telemetry", [][2]string{{"Enabled", asString(m["enabled"])}, {"Capture Active", asString(m["captureActive"])}, {"Config Path", asString(m["configPath"])}, {"DO_NOT_TRACK", asString(m["doNotTrack"])}})
+		printBlock(out, "Telemetry", [][2]string{{"Enabled", asString(m["enabled"])}, {"Region", asString(m["region"])}, {"Capture Mode", asString(m["captureMode"])}, {"Capture Active", asString(m["captureActive"])}, {"Config Path", asString(m["configPath"])}, {"DO_NOT_TRACK", asString(m["doNotTrack"])}})
 	case "upgrade":
 		m := data.(map[string]any)
 		printBlock(out, "Upgrade", [][2]string{{"Status", asString(m["status"])}, {"Install Method", asString(m["installMethod"])}, {"Command", asString(m["command"])}})

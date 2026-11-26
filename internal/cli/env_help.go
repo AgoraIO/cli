@@ -50,7 +50,9 @@ func agoraEnvCatalog() []agoraEnvVar {
 		{Name: "AGORA_RECIPES_BASE_URL", Category: "endpoints", Description: "Override the versioned Agora recipes API base URL for staging and integration tests.", Default: "https://recipes.agora.io/api/v1"},
 		{Name: "AGORA_QUICKSTART_<TEMPLATE>_REPO_URL", Category: "endpoints", Description: "Override the clone URL for a specific quickstart template (e.g. AGORA_QUICKSTART_NEXTJS_REPO_URL). Used for workshops, internal forks, and integration tests; everyday users do not set this.", Effect: "https:// | ssh:// | git:// | file:// | git@host:path | absolute local path"},
 		// Telemetry
-		{Name: "AGORA_TELEMETRY_URL", Category: "telemetry", Description: "Usage telemetry collector URL. HTTPS, or loopback HTTP for local tests. No transport without a configured or release-embedded URL."},
+		{Name: "AGORA_TELEMETRY_URL", Category: "telemetry", Description: "Global usage telemetry collector URL (never used for CN operations). HTTPS, or loopback HTTP for local tests. No transport without a configured or release-embedded URL."},
+		{Name: "AGORA_TELEMETRY_CN_URL", Category: "telemetry", Description: "CN usage telemetry collector URL. Same rules as AGORA_TELEMETRY_URL. CN events only go here, never to the global collector; without a valid URL CN capture is off."},
+		{Name: "AGORA_TELEMETRY_CN_MODE", Category: "telemetry", Description: "CN usage capture mode. aggregate sends events without an installation ID or App IDs. Invalid values mean off.", Default: "off", Effect: "off | aggregate | full"},
 		{Name: "AGORA_TELEMETRY_ENABLED", Category: "telemetry", Description: "When 0, disable all telemetry transport.", Effect: "0 | 1"},
 		{Name: "DO_NOT_TRACK", Category: "telemetry", Description: "Standard DO_NOT_TRACK convention; hard opt-out of telemetry and file logging.", Effect: "any non-empty value"},
 		{Name: "AGORA_SENTRY_ENABLED", Category: "telemetry", Description: "When 0, disable telemetry transport even if config has telemetryEnabled=true.", Default: "1", Effect: "0 | 1"},

@@ -1192,8 +1192,10 @@ The `telemetry` result reports these fields:
 - `doNotTrack` indicates whether `DO_NOT_TRACK` is set to a non-empty value.
 - `savedPreference` is the configured telemetry preference.
 - `enabled` combines the preference and runtime opt-outs.
-- `transportConfigured` indicates whether a valid collector URL is configured.
-- `captureActive` requires both `enabled` and `transportConfigured`.
+- `region` is the control-plane region an operation starting now would report under: `global`, `cn`, or `unknown` when the local CLI context cannot be read.
+- `transportConfigured` indicates whether a valid collector URL is configured for that region. The global and CN collectors are configured separately.
+- `captureMode` is the effective capture mode for that region: `off`, `aggregate` (no installation ID or App IDs), or `full`. It is `off` when `enabled` is false, `transportConfigured` is false, the region's configured mode is `off`, or `region` is `unknown`.
+- `captureActive` is true exactly when `captureMode` is not `off`.
 
 The `agora.telemetry.status` MCP tool returns the same fields.
 

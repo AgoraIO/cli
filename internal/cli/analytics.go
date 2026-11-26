@@ -23,6 +23,27 @@ import (
 // with -ldflags; local verification uses AGORA_TELEMETRY_URL.
 var analyticsEndpoint = ""
 
+// CN usage capture is configured separately and never uses the global
+// collector. Release builds may set these with -ldflags once a CN collector
+// is approved; local verification uses AGORA_TELEMETRY_CN_URL and
+// AGORA_TELEMETRY_CN_MODE.
+var analyticsEndpointCN = ""
+var analyticsModeCN = analyticsModeOff
+
+// Capture modes. full is the global behavior. aggregate sends the same
+// events without a persistent installation ID or App IDs. off sends nothing.
+const (
+	analyticsModeOff       = "off"
+	analyticsModeAggregate = "aggregate"
+	analyticsModeFull      = "full"
+)
+
+var analyticsModes = []string{analyticsModeOff, analyticsModeAggregate, analyticsModeFull}
+
+// analyticsAggregateProperties are the only properties an aggregate-mode
+// event may carry. Notably app_id is absent.
+var analyticsAggregateProperties = []string{"command", "outcome", "error_code", "exit_code", "stage", "failed_stage", "duration_ms", "cli_version", "os", "arch", "invocation_channel", "agent_family", "agent_surface", "agent_detection_source", "source_type", "source_id", "recipe_id", "project_action", "result_count", "region"}
+
 const analyticsSendTimeout = 10 * time.Second
 
 var analyticsIDPattern = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`)
@@ -81,6 +102,7 @@ type analyticsEvent struct {
 type analyticsOperation struct {
 	command      string
 	channel      string
+	mode         string // analyticsModeAggregate or analyticsModeFull
 	id           string
 	distinctID   string
 	properties   map[string]any
@@ -107,12 +129,6 @@ func analyticsUUID() string {
 	b[8] = (b[8] & 63) | 128
 	h := hex.EncodeToString(b[:])
 	return h[:8] + "-" + h[8:12] + "-" + h[12:16] + "-" + h[16:20] + "-" + h[20:]
-}
-
-// analyticsEnabled applies the shared telemetry gate to the startup
-// preference. Shell commands use this snapshot for their whole run.
-func (a *App) analyticsEnabled() bool {
-	return a.telemetryAllowed(a.cfg.TelemetryEnabled)
 }
 
 func (a *App) currentTelemetryPreference() bool {
@@ -146,11 +162,50 @@ func (a *App) currentTelemetryConfig() (appConfig, bool) {
 	return config, true
 }
 
+// analyticsURL is the global collector. AGORA_TELEMETRY_URL never applies to
+// CN operations; see analyticsCNURL.
 func (a *App) analyticsURL() string {
-	endpoint := strings.TrimSpace(a.env["AGORA_TELEMETRY_URL"])
-	if endpoint == "" {
-		endpoint = analyticsEndpoint
+	return validAnalyticsURL(valueOrDefault(a.env["AGORA_TELEMETRY_URL"], analyticsEndpoint))
+}
+
+// analyticsCNURL is the CN collector, or empty when none is configured.
+func (a *App) analyticsCNURL() string {
+	return validAnalyticsURL(valueOrDefault(a.env["AGORA_TELEMETRY_CN_URL"], analyticsEndpointCN))
+}
+
+// analyticsCNMode is the configured CN capture mode. Anything other than the
+// three known values means off.
+func (a *App) analyticsCNMode() string {
+	mode := valueOrDefault(a.env["AGORA_TELEMETRY_CN_MODE"], analyticsModeCN)
+	if !slices.Contains(analyticsModes, mode) {
+		return analyticsModeOff
 	}
+	return mode
+}
+
+// analyticsCapture resolves where and how an operation starting now may
+// report. region is global, cn or unknown. mode is the effective mode: off
+// when the region is unknown (fail closed), the region's mode is off, it has
+// no valid collector, or the shared telemetry gate is closed. endpoint is
+// the region's collector, reported even when mode is off so status can show
+// transportConfigured. CN never falls back to the global collector.
+func (a *App) analyticsCapture(preference bool) (region, mode, endpoint string) {
+	region, ok := a.analyticsRegion()
+	switch {
+	case !ok:
+		return analyticsValueUnknown, analyticsModeOff, ""
+	case region == regionCN:
+		mode, endpoint = a.analyticsCNMode(), a.analyticsCNURL()
+	default:
+		mode, endpoint = analyticsModeFull, a.analyticsURL()
+	}
+	if endpoint == "" || !a.telemetryAllowed(preference) {
+		mode = analyticsModeOff
+	}
+	return region, mode, endpoint
+}
+
+func validAnalyticsURL(endpoint string) string {
 	u, err := url.Parse(endpoint)
 	if err != nil || u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" {
 		return ""
@@ -199,13 +254,21 @@ func (a *App) analyticsIdentity() string {
 	return "cli:" + id
 }
 
-func (a *App) beginAnalytics(command, channel string) *analyticsOperation {
-	endpoint := a.analyticsURL()
-	enabled := a.analyticsEnabled()
+// analyticsPreference is the saved preference an operation is gated on: the
+// startup snapshot for shell commands, re-read per call for long-lived MCP.
+func (a *App) analyticsPreference(channel string) bool {
 	if channel == "mcp" {
-		enabled = a.telemetryAllowed(a.currentTelemetryPreference())
+		return a.currentTelemetryPreference()
 	}
-	if !enabled || endpoint == "" {
+	return a.cfg.TelemetryEnabled
+}
+
+// beginAnalytics starts an operation, or returns nil when its effective mode
+// is off. Region and mode are resolved here, at each operation start, so a
+// long-lived MCP server follows a login into another region.
+func (a *App) beginAnalytics(command, channel string) *analyticsOperation {
+	region, mode, endpoint := a.analyticsCapture(a.analyticsPreference(channel))
+	if mode == analyticsModeOff {
 		return nil
 	}
 	props := map[string]any{"command": command, "os": runtime.GOOS, "arch": runtime.GOARCH, "invocation_channel": channel}
@@ -216,16 +279,23 @@ func (a *App) beginAnalytics(command, channel string) *analyticsOperation {
 	props["cli_version"] = version
 	family, surface, source := analyticsAgent(a.osEnv)
 	props["agent_family"], props["agent_surface"], props["agent_detection_source"] = family, surface, source
-	// Read per operation: a long-lived MCP server may outlive a login into
-	// another region.
-	if region, ok := a.analyticsRegion(); ok {
-		props["region"] = region
+	// Only the CN collector receives region; global events stay unchanged.
+	if region == regionCN {
+		props["region"] = regionCN
 	}
-	id := a.analyticsIdentity()
+	var id string
+	if mode == analyticsModeAggregate {
+		// No persistent identity: a fresh ID per operation links nothing.
+		if u := analyticsUUID(); u != "" {
+			id = "cli:" + u
+		}
+	} else {
+		id = a.analyticsIdentity()
+	}
 	if id == "" {
 		return nil
 	}
-	op := &analyticsOperation{command: command, channel: channel, id: analyticsUUID(), distinctID: id, properties: props, started: time.Now(), endpoint: endpoint}
+	op := &analyticsOperation{command: command, channel: channel, mode: mode, id: analyticsUUID(), distinctID: id, properties: props, started: time.Now(), endpoint: endpoint}
 	op.batchBytes = len(analyticsBatchEnvelope)
 	if command == "init" {
 		event := op.newEvent("cli_init_started", nil)
@@ -243,12 +313,21 @@ func (a *App) beginAnalytics(command, channel string) *analyticsOperation {
 }
 
 // analyticsRegion reports the coarse control-plane region the CLI currently
-// targets, using the same persisted context region that authRegion uses to
-// choose between apiBaseURL and apiBaseURLCN. A missing context is the CLI
-// default (global). Unlike authRegion, an unreadable context is reported as
-// undeterminable rather than defaulting, so the property is omitted. Only
-// analyticsRegions values are ever returned, never the raw persisted string.
+// targets. An explicit AGORA_API_BASE_URL on the built-in CN API host is cn.
+// Otherwise it uses the persisted context region that authRegion uses to
+// choose between apiBaseURL and apiBaseURLCN; a missing context is the CLI
+// default (global), so a user who has never logged in is treated as global.
+// Unlike authRegion, an unreadable context is undeterminable (ok=false)
+// rather than global, so callers can fail closed. Only analyticsRegions
+// values are returned, never the raw persisted string.
 func (a *App) analyticsRegion() (string, bool) {
+	if override := strings.TrimSpace(a.explicitEnvValue("AGORA_API_BASE_URL")); override != "" {
+		u, err := url.Parse(override)
+		cn, cnErr := url.Parse(apiBaseURLCN)
+		if err == nil && cnErr == nil && u.Hostname() != "" && strings.EqualFold(u.Hostname(), cn.Hostname()) {
+			return regionCN, true
+		}
+	}
 	ctx, err := loadContext(a.env)
 	if err != nil {
 		return "", false
@@ -305,6 +384,9 @@ func (op *analyticsOperation) emit(name string, fields map[string]any) {
 func (op *analyticsOperation) newEvent(name string, fields map[string]any) analyticsEvent {
 	props := maps.Clone(op.properties)
 	maps.Copy(props, fields)
+	if op.mode == analyticsModeAggregate {
+		maps.DeleteFunc(props, func(key string, _ any) bool { return !slices.Contains(analyticsAggregateProperties, key) })
+	}
 	return analyticsEvent{Event: name, EventID: analyticsUUID(), OperationID: op.id, DistinctID: op.distinctID, Timestamp: time.Now().UTC(), Properties: props}
 }
 
@@ -369,6 +451,14 @@ func (op *analyticsOperation) finish(err error) {
 	op.flush()
 }
 
+// captureMode is the operation's mode; a nil operation captures nothing.
+func (op *analyticsOperation) captureMode() string {
+	if op == nil {
+		return analyticsModeOff
+	}
+	return op.mode
+}
+
 func analyticsFor(cmd *cobra.Command) *analyticsOperation {
 	op, _ := cmd.Context().Value(analyticsContextKey{}).(*analyticsOperation)
 	return op
@@ -380,8 +470,8 @@ func (a *App) instrumentAnalytics(cmd *cobra.Command, command string) {
 		if dry, _ := cmd.Flags().GetBool("dry-run"); dry {
 			return run(cmd, args)
 		}
-		a.maybeShowTelemetryNotice(cmd)
 		op := a.beginAnalytics(command, "shell")
+		a.showTelemetryNotice(cmd.ErrOrStderr(), op.captureMode())
 		if command == "init" {
 			recipe, _ := cmd.Flags().GetString("recipe")
 			template, _ := cmd.Flags().GetString("template")
@@ -421,7 +511,7 @@ var analyticsAppIDPattern = regexp.MustCompile(`^[0-9a-fA-F]{32}$`)
 var analyticsPlatformPattern = regexp.MustCompile(`^[a-z0-9]{1,20}$`)
 
 func (op *analyticsOperation) setAppID(id string) {
-	if op == nil || !analyticsAppIDPattern.MatchString(id) || op.properties["app_id"] != nil {
+	if op == nil || op.mode == analyticsModeAggregate || !analyticsAppIDPattern.MatchString(id) || op.properties["app_id"] != nil {
 		return
 	}
 	op.properties["app_id"] = id

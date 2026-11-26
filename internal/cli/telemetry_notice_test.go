@@ -21,7 +21,7 @@ func TestTelemetryNoticeAndPreference(t *testing.T) {
 		path, _ := resolveConfigFilePath(a.env)
 		before, _ := os.ReadFile(path)
 		var out bytes.Buffer
-		a.showTelemetryNotice(&out, a.analyticsEnabled())
+		a.showTelemetryNotice(&out, shellCaptureMode(a))
 		marker := filepath.Join(a.env["AGORA_HOME"], "telemetry-notice-shown")
 		_, err := os.Stat(marker)
 		if quiet {
@@ -29,13 +29,13 @@ func TestTelemetryNoticeAndPreference(t *testing.T) {
 				t.Fatal("quiet notice was recorded")
 			}
 			a.rootQuiet = false
-			a.showTelemetryNotice(&out, a.analyticsEnabled())
+			a.showTelemetryNotice(&out, shellCaptureMode(a))
 		}
 		if !strings.Contains(out.String(), "App IDs") || strings.Contains(out.String(), "[y/N]") {
 			t.Fatal("missing disclosure or interactive prompt")
 		}
 		length := out.Len()
-		a.showTelemetryNotice(&out, a.analyticsEnabled())
+		a.showTelemetryNotice(&out, shellCaptureMode(a))
 		if out.Len() != length {
 			t.Fatal("notice repeated")
 		}
@@ -46,7 +46,7 @@ func TestTelemetryNoticeAndPreference(t *testing.T) {
 		if err := a.persistTelemetryChoice(false); err != nil {
 			t.Fatal(err)
 		}
-		if a.analyticsEnabled() {
+		if a.telemetryAllowed(a.cfg.TelemetryEnabled) {
 			t.Fatal("disable lost")
 		}
 	}
@@ -54,7 +54,7 @@ func TestTelemetryNoticeAndPreference(t *testing.T) {
 
 func TestTelemetryNoticeFailureDoesNotGrantMarker(t *testing.T) {
 	a := analyticsTestApp(t, "https://collector.example/events")
-	a.showTelemetryNotice(failingNoticeWriter{}, true)
+	a.showTelemetryNotice(failingNoticeWriter{}, analyticsModeFull)
 	if _, err := os.Stat(filepath.Join(a.env["AGORA_HOME"], "telemetry-notice-shown")); !os.IsNotExist(err) {
 		t.Fatal("failed write marked shown")
 	}
@@ -62,7 +62,7 @@ func TestTelemetryNoticeFailureDoesNotGrantMarker(t *testing.T) {
 	if err := a.persistTelemetryChoice(false); err != nil {
 		t.Fatal(err)
 	}
-	a.showTelemetryNotice(&bytes.Buffer{}, true)
+	a.showTelemetryNotice(&bytes.Buffer{}, analyticsModeFull)
 	cfg, valid := a.currentTelemetryConfig()
 	if !valid || cfg.TelemetryEnabled {
 		t.Fatal("notice changed saved disable")

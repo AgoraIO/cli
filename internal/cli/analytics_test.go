@@ -346,18 +346,8 @@ func TestAnalyticsProjectCreateFailureBeforeAPIIsReported(t *testing.T) {
 	}{
 		{name: "invalid feature", channel: "shell", args: []string{"project", "create", "demo", "--feature", "bogus", "--json"}},
 		{name: "invalid rtm data center", channel: "shell", args: []string{"project", "create", "demo", "--rtm-data-center", "XX", "--json"}},
-		{name: "unreadable context", channel: "shell", args: []string{"project", "create", "demo", "--json"}, setup: func(t *testing.T, a *App) {
-			path, err := resolveContextFilePath(a.env)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
-				t.Fatal(err)
-			}
-			if err := os.WriteFile(path, []byte("{invalid"), 0o600); err != nil {
-				t.Fatal(err)
-			}
-		}},
+		// An unreadable context makes the region undeterminable, so capture
+		// fails closed; TestAnalyticsCorruptContextIsOff covers that case.
 		{name: "missing name", channel: "mcp", mcpArgs: map[string]any{}},
 	} {
 		t.Run(tc.channel+"/"+tc.name, func(t *testing.T) {

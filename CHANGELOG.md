@@ -18,6 +18,7 @@ Earlier entries pre-date this convention and only carry their version's compare 
 ### Added
 
 - Report `savedPreference`, `transportConfigured`, and `captureActive` in telemetry status output. `enabled` continues to reflect runtime opt-outs ([#76](https://github.com/AgoraIO/cli/pull/76)).
+- Add per-region usage capture modes (`off`, `aggregate`, `full`). Global keeps `full`. CN defaults to `off`, uses only its own collector (`AGORA_TELEMETRY_CN_URL`, `AGORA_TELEMETRY_CN_MODE`), and never falls back to the global collector. Telemetry status now reports `region` and `captureMode`, and `captureActive` is false whenever the effective mode is `off`. Capture is also off when the local CLI context cannot be read ([#82](https://github.com/AgoraIO/cli/pull/82)).
 
 ### Changed
 
