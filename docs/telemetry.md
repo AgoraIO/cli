@@ -7,7 +7,8 @@ title: Telemetry
 Agora CLI can report Recipes usage, init stages/results and project creation
 results to the CLI BFF, which forwards allowlisted events to PostHog. Capture is
 enabled by default when a valid collector URL is configured, unless the user
-opts out. The embedded collector URL is currently empty; deployment and release
+opts out. The CLI and MCP skip capture when the active API region is CN, even
+when a collector URL is configured. The embedded collector URL is currently empty; deployment and release
 configuration are required before production capture is active.
 
 Events contain a random local installation ID, a per-operation ID, CLI version,
@@ -69,13 +70,13 @@ agora telemetry enable --json
 ```
 
 `savedPreference` reports the configured preference. `enabled` also accounts
-for runtime opt-outs. `transportConfigured` reports whether a valid collector
+for runtime opt-outs and the active API region. `transportConfigured` reports whether a valid collector
 URL is configured. `captureActive` requires both `enabled` and
 `transportConfigured`. It tracks whether capture can start.
 
 Shell commands print a first-use disclosure to stderr unless quiet mode
 suppresses it. MCP includes the disclosure in its initialization instructions
-when a collector is configured. MCP hosts decide how to present instructions.
+when a collector is configured for a Global session. MCP hosts decide how to present instructions.
 The disclosure provides notice. The first instrumented call can collect events
 when capture is active.
 

@@ -316,8 +316,9 @@ func (op *analyticsOperation) completeStage(err error) {
 	op.stage = ""
 }
 
-func (op *analyticsOperation) finish(err error) {
-	if op == nil {
+func (op *analyticsOperation) finish(a *App, err error) {
+	// An implicit login can change the active region while the command runs.
+	if op == nil || a.authRegionFromContext() == regionCN {
 		return
 	}
 	failedStage := ""
@@ -363,7 +364,7 @@ func (a *App) instrumentAnalytics(cmd *cobra.Command, command string) {
 		}
 		ctx := cmd.Context()
 		cmd.SetContext(context.WithValue(ctx, analyticsContextKey{}, op))
-		defer func() { op.finish(err); cmd.SetContext(ctx) }()
+		defer func() { op.finish(a, err); cmd.SetContext(ctx) }()
 		return run(cmd, args)
 	}
 }

@@ -146,7 +146,7 @@ func (a *App) handleMCPRequest(req mcpRequest, encoder *json.Encoder) (any, erro
 			},
 			"serverInfo": map[string]any{"name": "agora-cli", "version": version},
 		}
-		if a.analyticsURL() != "" {
+		if a.authRegionFromContext() != regionCN && a.analyticsURL() != "" {
 			result["instructions"] = telemetryDisclosure
 		}
 		return result, nil
@@ -354,7 +354,7 @@ func (a *App) callMCPTool(name string, args map[string]any, progress progressEmi
 		if command == "init" {
 			op.setInitSourceType(stringArg(args, "recipe"), stringArg(args, "template"))
 		}
-		defer func() { op.finish(err) }()
+		defer func() { op.finish(a, err) }()
 	}
 	return a.dispatchMCPTool(name, args, progress, op)
 }

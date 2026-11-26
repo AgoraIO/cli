@@ -1191,7 +1191,7 @@ The `telemetry` result reports these fields:
 - `configPath` is the local configuration file path.
 - `doNotTrack` indicates whether `DO_NOT_TRACK` is set to a non-empty value.
 - `savedPreference` is the configured telemetry preference.
-- `enabled` combines the preference and runtime opt-outs.
+- `enabled` combines the preference, runtime opt-outs, and the active API region.
 - `transportConfigured` indicates whether a valid collector URL is configured.
 - `captureActive` requires both `enabled` and `transportConfigured`.
 

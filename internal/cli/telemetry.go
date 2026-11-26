@@ -49,7 +49,7 @@ type telemetryClient interface {
 // telemetryEnabled value: the startup snapshot for shell commands, or the
 // freshly re-read config for long-lived MCP servers.
 func (a *App) telemetryAllowed(preference bool) bool {
-	return preference && !a.telemetryOptedOut()
+	return preference && !a.telemetryOptedOut() && a.authRegionFromContext() != regionCN
 }
 
 // telemetryOptedOut reports a runtime opt-out that overrides the saved

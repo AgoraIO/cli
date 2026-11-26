@@ -88,7 +88,7 @@ func TestAnalyticsInstallationPrivacyAndStages(t *testing.T) {
 	op := a.beginAnalytics("init", "shell")
 	op.source("recipe", "hotel-reception")
 	op.beginStage("clone")
-	op.finish(&cliError{Code: "RECIPE_NOT_FOUND", Message: "private-token /private/home/project"})
+	op.finish(a, &cliError{Code: "RECIPE_NOT_FOUND", Message: "private-token /private/home/project"})
 	events := waitAnalyticsEvents(t, read, 4)
 	if len(events) != 4 {
 		t.Fatalf("want start, two stages, final; got %+v", events)
@@ -112,7 +112,7 @@ func TestAnalyticsInstallationPrivacyAndStages(t *testing.T) {
 		t.Fatalf("sensitive data leaked: %s", b)
 	}
 	next := a.beginAnalytics("recipes list", "shell")
-	next.finish(nil)
+	next.finish(a, nil)
 	all := waitAnalyticsEvents(t, read, 5)
 	last := all[len(all)-1]
 	if last.DistinctID != events[0].DistinctID || last.Properties["source_session_id"] != nil || last.OperationID == op.id {
@@ -214,7 +214,7 @@ func TestAnalyticsOptOutAndEndpointSafety(t *testing.T) {
 			}
 			op := a.beginAnalytics("init", "shell")
 			if op != nil {
-				op.finish(nil)
+				op.finish(a, nil)
 				t.Fatal("disabled transport created an operation")
 			}
 			if len(read()) != 0 {
@@ -281,7 +281,7 @@ func TestAnalyticsNetworkFailureIsBounded(t *testing.T) {
 	a := analyticsTestApp(t, server.URL)
 	start := time.Now()
 	op := a.beginAnalytics("init", "shell")
-	op.finish(errors.New("private error"))
+	op.finish(a, errors.New("private error"))
 	if time.Since(start) > 1500*time.Millisecond {
 		t.Fatal("analytics delayed command beyond bounded flush")
 	}
@@ -451,7 +451,7 @@ func TestAnalyticsCreationSurvivesLaterFailure(t *testing.T) {
 					if command == "init" && err == nil {
 						t.Fatal("fixture must fail after creation")
 					}
-					op.finish(err)
+					op.finish(a, err)
 					events := waitAnalyticsEvents(t, read, 1)
 					var creation *analyticsEvent
 					for i := range events {
@@ -490,7 +490,7 @@ func TestAnalyticsCreationAuthFailureAndInvalidAppID(t *testing.T) {
 	if _, err := a.createProject("private", "", op); err == nil {
 		t.Fatal("expected auth failure")
 	}
-	op.finish(nil)
+	op.finish(a, nil)
 	events := waitAnalyticsEvents(t, read, 1)
 	if len(events) != 1 || events[0].Properties["outcome"] != "failure" || events[0].Properties["app_id"] != nil {
 		t.Fatal(events)
@@ -528,7 +528,7 @@ func TestAnalyticsCreationTimingIncludesRefreshAndRetry(t *testing.T) {
 	}
 	op := a.beginAnalytics("project create", "shell")
 	_, err := a.createProject("local", "", op)
-	op.finish(err)
+	op.finish(a, err)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -552,7 +552,7 @@ func TestAnalyticsCLIStartupAndMCPReadFailure(t *testing.T) {
 				t.Fatal(err)
 			}
 			if op := a.beginAnalytics("recipes list", "mcp"); op != nil {
-				op.finish(nil)
+				op.finish(a, nil)
 				t.Fatal("MCP used unreadable preference")
 			}
 			// Normal CLI deliberately retains the startup policy despite later edits.
@@ -560,7 +560,7 @@ func TestAnalyticsCLIStartupAndMCPReadFailure(t *testing.T) {
 			if op == nil {
 				t.Fatal("CLI re-read startup preference")
 			}
-			op.finish(nil)
+			op.finish(a, nil)
 			waitAnalyticsEvents(t, read, 1)
 		})
 	}
@@ -608,7 +608,7 @@ func TestAnalyticsLiveMCPPreference(t *testing.T) {
 	if op == nil {
 		t.Fatal("persisted re-enable did not resume capture")
 	}
-	op.finish(nil)
+	op.finish(a, nil)
 }
 
 func TestAnalyticsPolicySnapshotForRunningOperation(t *testing.T) {
@@ -625,7 +625,7 @@ func TestAnalyticsPolicySnapshotForRunningOperation(t *testing.T) {
 		t.Fatal(err)
 	}
 	op.beginStage("clone")
-	op.finish(nil)
+	op.finish(a, nil)
 	events := waitAnalyticsEvents(t, read, 4)
 	if len(events) != 4 {
 		t.Fatalf("running operation changed snapshot: %+v", events)

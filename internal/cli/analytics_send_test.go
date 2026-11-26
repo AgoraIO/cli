@@ -54,7 +54,7 @@ func TestAnalyticsDetachedSenderUsesHTTPSProxy(t *testing.T) {
 	t.Setenv("no_proxy", "")
 	a := analyticsTestApp(t, "https://collector.example.invalid/api/telemetry/v1/events")
 	op := a.beginAnalytics("recipes list", "shell")
-	op.finish(nil)
+	op.finish(a, nil)
 	select {
 	case got := <-received:
 		if got != "CONNECT collector.example.invalid:443" {
@@ -94,7 +94,7 @@ func TestAnalyticsFinishDoesNotWaitForResponse(t *testing.T) {
 			a := analyticsTestApp(t, server.URL)
 			op := a.beginAnalytics("recipes list", "shell")
 			finished := make(chan struct{})
-			go func() { op.finish(nil); close(finished) }()
+			go func() { op.finish(a, nil); close(finished) }()
 			select {
 			case <-finished:
 			case <-time.After(500 * time.Millisecond):
@@ -148,7 +148,7 @@ func TestAnalyticsDoesNotRetryOrFollowRedirects(t *testing.T) {
 				if op == nil {
 					t.Fatal("a previous response suppressed a later operation")
 				}
-				op.finish(nil)
+				op.finish(a, nil)
 				select {
 				case <-received:
 				case <-time.After(time.Second):
@@ -323,7 +323,7 @@ func TestAnalyticsBatchIsDeferredUntilFinish(t *testing.T) {
 		t.Fatal("sent before operation finished")
 	}
 	started := time.Now()
-	op.finish(nil)
+	op.finish(a, nil)
 	if time.Since(started) > 500*time.Millisecond {
 		t.Fatal("finish waited for network")
 	}
@@ -361,7 +361,7 @@ func TestAnalyticsBatchHandoffAndSizeBound(t *testing.T) {
 	if op.batchBytes <= analyticsRequestLimit || len(op.events) != 0 {
 		t.Fatal("oversized batch was retained")
 	}
-	op.finish(nil)
+	op.finish(a, nil)
 	if len(read()) != 0 {
 		t.Fatal("sent a partial oversized operation")
 	}

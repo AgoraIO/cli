@@ -145,3 +145,55 @@ func TestMCPTelemetryStatusReportsEffectiveAndSavedPreference(t *testing.T) {
 		}
 	}
 }
+
+func TestCNTelemetryMakesNoShellOrMCPRequests(t *testing.T) {
+	collector, read := analyticsRecorder(t)
+	env := map[string]string{
+		"AGORA_HOME": t.TempDir(), "AGORA_TELEMETRY_URL": collector.URL,
+		"DO_NOT_TRACK": "", "AGORA_SENTRY_ENABLED": "1", "AGORA_TELEMETRY_ENABLED": "1",
+	}
+	if err := saveContext(env, projectContext{CurrentRegion: regionCN}); err != nil {
+		t.Fatal(err)
+	}
+	shell := runCLI(t, []string{"recipes", "list", "--type", "invalid", "--json"}, cliRunOptions{env: env})
+	if !strings.Contains(shell.stdout, "RECIPE_TYPE_INVALID") || strings.Contains(shell.stderr, telemetryDisclosure) {
+		t.Fatalf("unexpected CN shell result: %+v", shell)
+	}
+	a := analyticsTestApp(t, collector.URL)
+	a.env["AGORA_HOME"] = env["AGORA_HOME"]
+	initialize, err := a.handleMCPRequest(mcpRequest{Method: "initialize"}, nil)
+	if err != nil || initialize.(map[string]any)["instructions"] != nil {
+		t.Fatalf("unexpected CN MCP initialization: %v, %v", initialize, err)
+	}
+	status, err := a.callMCPTool("agora.telemetry.status", nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fields := status.(map[string]any)
+	if fields["savedPreference"] != true || fields["enabled"] != false || fields["captureActive"] != false || fields["transportConfigured"] != true {
+		t.Fatalf("unexpected CN MCP status: %v", fields)
+	}
+	if _, err := a.callMCPTool("agora.recipes.list", map[string]any{"type": "invalid"}, nil); err == nil {
+		t.Fatal("expected the MCP command to validate its input")
+	}
+	if _, err := os.Stat(filepath.Join(env["AGORA_HOME"], "analytics-id")); !os.IsNotExist(err) {
+		t.Fatalf("CN created a telemetry identity: %v", err)
+	}
+	// A long-lived MCP server must also honor a change in the active region.
+	for _, channel := range []string{"shell", "mcp"} {
+		if err := saveContext(a.env, projectContext{CurrentRegion: regionGlobal}); err != nil {
+			t.Fatal(err)
+		}
+		op := a.beginAnalytics("recipes list", channel)
+		if op == nil {
+			t.Fatal("expected capture in Global")
+		}
+		if err := saveContext(a.env, projectContext{CurrentRegion: regionCN}); err != nil {
+			t.Fatal(err)
+		}
+		op.finish(a, nil)
+	}
+	if len(read()) != 0 {
+		t.Fatal("CN sent telemetry")
+	}
+}
