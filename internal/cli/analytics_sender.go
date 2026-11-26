@@ -293,6 +293,10 @@ func validAnalyticsEvent(e analyticsEvent) bool {
 			if !slices.Contains(analyticsDetectionSources, str) {
 				return false
 			}
+		case "region":
+			if !slices.Contains(analyticsRegions, str) {
+				return false
+			}
 		case "source_type":
 			if !oneOf(str, "recipe", "quickstart") {
 				return false

@@ -11,11 +11,15 @@ opts out. The embedded collector URL is currently empty; deployment and release
 configuration are required before production capture is active.
 
 Events contain a random local installation ID, a per-operation ID, CLI version,
-OS/architecture, coarse AI-tool categories, public recipe/template IDs, timings
-and structured results. Project/init events can include validated Agora App IDs.
+OS/architecture, coarse AI-tool categories, coarse region (`global` or `cn`),
+public recipe/template IDs, timings and structured results. Project/init events can include validated Agora App IDs.
 An installation profile can be created in PostHog. Agora App IDs can be
 associated with Agora projects and companies. OAuth tokens, App Certificates, project names, source code, conversation
 content, local paths and raw errors are not included.
+
+The region is the control-plane region the CLI targets when the operation
+starts: the region saved by `agora login --region`, or `global` when none is
+saved. It is omitted when the saved CLI context cannot be read.
 
 Recipe init attempts are labeled as Recipe usage even if the catalog lookup
 fails. Only attempts with a confirmed public catalog entry include a Recipe ID.

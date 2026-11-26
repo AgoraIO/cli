@@ -66,6 +66,9 @@ var analyticsAgentFamilies = append(slices.Clone(analyticsKnownAgentFamilies), a
 var analyticsAgentSurfaces = []string{analyticsSurfaceDesktop, analyticsSurfaceCLI, analyticsValueUnknown}
 var analyticsDetectionSources = []string{analyticsDetectionExplicit, analyticsDetectionEnvironment, analyticsDetectionNone}
 
+// analyticsRegions are the coarse control-plane regions an event may report.
+var analyticsRegions = []string{regionGlobal, regionCN}
+
 type analyticsEvent struct {
 	Event       string         `json:"event"`
 	EventID     string         `json:"event_id"`
@@ -213,6 +216,11 @@ func (a *App) beginAnalytics(command, channel string) *analyticsOperation {
 	props["cli_version"] = version
 	family, surface, source := analyticsAgent(a.osEnv)
 	props["agent_family"], props["agent_surface"], props["agent_detection_source"] = family, surface, source
+	// Read per operation: a long-lived MCP server may outlive a login into
+	// another region.
+	if region, ok := a.analyticsRegion(); ok {
+		props["region"] = region
+	}
 	id := a.analyticsIdentity()
 	if id == "" {
 		return nil
@@ -232,6 +240,24 @@ func (a *App) beginAnalytics(command, channel string) *analyticsOperation {
 		op.beginStage(analyticsStageValidate)
 	}
 	return op
+}
+
+// analyticsRegion reports the coarse control-plane region the CLI currently
+// targets, using the same persisted context region that authRegion uses to
+// choose between apiBaseURL and apiBaseURLCN. A missing context is the CLI
+// default (global). Unlike authRegion, an unreadable context is reported as
+// undeterminable rather than defaulting, so the property is omitted. Only
+// analyticsRegions values are ever returned, never the raw persisted string.
+func (a *App) analyticsRegion() (string, bool) {
+	ctx, err := loadContext(a.env)
+	if err != nil {
+		return "", false
+	}
+	region := currentRegionFromContext(ctx)
+	if !slices.Contains(analyticsRegions, region) {
+		return "", false
+	}
+	return region, true
 }
 
 func analyticsAgent(env map[string]string) (family, surface, source string) {

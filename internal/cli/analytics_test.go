@@ -715,6 +715,7 @@ func TestAnalyticsAllowlistValuesArePinned(t *testing.T) {
 		{"agent families", analyticsAgentFamilies, []string{"codex", "claude-code", "kiro", "cursor", "cline", "windsurf", "aider", "custom", "unknown"}},
 		{"agent surfaces", analyticsAgentSurfaces, []string{"desktop", "cli", "unknown"}},
 		{"detection sources", analyticsDetectionSources, []string{"explicit", "environment", "none"}},
+		{"regions", analyticsRegions, []string{"global", "cn"}},
 	} {
 		if !slices.Equal(tc.got, tc.want) {
 			t.Errorf("%s changed: got %v, want %v", tc.name, tc.got, tc.want)

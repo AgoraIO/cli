@@ -12,7 +12,8 @@ import (
 
 const telemetryDisclosure = `Agora CLI collects usage statistics by default when a collector is configured:
 recipes/init/project create results, stages, duration, version, OS/architecture,
-public recipe/template IDs, Agora App IDs and coarse AI-tool categories.
+public recipe/template IDs, Agora App IDs, coarse AI-tool categories and
+coarse region (global/cn).
 Events use a random installation ID with an installation profile in PostHog;
 Agora App IDs can be associated with Agora projects and companies.
 No code, conversation content, secrets, project names or local paths are collected.
