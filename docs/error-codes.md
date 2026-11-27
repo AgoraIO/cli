@@ -96,6 +96,14 @@ These codes appear inside `data.checks[].issues[].code` and (for blocking issues
 | `WORKSPACE_ENV_APP_ID_MISMATCH` | 1 | A quickstart env file points at a different app ID. | Run the command from `suggestedCommand`. |
 | `APP_CREDENTIALS_MISSING` | 1 | The selected project has no App ID in the API response. | Run the command from `suggestedCommand` (`agora project show --project <id>`) to re-fetch project details. |
 
+### Conversational AI (`convoai playground`)
+
+| Code | Exit | Meaning | Recovery |
+|------|------|---------|----------|
+| `CHANNEL_INVALID` | 1 | The `--channel` value is empty, exceeds 64 bytes, or contains an unsupported character. | Pass a non-empty channel name using only alphanumeric characters, hyphens, and underscores, up to 64 bytes. |
+| `TTL_INVALID` | 1 | The `--ttl` value is not a valid positive Go duration (e.g. `1h`, `30m`). | Pass a positive duration such as `1h` or `30m`. |
+| `CONVOAI_NOT_READY` | 1 | The selected project does not have Conversational AI enabled. | Run `agora project feature enable convoai` and retry. |
+
 ### Skills (curated workflows)
 
 | Code | Exit | Meaning | Recovery |
